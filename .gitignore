@@ -2,3 +2,4 @@ config.json
 vendor/
 node_modules/
 reports/
+.clinerules
