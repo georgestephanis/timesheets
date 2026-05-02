@@ -1,0 +1,160 @@
+# AGENTS.md — activity-report
+
+Context file for AI agents and future contributors. Keep this up to date when the architecture, tooling, or data model changes.
+
+---
+
+## What this project is
+
+A single-file PHP CLI tool that aggregates local activity data from three sources and produces a project-attributed time report:
+
+| Source | Data | Location |
+|---|---|---|
+| ActivityWatch | App/window focus events + AFK status | `~/Library/Application Support/activitywatch/` (SQLite) |
+| Chrome history | Browser visits with URLs and titles | `~/Library/Application Support/Google/Chrome/` (SQLite) |
+| Git | Commits authored by configured email(s) | All repos listed in `projects[*].repos` |
+
+Events are classified into named **projects** by matching signals (VSCode window title, browser domain, Slack workspace/channel, SSH hostname) against rules in `config.json`. Anything that doesn't match a project rule falls into catch-all buckets (`Browser (uncategorized)`, `VSCode (uncategorized)`, etc.).
+
+---
+
+## File map
+
+```
+activity-report.php   — entire application (entrypoint + all logic)
+config.json           — local config, gitignored, never committed
+config.example.json   — safe-to-commit template with dummy data
+config.schema.json    — JSON Schema (draft 2020-12) for both config files
+phpcs.xml.dist        — PHP_CodeSniffer ruleset (PSR-12 + CLI exceptions)
+composer.json         — dev dep: squizlabs/php_codesniffer ^3.9
+package.json          — dev dep: prettier ^3.0
+.prettierrc.json      — 4-space indent, 120-char print width
+.prettierignore       — excludes vendor/ and node_modules/
+.gitignore            — excludes config.json, vendor/, node_modules/
+```
+
+`vendor/` and `node_modules/` are installed locally but not committed.
+
+---
+
+## Architecture
+
+`activity-report.php` is intentionally a single file with no classes. All logic is plain functions grouped by concern:
+
+| Group | Functions |
+|---|---|
+| CLI | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange` |
+| Helpers | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime` |
+| Data loaders | `loadActivityWatch`, `loadAwSqlite`, `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight`, `loadGitCommits` |
+| Classifiers | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `isAfkAt`, `classifyAndAggregate` |
+| Renderers | `renderMarkdown`, `renderJson`, `renderTsv` |
+
+### Data flow
+
+```
+loadActivityWatch ──┐
+loadChromeHistory ──┼── backfillChromeUrls ──► classifyAndAggregate ──► render*
+loadGitCommits ─────┘
+```
+
+`backfillChromeUrls` fills in missing URLs on Chrome ActivityWatch events by correlating them with the Chrome history SQLite within a configurable time window (`chrome_correlation_window_seconds`).
+
+`classifyAndAggregate` returns `[$bucket, $unmatched]`. `$bucket` is indexed `[date][project]` with `seconds`, `detail` (broken down by kind: vscode/browser/slack/ssh/app), and `commits`. `$unmatched` records signals that didn't match any project rule, surfaced via `--show-unmatched`.
+
+### Signal matching priority (inside `projectForSignals`)
+
+1. VSCode directory name (case-insensitive exact match)
+2. Browser hostname (glob match against `domains`)
+3. Slack workspace + optional channel glob
+4. SSH hostname (glob match against `ssh_hosts`)
+
+Git commits bypass `projectForSignals` entirely — they are pre-attributed to a project when `loadGitCommits` walks `projects[*].repos`.
+
+---
+
+## Config shape
+
+Defined and validated by `config.schema.json`. Key fields:
+
+```jsonc
+{
+  "timezone": "America/New_York",       // IANA tz for all output
+  "paths": {
+    "activitywatch": "~/...",
+    "chrome": "~/...",
+    "chrome_profiles": null             // null = all profiles; or ["Default", "Profile 1"]
+  },
+  "git_authors": ["you@example.com"],   // one or more commit-author emails
+  "chrome_correlation_window_seconds": 120,
+  "min_event_seconds_to_show": 30,
+  "projects": {
+    "Project Name": {
+      "repos":       ["~/path/to/repo"],
+      "vscode_dirs": ["folder-name"],
+      "domains":     ["*.example.com", "example.com"],
+      "slack":       [{"workspace": "Name", "channel_glob": "proj-*"}],
+      "ssh_hosts":   ["hostname*"]
+    }
+  },
+  "personal_hosts": ["youtube.com", ...],
+  "personal_apps":  ["Discord", ...]
+}
+```
+
+All project keys are optional — list only the signals that apply. Glob `*` is supported in `domains`, `slack[*].channel_glob`, and `ssh_hosts`.
+
+---
+
+## CLI flags
+
+```
+--days N              Look back N days (default 7)
+--from YYYY-MM-DD     Explicit start (overrides --days)
+--to   YYYY-MM-DD     Explicit end (default = now)
+--project NAME        Filter output to one project
+--format md|json|tsv  Output format (default md)
+--show-unmatched      Append unmatched signal counts (debug)
+--list-projects       Print project names and their signals, then exit
+-h, --help            Usage
+```
+
+---
+
+## Tooling
+
+### PHP linting (phpcs / phpcbf)
+
+```bash
+composer lint        # check — exits non-zero if violations found
+composer lint:fix    # auto-fix what phpcs can fix
+```
+
+Ruleset: PSR-12 via `phpcs.xml.dist`. Two sniffs are excluded:
+- `PSR1.Files.SideEffects` — the shebang CLI script intentionally mixes declarations and a top-level `main()` call.
+- `PSR12.Files.FileHeader` — the shebang line before `<?php` confuses the header-order check.
+
+Line limit is raised to 160 (some function signatures are legitimately long).
+
+### JSON formatting (prettier)
+
+```bash
+npm run format        # rewrite JSON files in place
+npm run format:check  # dry-run, exits non-zero if anything would change
+```
+
+Covers `config.example.json`, `config.schema.json`, `composer.json`, `package.json`.  
+`config.json` is gitignored so prettier touches it locally but it is never committed.
+
+### JSON Schema validation
+
+`config.json` and `config.example.json` both carry a `"$schema": "./config.schema.json"` pointer. Editors that support JSON Schema (VS Code, JetBrains) will validate and autocomplete config files automatically.
+
+---
+
+## Conventions
+
+- **No classes.** Keep everything as plain functions. Only introduce a class if the complexity genuinely demands it and you've discussed it first.
+- **No autoloader.** The project is intentionally dependency-free at runtime — `vendor/` contains only dev tools.
+- **Schema stays in sync.** Whenever a new config key is added or an existing key's shape changes, update `config.schema.json` and `config.example.json` in the same change.
+- **Run linters before committing.** `composer lint` must exit 0. `npm run format:check` must exit 0.
+- **`config.json` is never committed.** It contains real email addresses, repo paths, and workspace names. It is in `.gitignore`.

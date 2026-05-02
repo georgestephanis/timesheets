@@ -1,0 +1,20 @@
+{
+    "$schema": "https://getcomposer.org/schema.json",
+    "name": "georgestephanis/timesheets",
+    "description": "Single-file CLI tool that aggregates ActivityWatch, Chrome history, and git commits into a project-based activity report.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "squizlabs/php_codesniffer": "^3.9"
+    },
+    "scripts": {
+        "lint": "phpcs",
+        "lint:fix": "phpcbf"
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}

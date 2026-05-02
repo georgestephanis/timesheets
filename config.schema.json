@@ -1,0 +1,156 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "config.schema.json",
+    "title": "activity-report config",
+    "description": "Configuration for activity-report.php",
+    "type": "object",
+    "required": ["timezone", "paths", "git_authors", "projects"],
+    "additionalProperties": false,
+    "properties": {
+        "$schema": {
+            "description": "JSON Schema reference — allows editors to validate and autocomplete this file.",
+            "type": "string"
+        },
+
+        "timezone": {
+            "description": "IANA timezone name used for all date/time output.",
+            "type": "string",
+            "examples": ["America/New_York", "America/Chicago", "America/Los_Angeles", "Europe/London", "UTC"]
+        },
+
+        "paths": {
+            "description": "Filesystem paths to local data sources. ~ is expanded to $HOME.",
+            "type": "object",
+            "required": ["activitywatch", "chrome"],
+            "additionalProperties": false,
+            "properties": {
+                "activitywatch": {
+                    "description": "Path to the ActivityWatch data directory.",
+                    "type": "string"
+                },
+                "chrome": {
+                    "description": "Path to the Chrome user-data directory.",
+                    "type": "string"
+                },
+                "chrome_profiles": {
+                    "description": "Chrome profile folder names to scan (e.g. [\"Default\", \"Profile 1\"]). null scans all profiles found.",
+                    "oneOf": [
+                        { "type": "null" },
+                        {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "minItems": 1
+                        }
+                    ],
+                    "default": null
+                }
+            }
+        },
+
+        "git_authors": {
+            "description": "Email addresses used for git authorship. Commits matching any are credited to you.",
+            "type": "array",
+            "items": { "type": "string", "format": "email" },
+            "minItems": 1
+        },
+
+        "chrome_correlation_window_seconds": {
+            "description": "Back-fill empty Chrome ActivityWatch events with a URL from Chrome history if a visit falls within this many seconds.",
+            "type": "integer",
+            "minimum": 0,
+            "default": 120
+        },
+
+        "min_event_seconds_to_show": {
+            "description": "Hide activity segments shorter than this many seconds from output.",
+            "type": "integer",
+            "minimum": 0,
+            "default": 30
+        },
+
+        "projects": {
+            "description": "Named projects, each clustering one or more signals (repos, domains, Slack workspaces, etc.).",
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+                "$ref": "#/$defs/project"
+            }
+        },
+
+        "personal_hosts": {
+            "description": "Browser hostnames to bucket as personal (not work) when no project matches. Glob-style * is supported.",
+            "type": "array",
+            "items": { "type": "string" },
+            "default": []
+        },
+
+        "personal_apps": {
+            "description": "Application names (as reported by ActivityWatch) to bucket as personal.",
+            "type": "array",
+            "items": { "type": "string" },
+            "default": []
+        }
+    },
+
+    "$defs": {
+        "project": {
+            "description": "A named cluster of signals. All keys are optional — list only what applies.",
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+                "repos": {
+                    "description": "Absolute or ~-relative paths to git repositories belonging to this project.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                },
+
+                "vscode_dirs": {
+                    "description": "VSCode workspace folder names to match against window titles (case-insensitive).",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                },
+
+                "domains": {
+                    "description": "Browser hostnames for this project. Glob-style * is supported (e.g. *.example.com).",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                },
+
+                "slack": {
+                    "description": "Slack workspaces/channels for this project.",
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/slack_rule" },
+                    "minItems": 1
+                },
+
+                "ssh_hosts": {
+                    "description": "SSH hostnames matched against terminal window titles. Glob-style * is supported.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                }
+            }
+        },
+
+        "slack_rule": {
+            "description": "A Slack matching rule. Matches any channel in the workspace when channel_glob is omitted.",
+            "type": "object",
+            "required": ["workspace"],
+            "additionalProperties": false,
+            "properties": {
+                "workspace": {
+                    "description": "Slack workspace display name (case-insensitive match).",
+                    "type": "string"
+                },
+                "channel_glob": {
+                    "description": "Glob pattern for channel names (case-insensitive). Omit to match any channel in the workspace.",
+                    "type": "string"
+                }
+            }
+        }
+    }
+}

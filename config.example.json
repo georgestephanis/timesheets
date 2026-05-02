@@ -1,0 +1,50 @@
+{
+    "$schema": "./config.schema.json",
+
+    "timezone": "America/New_York",
+
+    "paths": {
+        "activitywatch": "~/Library/Application Support/activitywatch",
+        "chrome": "~/Library/Application Support/Google/Chrome",
+        "chrome_profiles": null
+    },
+
+    "git_authors": ["you@example.com"],
+
+    "chrome_correlation_window_seconds": 120,
+    "min_event_seconds_to_show": 30,
+
+    "projects": {
+        "Acme Corp": {
+            "repos": ["~/code/acme-backend", "~/code/acme-frontend"],
+            "vscode_dirs": ["acme-backend", "acme-frontend", "acme"],
+            "domains": ["acme.com", "*.acme.com", "acme.local", "acme.wp.local"],
+            "slack": [{ "workspace": "Acme Corp" }],
+            "ssh_hosts": ["acme-prod", "acme-staging*"]
+        },
+
+        "Personal Projects": {
+            "repos": ["~/code/my-side-project"],
+            "vscode_dirs": ["my-side-project"],
+            "domains": ["my-side-project.com", "*.my-side-project.com"]
+        }
+    },
+
+    "personal_hosts": [
+        "x.com",
+        "twitter.com",
+        "*.twitter.com",
+        "*.facebook.com",
+        "facebook.com",
+        "discord.com",
+        "*.discord.com",
+        "*.reddit.com",
+        "reddit.com",
+        "*.youtube.com",
+        "youtube.com",
+        "*.instagram.com",
+        "instagram.com"
+    ],
+
+    "personal_apps": ["Discord", "Messenger"]
+}
