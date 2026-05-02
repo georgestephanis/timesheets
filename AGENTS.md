@@ -6,7 +6,7 @@ Context file for AI agents and future contributors. Keep this up to date when th
 
 ## What this project is
 
-A single-file PHP CLI tool that aggregates local activity data from three sources and produces a project-attributed time report:
+A PHP CLI tool that aggregates local activity data from three sources and produces a project-attributed time report:
 
 | Source | Data | Location |
 |---|---|---|
@@ -21,16 +21,29 @@ Events are classified into named **projects** by matching signals (VSCode window
 ## File map
 
 ```
-activity-report.php   — entire application (entrypoint + all logic)
-config.json           — local config, gitignored, never committed
-config.example.json   — safe-to-commit template with dummy data
-config.schema.json    — JSON Schema (draft 2020-12) for both config files
-phpcs.xml.dist        — PHP_CodeSniffer ruleset (PSR-12 + CLI exceptions)
-composer.json         — dev dep: squizlabs/php_codesniffer ^3.9
-package.json          — dev dep: prettier ^3.0
-.prettierrc.json      — 4-space indent, 120-char print width
-.prettierignore       — excludes vendor/ and node_modules/
-.gitignore            — excludes config.json, vendor/, node_modules/
+activity-report.php         — entry point: config load, PROJECT_ROOT, require_once, main()
+src/
+  cli.php                   — main(), parseArgs(), printHelp(), printProjects(), resolveDateRange(), VERSION
+  helpers.php               — expandPath(), fnmatchAny(), fmtDur(), copyForRead(), pdo(), chromeTime()
+  cache.php                 — reportsDir(), reportsCacheKey(), rangeIsHistorical(), loadCachedSources(),
+                              saveCachedSources(), saveGeneratedReport(), appendToIndex(),
+                              serializeEvents/deserializeEvents, serializeChrome/deserializeChrome,
+                              serializeCommits/deserializeCommits
+  loader-activitywatch.php  — loadActivityWatch(), loadAwSqlite()
+  loader-chrome.php         — loadChromeHistory(), backfillChromeUrls(), bsearchRight()
+  loader-git.php            — loadGitCommits()
+  classifiers.php           — classifyVscode(), classifySlack(), classifySsh(),
+                              projectForSignals(), isAfkAt(), classifyAndAggregate()
+  renderers.php             — renderProjectEntry(), renderMarkdown(), renderJson(), renderTsv()
+config.json                 — local config, gitignored, never committed
+config.example.json         — safe-to-commit template with dummy data
+config.schema.json          — JSON Schema (draft 2020-12) for both config files
+phpcs.xml.dist              — PHP_CodeSniffer ruleset (PSR-12 + CLI exceptions)
+composer.json               — dev dep: squizlabs/php_codesniffer ^3.9
+package.json                — dev dep: prettier ^3.0
+.prettierrc.json            — 4-space indent, 120-char print width
+.prettierignore             — excludes vendor/ and node_modules/
+.gitignore                  — excludes config.json, vendor/, node_modules/
 ```
 
 `vendor/` and `node_modules/` are installed locally but not committed.
@@ -39,15 +52,20 @@ package.json          — dev dep: prettier ^3.0
 
 ## Architecture
 
-`activity-report.php` is intentionally a single file with no classes. All logic is plain functions grouped by concern:
+Logic is split across `src/` includes with no classes. All code is plain functions grouped by concern. `activity-report.php` is a thin entry point that loads config, defines `PROJECT_ROOT`, requires all includes, and calls `main()`.
 
-| Group | Functions |
+| File | Functions |
 |---|---|
-| CLI | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange` |
-| Helpers | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime` |
-| Data loaders | `loadActivityWatch`, `loadAwSqlite`, `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight`, `loadGitCommits` |
-| Classifiers | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `isAfkAt`, `classifyAndAggregate` |
-| Renderers | `renderMarkdown`, `renderJson`, `renderTsv` |
+| `src/cli.php` | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange` |
+| `src/helpers.php` | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime` |
+| `src/cache.php` | `reportsDir`, `reportsCacheKey`, `rangeIsHistorical`, `loadCachedSources`, `saveCachedSources`, `saveGeneratedReport`, `appendToIndex`, serialize/deserialize pairs |
+| `src/loader-activitywatch.php` | `loadActivityWatch`, `loadAwSqlite` |
+| `src/loader-chrome.php` | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight` |
+| `src/loader-git.php` | `loadGitCommits` |
+| `src/classifiers.php` | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `isAfkAt`, `classifyAndAggregate` |
+| `src/renderers.php` | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv` |
+
+`PROJECT_ROOT` is defined as `__DIR__` in `activity-report.php`. Cache functions in `src/cache.php` use `PROJECT_ROOT` (not `__DIR__`) so that `reports/` always resolves to the project root regardless of include depth.
 
 ### Data flow
 
@@ -154,7 +172,7 @@ Covers `config.example.json`, `config.schema.json`, `composer.json`, `package.js
 ## Conventions
 
 - **No classes.** Keep everything as plain functions. Only introduce a class if the complexity genuinely demands it and you've discussed it first.
-- **No autoloader.** The project is intentionally dependency-free at runtime — `vendor/` contains only dev tools.
+- **No autoloader.** The project is intentionally dependency-free at runtime — `vendor/` contains only dev tools. New modules go in `src/` and get a `require_once` line in `activity-report.php`.
 - **Schema stays in sync.** Whenever a new config key is added or an existing key's shape changes, update `config.schema.json` and `config.example.json` in the same change.
 - **Run linters before committing.** `composer lint` must exit 0. `npm run format:check` must exit 0.
 - **`config.json` is never committed.** It contains real email addresses, repo paths, and workspace names. It is in `.gitignore`.
