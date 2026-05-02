@@ -16,11 +16,19 @@
 
     "projects": {
         "Acme Corp": {
+            "grouping": "Acme",
             "repos": ["~/code/acme-backend", "~/code/acme-frontend"],
             "vscode_dirs": ["acme-backend", "acme-frontend", "acme"],
             "domains": ["acme.com", "*.acme.com", "acme.local", "acme.wp.local"],
             "slack": [{ "workspace": "Acme Corp" }],
             "ssh_hosts": ["acme-prod", "acme-staging*"]
+        },
+
+        "Acme Docs": {
+            "grouping": "Acme",
+            "repos": ["~/code/acme-docs"],
+            "vscode_dirs": ["acme-docs"],
+            "domains": ["docs.acme.com"]
         },
 
         "Personal Projects": {

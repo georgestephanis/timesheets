@@ -1206,18 +1206,76 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
         $bucket[$date][$proj]['commits'][] = $c;
     }
 
+    // Attach grouping label from config so renderers don't need to re-inspect config.
+    foreach (array_keys($bucket) as $date) {
+        foreach (array_keys($bucket[$date]) as $proj) {
+            $bucket[$date][$proj]['grouping'] = $config['projects'][$proj]['grouping'] ?? null;
+        }
+    }
+
     return [$bucket, $unmatched];
 }
 
 // ---------- Renderers ----------
 
 /**
+ * Renders a single project entry at the given Markdown heading level.
+ *
+ * Returns an empty string when the project falls below $minSec with no commits,
+ * allowing callers to suppress empty entries and their parent group headers.
+ *
+ * @param string       $heading Markdown heading prefix ('###' or '####').
+ * @param string       $name    Project name.
+ * @param array        $rec     Project record: seconds, detail, commits, grouping.
+ * @param int          $minSec  Minimum seconds threshold from config.
+ * @param DateTimeZone $tz      Display timezone for commit timestamps.
+ */
+function renderProjectEntry(string $heading, string $name, array $rec, int $minSec, DateTimeZone $tz): string
+{
+    $sec     = $rec['seconds'] ?? 0;
+    $commits = $rec['commits'] ?? [];
+    if ($sec < $minSec && !$commits) {
+        return '';
+    }
+    $secStr = $sec ? ' — ' . fmtDur($sec) : '';
+    $out    = "$heading $name$secStr\n\n";
+    foreach (($rec['detail'] ?? []) as $kind => $items) {
+        arsort($items);
+        $top = array_slice($items, 0, 6, true);
+        if (!$top) {
+            continue;
+        }
+        $bits = [];
+        foreach ($top as $label => $s) {
+            if ($s < $minSec) {
+                continue;
+            }
+            $bits[] = "$label (" . fmtDur($s) . ")";
+        }
+        if ($bits) {
+            $out .= "- _$kind:_ " . implode(', ', $bits) . "\n";
+        }
+    }
+    if ($commits) {
+        $out .= "- _commits (" . count($commits) . "):_\n";
+        foreach ($commits as $c) {
+            $t = $c['dt']->setTimezone($tz)->format('H:i');
+            $out .= "    - `$t` `" . substr($c['sha'], 0, 8) . "` " . $c['subj'] . "\n";
+        }
+    }
+    $out .= "\n";
+    return $out;
+}
+
+/**
  * Renders the activity bucket as a human-readable Markdown report.
  *
- * Days are ordered most-recent first. Within each day, projects are sorted by
- * total active seconds descending. The top 6 detail items per signal kind are
- * shown. Projects below min_event_seconds_to_show with no commits are omitted.
- * When --show-unmatched is set, an appendix lists the unclassified signals.
+ * Days are ordered most-recent first. Within each day, projects that share a
+ * 'grouping' value are collected under a ### group header (sorted by total seconds),
+ * with each project rendered as ####. Ungrouped projects (no 'grouping' set) are
+ * rendered as ### entries after all groups. Projects below min_event_seconds_to_show
+ * with no commits are omitted. When --show-unmatched is set, an appendix lists
+ * unclassified signals.
  *
  * @param  array             $bucket    Aggregated data from classifyAndAggregate().
  * @param  array             $unmatched Unmatched signal counts from classifyAndAggregate().
@@ -1254,53 +1312,49 @@ function renderMarkdown(
     $dates = array_reverse($dates);
 
     foreach ($dates as $date) {
-        $weekday = (new DateTimeImmutable($date, $tz))->format('D');
-        $dayTotal = 0;
-        foreach ($bucket[$date] as $proj => $rec) {
-            $dayTotal += $rec['seconds'] ?? 0;
+        $weekday  = (new DateTimeImmutable($date, $tz))->format('D');
+        $dayTotal = array_sum(array_map(fn($r) => $r['seconds'] ?? 0, $bucket[$date]));
+        $out .= "## $date ($weekday) — " . fmtDur($dayTotal) . " active\n\n";
+
+        // Sort projects by seconds descending, preserving keys.
+        $dayProjects = $bucket[$date];
+        uasort($dayProjects, fn($a, $b) => ($b['seconds'] ?? 0) <=> ($a['seconds'] ?? 0));
+
+        // Split into grouped (keyed by grouping name) and ungrouped.
+        $grouped   = []; // [groupName => [projName => rec]]
+        $ungrouped = []; // [projName => rec]
+        foreach ($dayProjects as $name => $rec) {
+            $g = $rec['grouping'] ?? null;
+            if ($g !== null) {
+                $grouped[$g][$name] = $rec;
+            } else {
+                $ungrouped[$name] = $rec;
+            }
         }
 
-        $out .= "## $date ($weekday) — " . fmtDur($dayTotal) . " active\n\n";
-        // Sort projects by activity time, then commits as tiebreaker
-        $proj = $bucket[$date];
-        uksort($proj, function ($a, $b) use ($proj) {
-            return ($proj[$b]['seconds'] ?? 0) <=> ($proj[$a]['seconds'] ?? 0);
-        });
+        // Render groups sorted by total seconds descending.
+        if ($grouped) {
+            $groupTotals = [];
+            foreach ($grouped as $g => $projs) {
+                $groupTotals[$g] = array_sum(array_map(fn($r) => $r['seconds'] ?? 0, $projs));
+            }
+            arsort($groupTotals);
+            foreach (array_keys($groupTotals) as $g) {
+                $groupEntry = '';
+                foreach ($grouped[$g] as $name => $rec) {
+                    $groupEntry .= renderProjectEntry('####', $name, $rec, $minSec, $tz);
+                }
+                if ($groupEntry !== '') {
+                    $groupSec = $groupTotals[$g];
+                    $groupSecStr = $groupSec ? ' — ' . fmtDur($groupSec) : '';
+                    $out .= "### $g$groupSecStr\n\n" . $groupEntry;
+                }
+            }
+        }
 
-        foreach ($proj as $name => $rec) {
-            $sec = $rec['seconds'] ?? 0;
-            $commits = $rec['commits'] ?? [];
-            if ($sec < $minSec && !$commits) {
-                continue;
-            }
-            $secStr = $sec ? ' — ' . fmtDur($sec) : '';
-            $out .= "### $name$secStr\n\n";
-            // Detail breakdown (top items)
-            foreach (($rec['detail'] ?? []) as $kind => $items) {
-                arsort($items);
-                $top = array_slice($items, 0, 6, true);
-                if (!$top) {
-                    continue;
-                }
-                $bits = [];
-                foreach ($top as $label => $s) {
-                    if ($s < $minSec) {
-                        continue;
-                    }
-                    $bits[] = "$label (" . fmtDur($s) . ")";
-                }
-                if ($bits) {
-                    $out .= "- _$kind:_ " . implode(', ', $bits) . "\n";
-                }
-            }
-            if ($commits) {
-                $out .= "- _commits (" . count($commits) . "):_\n";
-                foreach ($commits as $c) {
-                    $t = $c['dt']->setTimezone($tz)->format('H:i');
-                    $out .= "    - `$t` `" . substr($c['sha'], 0, 8) . "` " . $c['subj'] . "\n";
-                }
-            }
-            $out .= "\n";
+        // Render ungrouped projects at the ### level.
+        foreach ($ungrouped as $name => $rec) {
+            $out .= renderProjectEntry('###', $name, $rec, $minSec, $tz);
         }
     }
 
@@ -1341,8 +1395,9 @@ function renderJson(array $bucket, array $unmatched, DateTimeImmutable $from, Da
     foreach ($bucket as $date => $projs) {
         foreach ($projs as $name => $rec) {
             $clean[$date][$name] = [
-                'seconds' => $rec['seconds'] ?? 0,
-                'detail'  => $rec['detail']  ?? [],
+                'grouping' => $rec['grouping'] ?? null,
+                'seconds'  => $rec['seconds']  ?? 0,
+                'detail'   => $rec['detail']   ?? [],
                 'commits' => array_map(fn($c) => [
                     'time' => $c['dt']->setTimezone($tz)->format('c'),
                     'sha'  => $c['sha'],
@@ -1376,12 +1431,13 @@ function renderJson(array $bucket, array $unmatched, DateTimeImmutable $from, Da
  */
 function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to, DateTimeZone $tz): string
 {
-    $rows = ["date\tproject\tseconds\tcommits"];
+    $rows = ["date\tgrouping\tproject\tseconds\tcommits"];
     $dates = array_keys($bucket);
     sort($dates);
     foreach ($dates as $date) {
         foreach ($bucket[$date] as $proj => $rec) {
-            $rows[] = "$date\t$proj\t" . (int)($rec['seconds'] ?? 0) . "\t" . count($rec['commits'] ?? []);
+            $grouping = $rec['grouping'] ?? '';
+            $rows[] = "$date\t$grouping\t$proj\t" . (int)($rec['seconds'] ?? 0) . "\t" . count($rec['commits'] ?? []);
         }
     }
     return implode("\n", $rows) . "\n";

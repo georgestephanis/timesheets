@@ -132,6 +132,11 @@
                     "type": "array",
                     "items": { "type": "string" },
                     "minItems": 1
+                },
+
+                "grouping": {
+                    "description": "Client or billing group this project belongs to. Projects with the same grouping are shown together under a shared section header in reports.",
+                    "type": "string"
                 }
             }
         },
