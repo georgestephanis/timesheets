@@ -58,7 +58,7 @@ function main(array $config): void
     }
     saveGeneratedReport($dir, $key, $from, $to, $format, $opts['project'], $cached !== null, $out);
 
-    fwrite(STDOUT, $out);
+    echo $out;
 }
 
 /**

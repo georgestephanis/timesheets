@@ -70,18 +70,18 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 
 ### Top-level fields
 
-| Field | Type | Description |
-|---|---|---|
-| `timezone` | string | IANA timezone name for all output (e.g. `America/New_York`) |
-| `paths.activitywatch` | string | Path to ActivityWatch data directory |
-| `paths.chrome` | string | Path to Chrome user-data directory |
-| `paths.chrome_profiles` | array\|null | Profile folders to scan; `null` = auto-discover all |
-| `git_authors` | string[] | Your commit author email address(es) |
-| `chrome_correlation_window_seconds` | int | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120) |
-| `min_event_seconds_to_show` | int | Hide activity segments shorter than this (default 30) |
-| `projects` | object | Named project definitions (see below) |
-| `personal_hosts` | string[] | Browser hostnames to bucket as personal, not work |
-| `personal_apps` | string[] | App names (as reported by ActivityWatch) to bucket as personal |
+| Field                               | Type        | Description                                                                                       |
+| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
+| `timezone`                          | string      | IANA timezone name for all output (e.g. `America/New_York`)                                       |
+| `paths.activitywatch`               | string      | Path to ActivityWatch data directory                                                              |
+| `paths.chrome`                      | string      | Path to Chrome user-data directory                                                                |
+| `paths.chrome_profiles`             | array\|null | Profile folders to scan; `null` = auto-discover all                                               |
+| `git_authors`                       | string[]    | Your commit author email address(es)                                                              |
+| `chrome_correlation_window_seconds` | int         | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120) |
+| `min_event_seconds_to_show`         | int         | Hide activity segments shorter than this (default 30)                                             |
+| `projects`                          | object      | Named project definitions (see below)                                                             |
+| `personal_hosts`                    | string[]    | Browser hostnames to bucket as personal, not work                                                 |
+| `personal_apps`                     | string[]    | App names (as reported by ActivityWatch) to bucket as personal                                    |
 
 ### Project signals
 
@@ -119,11 +119,21 @@ php activity-report.php --show-unmatched
 
 ## Output formats
 
-| Format | Flag | Use case |
-|---|---|---|
-| Markdown | `--format md` (default) | Reading in terminal or pasting into a doc |
-| JSON | `--format json` | Piping into `jq`, importing into a spreadsheet |
-| TSV | `--format tsv` | Opening in Excel / Numbers |
+| Format   | Flag                    | Use case                                       |
+| -------- | ----------------------- | ---------------------------------------------- |
+| Markdown | `--format md` (default) | Reading in terminal or pasting into a doc      |
+| JSON     | `--format json`         | Piping into `jq`, importing into a spreadsheet |
+| TSV      | `--format tsv`          | Opening in Excel / Numbers                     |
+
+## HTML Output
+
+If you'd like to start a HTTP webserver locally, run the following:
+
+```bash
+php -S localhost:8000 report_renderer.php
+```
+
+This will give you a UI to view the reports more aesthetically than markdown, if desired.
 
 ## Development
 
