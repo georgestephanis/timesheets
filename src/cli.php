@@ -50,7 +50,7 @@ function main(array $config): void
     $out = match ($format) {
         'json' => renderJson($bucket, $unmatched, $from, $to, $tz),
         'tsv'  => renderTsv($bucket, $from, $to, $tz),
-        default => renderMarkdown($bucket, $unmatched, $from, $to, $tz, $opts, $config),
+        default => renderMarkdown($bucket ?? [], $unmatched, $from, $to, $tz, $opts, $config),
     };
 
     if (!$cached) {
