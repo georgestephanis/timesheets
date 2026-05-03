@@ -9,7 +9,7 @@
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-cache');
 
-define('PROJECT_ROOT', __DIR__);
+define('PROJECT_ROOT', dirname(__DIR__));
 
 $configFile = PROJECT_ROOT . '/config.json';
 if (!file_exists($configFile)) {

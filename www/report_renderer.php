@@ -4,9 +4,10 @@
 // HTML format: static shell + JS renderer (data fetched async from api.php).
 // Other formats: full PHP pipeline rendered server-side.
 
+
 $format = $_GET['format'] ?? 'html';
 
-define('PROJECT_ROOT', __DIR__);
+define('PROJECT_ROOT', dirname(__DIR__));
 
 $configFile = PROJECT_ROOT . '/config.json';
 if (!file_exists($configFile)) {

@@ -130,7 +130,7 @@ php activity-report.php --show-unmatched
 If you'd like to start a HTTP webserver locally, run the following:
 
 ```bash
-php -S localhost:8000 report_renderer.php
+php -S localhost:8000 www/index.php
 ```
 
 This will give you a UI to view the reports more aesthetically than markdown, if desired.

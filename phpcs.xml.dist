@@ -3,8 +3,7 @@
     <description>Coding standards for activity-report.php (PSR-12 with CLI-script exceptions).</description>
 
     <file>activity-report.php</file>
-    <file>api.php</file>
-    <file>report_renderer.php</file>
+    <file>www/</file>
     <file>src/</file>
     <arg name="extensions" value="php"/>
     <arg name="colors"/>
