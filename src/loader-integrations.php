@@ -79,6 +79,10 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
                 $existing['integrations']['clickup'][$idx]['assignee'] = (string)$conn['assignee'];
             }
         }
+
+        if (is_file($configFile) && backupConfigSnapshot($configFile, 'integrations') === null) {
+            integrationWarning('failed to create config backup in reports/config before auto-save');
+        }
         file_put_contents($configFile, json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
     }
 
@@ -98,6 +102,23 @@ function integrationWarning(string $message): void
     }
 
     error_log($line);
+}
+
+/**
+ * Creates a timestamped config snapshot in reports/config.
+ *
+ * @return string|null Backup path on success, null on failure.
+ */
+function backupConfigSnapshot(string $configFile, string $source): ?string
+{
+    $backupDir = PROJECT_ROOT . '/reports/config';
+    if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true)) {
+        return null;
+    }
+
+    $stamp = (new DateTimeImmutable('now'))->format('Ymd\\THis_u');
+    $backupPath = $backupDir . '/config.' . $source . '.' . $stamp . '.json';
+    return copy($configFile, $backupPath) ? $backupPath : null;
 }
 
 /**

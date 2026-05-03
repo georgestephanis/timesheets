@@ -46,6 +46,9 @@ package.json                — dev dep: prettier ^3.0
 .prettierrc.json            — 4-space indent, 120-char print width
 .prettierignore             — excludes vendor/ and node_modules/
 .gitignore                  — excludes config.json, vendor/, node_modules/
+tools/
+  sync-integration-projects.php    — discovers Harvest/ClickUp project catalogs and merges mappings into config.json
+  cleanup-integration-projects.php — conservative merge of newly added integration project stubs back into existing projects
 ```
 
 `vendor/` and `node_modules/` are installed locally but not committed.
@@ -183,6 +186,32 @@ Covers `config.example.json`, `config.schema.json`, `composer.json`, `package.js
 
 `config.json` and `config.example.json` both carry a `"$schema": "./config.schema.json"` pointer. Editors that support JSON Schema (VS Code, JetBrains) will validate and autocomplete config files automatically.
 
+### Integration project sync tools
+
+Use these scripts to keep external project names linked into local `projects` mappings:
+
+```bash
+php tools/sync-integration-projects.php
+```
+
+What this does:
+
+- Queries Harvest projects via `GET /v2/projects` (active projects).
+- If Harvest project listing is unauthorized for a token/account, falls back to `GET /v2/time_entries` and extracts `project.name` values seen in the past year.
+- Queries ClickUp names via team → spaces → folders → lists (including folderless lists).
+- Reuses an existing local project on case-insensitive name match; otherwise creates a new project stub.
+- Adds Harvest mappings under `harvest_projects` as exact names.
+- Adds ClickUp mappings under `clickup_tasks` as `*Name*` globs.
+
+Conservative cleanup (optional):
+
+```bash
+php tools/cleanup-integration-projects.php --baseline reports/config/config.sync.<timestamp>.json --dry-run
+php tools/cleanup-integration-projects.php --baseline reports/config/config.sync.<timestamp>.json --apply
+```
+
+Cleanup only merges high-confidence name matches back into existing projects and leaves ambiguous additions untouched.
+
 ---
 
 ## Conventions
@@ -192,4 +221,5 @@ Covers `config.example.json`, `config.schema.json`, `composer.json`, `package.js
 - **Schema stays in sync.** Whenever a new config key is added or an existing key's shape changes, update `config.schema.json` and `config.example.json` in the same change.
 - **Run linters before committing.** `composer lint` must exit 0. `npm run format:check` must exit 0.
 - **`config.json` is never committed.** It contains real email addresses, repo paths, and workspace names. It is in `.gitignore`.
+- **Config backups live in `reports/config/`.** Any tool or runtime path that mutates `config.json` must write a timestamped backup into `reports/config/` first (do not create root-level `config.json.bak*` files).
 - **Cache stays flat JSON, not SQLite.** Each cached range is a small set of per-date JSON files. The volumes are tiny (one person, one day), files are transparent and easy to inspect or delete, and selective invalidation is just `rm -rf reports/YYYY-MM/DD/`. A SQLite cache would add complexity without meaningful benefit. If cross-range aggregate queries become a priority in future, build a thin read layer over the already-generated report files rather than re-doing raw event storage in SQLite.
