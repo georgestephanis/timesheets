@@ -73,7 +73,7 @@
         "clickup": [
             {
                 "name": "ClickUp Main",
-                "team_id": "1234567",
+                "team_id": ["1234567", "7654321"],
                 "token": "CLICKUP_PERSONAL_ACCESS_TOKEN",
                 "assignee": "me"
             }

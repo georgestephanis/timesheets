@@ -18,27 +18,143 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
 {
     $rows = [];
     $integrations = $config['integrations'] ?? [];
+    $configDirty = false;
 
-    foreach (($integrations['harvest'] ?? []) as $conn) {
+    foreach (($integrations['harvest'] ?? []) as $idx => $conn) {
         if (!is_array($conn)) {
             continue;
         }
-        foreach (loadHarvestTimeEntries($conn, $from, $to) as $row) {
-            $rows[] = $row;
+        $label = (string)($conn['name'] ?? "harvest[$idx]");
+        // Auto-resolve user_id from /v2/users/me when absent/non-standard, then persist it.
+        if (!idLooksStandard($conn['user_id'] ?? null)) {
+            $resolved = resolveHarvestUserId($conn);
+            if ($resolved !== null) {
+                $conn['user_id'] = $resolved;
+                $config['integrations']['harvest'][$idx]['user_id'] = $resolved;
+                $configDirty = true;
+            }
+        }
+        try {
+            foreach (loadHarvestTimeEntries($conn, $from, $to) as $row) {
+                $rows[] = $row;
+            }
+        } catch (RuntimeException $e) {
+            fwrite(STDERR, "warning: [$label] " . $e->getMessage() . "\n");
         }
     }
 
-    foreach (($integrations['clickup'] ?? []) as $conn) {
+    foreach (($integrations['clickup'] ?? []) as $idx => $conn) {
         if (!is_array($conn)) {
             continue;
         }
-        foreach (loadClickUpTimeEntries($conn, $from, $to) as $row) {
-            $rows[] = $row;
+        $label = (string)($conn['name'] ?? "clickup[$idx]");
+        // Auto-resolve assignee from /api/v2/user when absent/non-standard, then persist it.
+        if (!idLooksStandard($conn['assignee'] ?? null)) {
+            $resolved = resolveClickUpUserId($conn);
+            if ($resolved !== null) {
+                $conn['assignee'] = $resolved;
+                $config['integrations']['clickup'][$idx]['assignee'] = $resolved;
+                $configDirty = true;
+            }
         }
+        try {
+            foreach (loadClickUpTimeEntries($conn, $from, $to) as $row) {
+                $rows[] = $row;
+            }
+        } catch (RuntimeException $e) {
+            fwrite(STDERR, "warning: [$label] " . $e->getMessage() . "\n");
+        }
+    }
+
+    if ($configDirty) {
+        $configFile = PROJECT_ROOT . '/config.json';
+        $existing = is_file($configFile) ? (json_decode((string)file_get_contents($configFile), true) ?? []) : [];
+        foreach (($config['integrations']['harvest'] ?? []) as $idx => $conn) {
+            if (isset($conn['user_id']) && is_array($existing['integrations']['harvest'][$idx] ?? null)) {
+                $existing['integrations']['harvest'][$idx]['user_id'] = $conn['user_id'];
+            }
+        }
+        foreach (($config['integrations']['clickup'] ?? []) as $idx => $conn) {
+            if (isset($conn['assignee']) && is_array($existing['integrations']['clickup'][$idx] ?? null)) {
+                $existing['integrations']['clickup'][$idx]['assignee'] = (string)$conn['assignee'];
+            }
+        }
+        file_put_contents($configFile, json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
     }
 
     usort($rows, fn($a, $b) => $a['start'] <=> $b['start']);
     return $rows;
+}
+
+/**
+ * True when an ID looks like a numeric account/user identifier.
+ */
+function idLooksStandard(mixed $value): bool
+{
+    if (is_int($value)) {
+        return $value > 0;
+    }
+
+    if (is_string($value)) {
+        return $value !== '' && preg_match('/^[0-9]+$/', $value) === 1;
+    }
+
+    return false;
+}
+
+/**
+ * Fetches the authenticated Harvest user's ID from /v2/users/me.
+ * Returns null on any failure so callers can treat it as optional.
+ *
+ * @param  array $conn Harvest connection config (needs token + account_id).
+ * @return int|null
+ */
+function resolveHarvestUserId(array $conn): ?int
+{
+    $token = (string)($conn['token'] ?? '');
+    $accountId = (string)($conn['account_id'] ?? '');
+    if ($token === '' || $accountId === '') {
+        return null;
+    }
+
+    try {
+        $json = httpGetJson('https://api.harvestapp.com/v2/users/me', [
+            'Authorization: Bearer ' . $token,
+            'Harvest-Account-ID: ' . $accountId,
+            'User-Agent: activity-report',
+            'Accept: application/json',
+        ]);
+        $id = $json['id'] ?? null;
+        return is_int($id) ? $id : (is_numeric($id) ? (int)$id : null);
+    } catch (RuntimeException $e) {
+        return null;
+    }
+}
+
+/**
+ * Fetches the authenticated ClickUp user's ID from /api/v2/user.
+ * Returns null on failure so callers can treat it as optional.
+ *
+ * @param  array $conn ClickUp connection config (needs token).
+ * @return string|null
+ */
+function resolveClickUpUserId(array $conn): ?string
+{
+    $token = (string)($conn['token'] ?? '');
+    if ($token === '') {
+        return null;
+    }
+
+    try {
+        $json = httpGetJson('https://api.clickup.com/api/v2/user', [
+            'Authorization: ' . $token,
+            'Accept: application/json',
+        ]);
+        $id = $json['user']['id'] ?? null;
+        return idLooksStandard($id) ? (string)$id : null;
+    } catch (RuntimeException $e) {
+        return null;
+    }
 }
 
 /**
@@ -72,10 +188,15 @@ function httpGetJson(string $url, array $headers): array
 
     $decoded = json_decode($raw, true);
     if (!is_array($decoded)) {
-        throw new RuntimeException("Invalid JSON from $url");
+        throw new RuntimeException("Invalid JSON from $url — body: " . substr($raw, 0, 300));
     }
     if ($status < 200 || $status >= 300) {
-        $msg = is_string($decoded['error'] ?? null) ? $decoded['error'] : ($decoded['err'] ?? 'request failed');
+        // ClickUp wraps errors as {"ECODE":"...","err":"..."}, Harvest uses {"error":"..."}
+        $msg = $decoded['error'] ?? $decoded['err'] ?? null;
+        if (!is_string($msg) || $msg === '') {
+            // Fallback: dump the whole decoded body for context
+            $msg = json_encode($decoded);
+        }
         throw new RuntimeException("HTTP $status from $url: $msg");
     }
 
@@ -109,7 +230,7 @@ function loadHarvestTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
             'to' => $to->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d'),
             'page' => (string)$page,
         ];
-        if (is_int($userId) || (is_string($userId) && $userId !== '')) {
+        if (idLooksStandard($userId)) {
             $params['user_id'] = (string)$userId;
         }
 
@@ -185,8 +306,10 @@ function loadHarvestTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
 function loadClickUpTimeEntries(array $conn, DateTimeImmutable $from, DateTimeImmutable $to): array
 {
     $token = (string)($conn['token'] ?? '');
-    $teamId = (string)($conn['team_id'] ?? '');
-    if ($token === '' || $teamId === '') {
+    $rawTeamId = $conn['team_id'] ?? '';
+    $teamIds = is_array($rawTeamId) ? $rawTeamId : [$rawTeamId];
+    $teamIds = array_values(array_filter(array_map('strval', $teamIds), fn($v) => $v !== ''));
+    if ($token === '' || $teamIds === []) {
         return [];
     }
 
@@ -198,51 +321,53 @@ function loadClickUpTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
         'start_date' => (string)($from->setTimezone(new DateTimeZone('UTC'))->getTimestamp() * 1000),
         'end_date' => (string)($to->setTimezone(new DateTimeZone('UTC'))->getTimestamp() * 1000),
     ];
-    if (is_string($assignee) && $assignee !== '') {
+    if (idLooksStandard($assignee)) {
         $params['assignee'] = $assignee;
     }
 
-    $url = 'https://api.clickup.com/api/v2/team/' . rawurlencode($teamId) . '/time_entries?' . http_build_query($params);
-    $json = httpGetJson($url, [
-        'Authorization: ' . $token,
-        'Accept: application/json',
-    ]);
+    foreach ($teamIds as $teamId) {
+        $url = 'https://api.clickup.com/api/v2/team/' . rawurlencode($teamId) . '/time_entries?' . http_build_query($params);
+        $json = httpGetJson($url, [
+            'Authorization: ' . $token,
+            'Accept: application/json',
+        ]);
 
-    foreach (($json['data'] ?? []) as $e) {
-        if (!is_array($e)) {
-            continue;
+        foreach (($json['data'] ?? []) as $e) {
+            if (!is_array($e)) {
+                continue;
+            }
+
+            $startMs = (int)($e['start'] ?? 0);
+            $endMs = (int)($e['end'] ?? 0);
+            $durationMs = (int)($e['duration'] ?? 0);
+            if ($durationMs <= 0 && $endMs > $startMs) {
+                $durationMs = $endMs - $startMs;
+            }
+            $seconds = (int)round(max(0, $durationMs) / 1000);
+            if ($seconds <= 0) {
+                continue;
+            }
+
+            $start = (new DateTimeImmutable('@' . (int)floor($startMs / 1000)))->setTimezone(new DateTimeZone('UTC'));
+            $end = $start->modify('+' . $seconds . ' seconds');
+
+            $taskName = (string)($e['task']['name'] ?? '');
+            $description = trim((string)($e['description'] ?? ''));
+            $label = $taskName !== '' ? $taskName : ($description !== '' ? $description : 'ClickUp time entry');
+
+            $rows[] = [
+                'source' => 'clickup',
+                'connection' => $name,
+                'start' => $start,
+                'end' => $end,
+                'seconds' => $seconds,
+                'project_hint' => $label,
+                'label' => $label,
+                'entry_count' => 1,
+                'activity_count' => 1,
+                'discussion_count' => $description !== '' ? 1 : 0,
+            ];
         }
-
-        $startMs = (int)($e['start'] ?? 0);
-        $endMs = (int)($e['end'] ?? 0);
-        $durationMs = (int)($e['duration'] ?? 0);
-        if ($durationMs <= 0 && $endMs > $startMs) {
-            $durationMs = $endMs - $startMs;
-        }
-        $seconds = (int)round(max(0, $durationMs) / 1000);
-        if ($seconds <= 0) {
-            continue;
-        }
-
-        $start = (new DateTimeImmutable('@' . (int)floor($startMs / 1000)))->setTimezone(new DateTimeZone('UTC'));
-        $end = $start->modify('+' . $seconds . ' seconds');
-
-        $taskName = (string)($e['task']['name'] ?? '');
-        $description = trim((string)($e['description'] ?? ''));
-        $label = $taskName !== '' ? $taskName : ($description !== '' ? $description : 'ClickUp time entry');
-
-        $rows[] = [
-            'source' => 'clickup',
-            'connection' => $name,
-            'start' => $start,
-            'end' => $end,
-            'seconds' => $seconds,
-            'project_hint' => $label,
-            'label' => $label,
-            'entry_count' => 1,
-            'activity_count' => 1,
-            'discussion_count' => $description !== '' ? 1 : 0,
-        ];
     }
 
     return $rows;
