@@ -58,6 +58,11 @@ function main(array $config): void
     }
     saveGeneratedReport($dir, $key, $from, $to, $format, $opts['project'], $cached !== null, $out);
 
+    if ($format === 'md') {
+        $jsonOut = renderJson($bucket, $unmatched, $from, $to, $tz);
+        saveGeneratedReport($dir, $key, $from, $to, 'json', $opts['project'], $cached !== null, $jsonOut);
+    }
+
     echo $out;
 }
 
