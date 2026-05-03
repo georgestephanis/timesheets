@@ -33,7 +33,12 @@ src/
   loader-activitywatch.php  — loadActivityWatch(), loadAwSqlite()
   loader-chrome.php         — loadChromeHistory(), backfillChromeUrls(), bsearchRight()
   loader-git.php            — loadGitCommits()
-  loader-integrations.php   — loadIntegrationActivity(), loadHarvestTimeEntries(), loadClickUpTimeEntries()
+  loader-integrations.php   — loadIntegrationActivity(), integrationWarning(), backupConfigSnapshot()
+  integrations/
+    shared.php              — idLooksStandard(), httpGetJson()
+    harvest.php             — resolveHarvestUserId(), loadHarvestTimeEntries()
+    clickup.php             — resolveClickUpUserId(), loadClickUpTimeEntries()
+    github.php              — loadGitHubActivity(), github* helpers
   classifiers.php           — classifyVscode(), classifySlack(), classifySsh(),
                               projectForSignals(), isAfkAt(), classifyAndAggregate()
   renderers.php             — renderProjectEntry(), renderMarkdown(), renderJson(), renderTsv()
@@ -69,7 +74,11 @@ Logic is split across `src/` includes with no classes. All code is plain functio
 | `src/loader-activitywatch.php` | `loadActivityWatch`, `loadAwSqlite`                                                                                                                                 |
 | `src/loader-chrome.php`        | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight`                                                                                                           |
 | `src/loader-git.php`           | `loadGitCommits`                                                                                                                                                    |
-| `src/loader-integrations.php`  | `loadIntegrationActivity`, `loadHarvestTimeEntries`, `loadClickUpTimeEntries`                                                                                       |
+| `src/loader-integrations.php`  | `loadIntegrationActivity`, `integrationWarning`, `backupConfigSnapshot`                                                                                             |
+| `src/integrations/shared.php`  | `idLooksStandard`, `httpGetJson`                                                                                                                                      |
+| `src/integrations/harvest.php` | `resolveHarvestUserId`, `loadHarvestTimeEntries`                                                                                                                     |
+| `src/integrations/clickup.php` | `resolveClickUpUserId`, `loadClickUpTimeEntries`                                                                                                                     |
+| `src/integrations/github.php`  | `loadGitHubActivity`, `githubActorLogins`, `githubPaginatedGet`, `githubDateInRange`, `githubGetJson`, `githubReposByProject`, `githubRepoFromRemoteUrl`         |
 | `src/classifiers.php`          | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `isAfkAt`, `classifyAndAggregate`                                                            |
 | `src/renderers.php`            | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv`                                                                                                   |
 
