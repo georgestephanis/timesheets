@@ -10,7 +10,7 @@ A PHP CLI tool that aggregates local activity data from three sources and produc
 
 | Source | Data | Location |
 |---|---|---|
-| ActivityWatch | App/window focus events + AFK status | `~/Library/Application Support/activitywatch/` (SQLite) |
+| ActivityWatch | App/window focus events + AFK status + input slices (presses/clicks/mouse/scroll) | `~/Library/Application Support/activitywatch/` (SQLite) |
 | Chrome history | Browser visits with URLs and titles | `~/Library/Application Support/Google/Chrome/` (SQLite) |
 | Git | Commits authored by configured email(s) | All repos listed in `projects[*].repos` |
 
@@ -78,6 +78,8 @@ loadGitCommits ─────┘
 `backfillChromeUrls` fills in missing URLs on Chrome ActivityWatch events by correlating them with the Chrome history SQLite within a configurable time window (`chrome_correlation_window_seconds`).
 
 `classifyAndAggregate` returns `[$bucket, $unmatched]`. `$bucket` is indexed `[date][project]` with `seconds`, `detail` (broken down by kind: vscode/browser/slack/ssh/app), and `commits`. `$unmatched` records signals that didn't match any project rule, surfaced via `--show-unmatched`.
+
+When input buckets (`aw-watcher-input*`) are present, `classifyAndAggregate` also computes `active_seconds` and `activity_ratio` per `[date][project]` by overlapping focused window time with input slices that contain keyboard/mouse/scroll activity.
 
 ### Signal matching priority (inside `projectForSignals`)
 

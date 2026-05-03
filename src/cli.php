@@ -44,7 +44,16 @@ function main(array $config): void
         backfillChromeUrls($events, $chrome, (int)$config['chrome_correlation_window_seconds']);
     }
 
-    [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+    $fullOpts = $opts;
+    $fullOpts['project'] = null;
+    [$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $config, $tz, $fullOpts);
+
+    $hasProjectFilter = !empty($opts['project']);
+    if ($hasProjectFilter) {
+        [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+    } else {
+        [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
+    }
 
     $format = $opts['format'];
     $out = match ($format) {
@@ -53,14 +62,20 @@ function main(array $config): void
         default => renderMarkdown($bucket ?? [], $unmatched, $from, $to, $tz, $opts, $config),
     };
 
+    $fullOut = match ($format) {
+        'json' => renderJson($fullBucket, $fullUnmatched, $from, $to, $tz),
+        'tsv'  => renderTsv($fullBucket, $from, $to, $tz),
+        default => renderMarkdown($fullBucket ?? [], $fullUnmatched, $from, $to, $tz, $fullOpts, $config),
+    };
+
     if (!$cached) {
         saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits);
     }
-    saveGeneratedReport($dir, $key, $from, $to, $format, $opts['project'], $cached !== null, $out);
+    saveGeneratedReport($dir, $key, $from, $to, $format, null, $cached !== null, $fullOut);
 
     if ($format === 'md') {
-        $jsonOut = renderJson($bucket, $unmatched, $from, $to, $tz);
-        saveGeneratedReport($dir, $key, $from, $to, 'json', $opts['project'], $cached !== null, $jsonOut);
+        $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
+        saveGeneratedReport($dir, $key, $from, $to, 'json', null, $cached !== null, $jsonOut);
     }
 
     echo $out;

@@ -73,6 +73,8 @@ if ($format === 'html') {
     .date-form input[type="date"] { padding: 0.22rem 0.35rem; border: 1px solid #bbb; border-radius: 4px;
                                                                         font-size: 0.85rem; background: #f8f8f8; }
     .date-form .hint { font-size: 0.75rem; color: #666; }
+    .date-form .date-range { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .date-form .is-hidden { display: none; }
   .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px;
            font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
   .badge--live    { background: #d1fae5; color: #065f46; }
@@ -121,7 +123,6 @@ function buildApiUrl(params, rebuild = false) {
     if (params.from)    u.set('from',    params.from);
     if (params.to)      u.set('to',      params.to);
     if (params.days)    u.set('days',    String(params.days));
-    if (params.project) u.set('project', params.project);
     if (rebuild)        u.set('rebuild', '1');
     return 'api.php?' + u;
 }
@@ -181,8 +182,18 @@ function renderProject(tag, name, rec) {
     return `<${tag}>${esc(name)}${secStr}</${tag}>${body ? `<ul>${body}</ul>` : ''}`;
 }
 
-function renderDay(date, projects) {
-    const entries  = Object.entries(projects).sort(([, a], [, b]) => (b.seconds||0) - (a.seconds||0));
+function filterProjectsForView(projects, projectFilter) {
+    if (!projectFilter) return Object.entries(projects || {});
+    if (projectFilter.startsWith('group:')) {
+        const grouping = projectFilter.slice(6);
+        return Object.entries(projects || {}).filter(([, rec]) => (rec?.grouping || null) === grouping);
+    }
+    return Object.entries(projects || {}).filter(([name]) => name === projectFilter);
+}
+
+function renderDay(date, projects, projectFilter) {
+    const entries  = filterProjectsForView(projects, projectFilter).sort(([, a], [, b]) => (b.seconds||0) - (a.seconds||0));
+    if (!entries.length) return '';
     const dayTotal = entries.reduce((s, [, r]) => s + (r.seconds||0), 0);
     const dow      = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
 
@@ -210,10 +221,26 @@ function renderDay(date, projects) {
     return html;
 }
 
-function renderReport(data) {
+function renderReport(data, projectFilter = '') {
     const days = Object.keys(data.days || {}).sort().reverse();
     if (!days.length) return '<p><em>No activity recorded for this period.</em></p>';
-    return days.map(date => renderDay(date, data.days[date])).join('\n');
+
+    const blocks = days
+        .map(date => renderDay(date, data.days[date], projectFilter))
+        .filter(Boolean);
+
+    if (!blocks.length) return '<p><em>No activity recorded for this filter in this period.</em></p>';
+    return blocks.join('\n');
+}
+
+function renderCurrentView() {
+    if (!currentData) return;
+    const elReport = document.getElementById('report');
+    const elNav = document.getElementById('nav');
+
+    elNav.innerHTML = renderNav(currentParams || {}, currentData.from, currentData.to);
+    elReport.innerHTML = renderReport(currentData, currentParams?.project || '');
+    bindNavEvents();
 }
 
 // ── Diff ──────────────────────────────────────────────────────────────────────
@@ -259,10 +286,16 @@ function renderNav(params, fromRaw, toRaw) {
     // data.from / data.to are full ISO strings ("2026-05-01T00:00:00-04:00"); strip the time part.
     const from = String(fromRaw).slice(0, 10);
     const to   = String(toRaw).slice(0, 10);
-    const rangeDays = Math.max(1, Math.round((new Date(`${to}T12:00:00`) - new Date(`${from}T12:00:00`)) / 86400000) + 1);
-    const prevFrom  = addDays(from, -rangeDays),  prevTo  = addDays(from, -1);
-    const nextFrom  = addDays(to,    1),           nextTo  = addDays(to,  rangeDays);
+    const start = from <= to ? from : to;
+    const end = from <= to ? to : from;
+    const rangeDays = Math.max(1, Math.round((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1);
+    const prevFrom  = addDays(start, -rangeDays), prevTo = addDays(start, -1);
+    const nextFrom  = addDays(end, 1),            nextTo = addDays(end, rangeDays);
     const isFuture  = nextFrom > SITE.today;
+    const hasRange = start !== end;
+    const addRangeClass = hasRange ? 'is-hidden' : '';
+    const rangeClass = hasRange ? '' : 'is-hidden';
+    const removeRangeClass = hasRange ? '' : 'is-hidden';
 
     const prevUrl   = buildPageUrl({ ...params, from: prevFrom, to: prevTo,   days: null });
     const nextUrl   = buildPageUrl({ ...params, from: nextFrom, to: nextTo,   days: null });
@@ -302,11 +335,14 @@ function renderNav(params, fromRaw, toRaw) {
       ${nextBtn}
       <span class="sep">|</span>
             <form class="date-form" data-date-form>
-                <input type="date" data-date-from value="${esc(from)}" aria-label="Start date" required>
-                <span>&rarr;</span>
-                <input type="date" data-date-to value="${esc(to)}" aria-label="End date">
+                <input type="date" data-date-from value="${esc(start)}" aria-label="Start date" required>
+                <a href="#" class="btn ${addRangeClass}" data-add-range>Add end date</a>
+                <span class="date-range ${rangeClass}" data-date-range>
+                    <span>&rarr;</span>
+                    <input type="date" data-date-to value="${esc(hasRange ? end : '')}" aria-label="End date">
+                    <a href="#" class="btn ${removeRangeClass}" data-remove-range>Single day</a>
+                </span>
                 <button class="btn" type="submit">Apply</button>
-                <span class="hint">Leave end blank for one day</span>
             </form>
             <span class="sep">|</span>
       <select data-project-select>
@@ -349,7 +385,7 @@ async function fetchAndRender(params, isRebuild = false) {
         const to   = data.to;
 
         elNav.innerHTML    = renderNav(params, from, to);
-        elReport.innerHTML = renderReport(data);
+        elReport.innerHTML = renderReport(data, params.project || '');
 
         if (isRebuild) {
             elBanner.innerHTML = renderDiffBanner(computeDiff(prevData, data), prevData !== null);
@@ -385,25 +421,56 @@ function bindNavEvents() {
 
     const dateForm = nav.querySelector('[data-date-form]');
     if (dateForm) {
+        const fromInput = nav.querySelector('[data-date-from]');
+        const toInput = nav.querySelector('[data-date-to]');
+        const rangeWrap = nav.querySelector('[data-date-range]');
+        const addRangeBtn = nav.querySelector('[data-add-range]');
+        const removeRangeBtn = nav.querySelector('[data-remove-range]');
+
+        const showRange = () => {
+            rangeWrap?.classList.remove('is-hidden');
+            addRangeBtn?.classList.add('is-hidden');
+            if (toInput && !toInput.value) {
+                toInput.value = fromInput?.value || '';
+            }
+            toInput?.focus();
+        };
+
+        const hideRange = () => {
+            rangeWrap?.classList.add('is-hidden');
+            addRangeBtn?.classList.remove('is-hidden');
+            if (toInput) {
+                toInput.value = '';
+            }
+        };
+
+        addRangeBtn?.addEventListener('click', e => {
+            e.preventDefault();
+            showRange();
+        });
+
+        removeRangeBtn?.addEventListener('click', e => {
+            e.preventDefault();
+            hideRange();
+        });
+
         dateForm.addEventListener('submit', e => {
             e.preventDefault();
-            const fromInput = nav.querySelector('[data-date-from]');
-            const toInput = nav.querySelector('[data-date-to]');
             const from = fromInput?.value || '';
-            const to = toInput?.value || from;
+            const to = rangeWrap?.classList.contains('is-hidden') ? from : (toInput?.value || from);
             if (!from) return;
-            navigateTo({ from, to, days: null });
+            const nextFrom = from <= to ? from : to;
+            const nextTo = from <= to ? to : from;
+            navigateTo({ from: nextFrom, to: nextTo, days: null });
         });
     }
 
     const sel = nav.querySelector('[data-project-select]');
     if (sel) {
         sel.addEventListener('change', () => {
-            const fromInput = nav.querySelector('[data-date-from]');
-            const toInput = nav.querySelector('[data-date-to]');
-            const from = fromInput?.value || String(currentData?.from ?? '').slice(0, 10);
-            const to = toInput?.value || from || String(currentData?.to ?? '').slice(0, 10);
-            navigateTo({ project: sel.value, from, to, days: null });
+            currentParams = { ...currentParams, project: sel.value };
+            history.pushState(currentParams, '', buildPageUrl(currentParams));
+            renderCurrentView();
         });
     }
 
@@ -472,7 +539,6 @@ $tz = new DateTimeZone($config['timezone']);
 
 $dir  = reportsDir($from);
 $key  = reportsCacheKey($from, $to);
-$slug = $opts['project'] !== null ? '--' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $opts['project']) : '';
 
 $cached    = (!$rebuild && rangeIsHistorical($to, $tz)) ? loadCachedSources($dir, $key) : null;
 $fromCache = $cached !== null;
@@ -486,7 +552,16 @@ if ($fromCache) {
     backfillChromeUrls($events, $chrome, (int)$config['chrome_correlation_window_seconds']);
 }
 
-[$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+$fullOpts = $opts;
+$fullOpts['project'] = null;
+[$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $config, $tz, $fullOpts);
+
+$hasProjectFilter = !empty($opts['project']);
+if ($hasProjectFilter) {
+    [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+} else {
+    [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
+}
 
 $out = match ($opts['format']) {
     'json' => renderJson($bucket, $unmatched, $from, $to, $tz),
@@ -494,13 +569,19 @@ $out = match ($opts['format']) {
     default => renderMarkdown($bucket, $unmatched, $from, $to, $tz, $opts, $config),
 };
 
+$fullOut = match ($opts['format']) {
+    'json' => renderJson($fullBucket, $fullUnmatched, $from, $to, $tz),
+    'tsv'  => renderTsv($fullBucket, $from, $to, $tz),
+    default => renderMarkdown($fullBucket, $fullUnmatched, $from, $to, $tz, $fullOpts, $config),
+};
+
 if (!$fromCache) {
     saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits);
 }
-saveGeneratedReport($dir, $key, $from, $to, $opts['format'], $opts['project'], $fromCache, $out);
+saveGeneratedReport($dir, $key, $from, $to, $opts['format'], null, $fromCache, $fullOut);
 if ($opts['format'] === 'md') {
-    $jsonOut = renderJson($bucket, $unmatched, $from, $to, $tz);
-    saveGeneratedReport($dir, $key, $from, $to, 'json', $opts['project'], $fromCache, $jsonOut);
+    $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
+    saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $jsonOut);
 }
 
 echo $out;

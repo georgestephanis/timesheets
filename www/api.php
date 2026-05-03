@@ -60,11 +60,11 @@ $tz   = new DateTimeZone($config['timezone']);
 
 $dir  = reportsDir($from);
 $key  = reportsCacheKey($from, $to);
-$slug = $opts['project'] !== null ? '--' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $opts['project']) : '';
+$hasProjectFilter = !empty($opts['project']);
 
 // For historical ranges, serve the latest saved JSON if not rebuilding.
-if (!$rebuild && rangeIsHistorical($to, $tz)) {
-    $latest = findLatestReport($dir, $key, $slug, 'json');
+if (!$rebuild && !$hasProjectFilter && rangeIsHistorical($to, $tz)) {
+    $latest = findLatestReport($dir, $key, '', 'json');
     if ($latest) {
         header('X-Report-Source: cached');
         readfile($latest);
@@ -85,13 +85,23 @@ if ($fromCache) {
     backfillChromeUrls($events, $chrome, (int)$config['chrome_correlation_window_seconds']);
 }
 
-[$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+$fullOpts = $opts;
+$fullOpts['project'] = null;
+[$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $config, $tz, $fullOpts);
+
+if ($hasProjectFilter) {
+    [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+} else {
+    [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
+}
+
 $out = renderJson($bucket, $unmatched, $from, $to, $tz);
+$fullOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
 
 if (!$fromCache) {
     saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits);
 }
-saveGeneratedReport($dir, $key, $from, $to, 'json', $opts['project'], $fromCache, $out);
+saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $fullOut);
 
 header('X-Report-Source: generated');
 echo $out;

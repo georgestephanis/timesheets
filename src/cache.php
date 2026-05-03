@@ -89,7 +89,7 @@ function loadCachedSources(string $dir, string $key): ?array
  * @param string            $key     Date-range key from reportsCacheKey().
  * @param DateTimeImmutable $from    Report start date (for the index record).
  * @param DateTimeImmutable $to      Report end date (for the index record).
- * @param array             $events  AW events (window + afk) after backfillChromeUrls().
+ * @param array             $events  AW events (window + afk + input) after backfillChromeUrls().
  * @param array             $chrome  Raw Chrome history rows.
  * @param array             $commits Git commit rows.
  */
@@ -125,6 +125,7 @@ function saveCachedSources(
         'counts'    => [
             'window_events' => count($events['window']),
             'afk_events'    => count($events['afk']),
+            'input_events'  => count($events['input'] ?? []),
             'chrome_rows'   => count($chrome),
             'commits'       => count($commits),
         ],
@@ -221,8 +222,8 @@ function appendToIndex(string $path, array $record): void
 /**
  * Converts AW event arrays (containing DateTimeImmutable values) to plain JSON-serialisable arrays.
  *
- * @param  array{window: array, afk: array} $events ActivityWatch event arrays.
- * @return array{window: array, afk: array}
+ * @param  array{window: array, afk: array, input?: array} $events ActivityWatch event arrays.
+ * @return array{window: array, afk: array, input: array}
  */
 function serializeEvents(array $events): array
 {
@@ -234,14 +235,18 @@ function serializeEvents(array $events): array
         }
         return $r;
     }, $rows);
-    return ['window' => $fmt($events['window']), 'afk' => $fmt($events['afk'])];
+    return [
+        'window' => $fmt($events['window']),
+        'afk'    => $fmt($events['afk']),
+        'input'  => $fmt($events['input'] ?? []),
+    ];
 }
 
 /**
  * Reconstructs AW event arrays from cached JSON by re-hydrating ISO strings to DateTimeImmutable.
  *
- * @param  array{window: array, afk: array} $data Decoded JSON data.
- * @return array{window: array, afk: array}
+ * @param  array{window: array, afk: array, input?: array} $data Decoded JSON data.
+ * @return array{window: array, afk: array, input: array}
  */
 function deserializeEvents(array $data): array
 {
@@ -253,7 +258,11 @@ function deserializeEvents(array $data): array
         }
         return $r;
     }, $rows);
-    return ['window' => $parse($data['window'] ?? []), 'afk' => $parse($data['afk'] ?? [])];
+    return [
+        'window' => $parse($data['window'] ?? []),
+        'afk'    => $parse($data['afk'] ?? []),
+        'input'  => $parse($data['input'] ?? []),
+    ];
 }
 
 /**
