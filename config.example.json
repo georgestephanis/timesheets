@@ -20,6 +20,8 @@
             "repos": ["~/code/acme-backend", "~/code/acme-frontend"],
             "vscode_dirs": ["acme-backend", "acme-frontend", "acme"],
             "domains": ["acme.com", "*.acme.com", "acme.local", "acme.wp.local"],
+            "harvest_projects": ["Acme*"],
+            "clickup_tasks": ["*acme*"],
             "slack": [{ "workspace": "Acme Corp" }],
             "ssh_hosts": ["acme-prod", "acme-staging*"]
         },
@@ -57,5 +59,24 @@
 
     "personal_apps": ["Discord", "Messenger"],
 
-    "ignored_projects": []
+    "ignored_projects": [],
+
+    "integrations": {
+        "harvest": [
+            {
+                "name": "Harvest Main",
+                "account_id": "123456",
+                "token": "HARVEST_PERSONAL_ACCESS_TOKEN",
+                "user_id": "1234567"
+            }
+        ],
+        "clickup": [
+            {
+                "name": "ClickUp Main",
+                "team_id": "1234567",
+                "token": "CLICKUP_PERSONAL_ACCESS_TOKEN",
+                "assignee": "me"
+            }
+        ]
+    }
 }

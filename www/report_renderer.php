@@ -768,6 +768,7 @@ require_once PROJECT_ROOT . '/src/cache.php';
 require_once PROJECT_ROOT . '/src/loader-activitywatch.php';
 require_once PROJECT_ROOT . '/src/loader-chrome.php';
 require_once PROJECT_ROOT . '/src/loader-git.php';
+require_once PROJECT_ROOT . '/src/loader-integrations.php';
 require_once PROJECT_ROOT . '/src/classifiers.php';
 require_once PROJECT_ROOT . '/src/renderers.php';
 require_once PROJECT_ROOT . '/src/cli.php';
@@ -795,21 +796,22 @@ $cached    = (!$rebuild && rangeIsHistorical($to, $tz)) ? loadCachedSources($dir
 $fromCache = $cached !== null;
 
 if ($fromCache) {
-    ['events' => $events, 'chrome' => $chrome, 'commits' => $commits] = $cached;
+    ['events' => $events, 'chrome' => $chrome, 'commits' => $commits, 'external' => $external] = $cached;
 } else {
     $events  = loadActivityWatch($config, $from, $to);
     $chrome  = loadChromeHistory($config, $from, $to);
     $commits = loadGitCommits($config, $from, $to);
+    $external = loadIntegrationActivity($config, $from, $to);
     backfillChromeUrls($events, $chrome, (int)$config['chrome_correlation_window_seconds']);
 }
 
 $fullOpts = $opts;
 $fullOpts['project'] = null;
-[$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $config, $tz, $fullOpts);
+[$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $fullOpts);
 
 $hasProjectFilter = !empty($opts['project']);
 if ($hasProjectFilter) {
-    [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+    [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $opts);
 } else {
     [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
 }
@@ -827,7 +829,7 @@ $fullOut = match ($opts['format']) {
 };
 
 if (!$fromCache) {
-    saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits);
+    saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits, $external);
 }
 saveGeneratedReport($dir, $key, $from, $to, $opts['format'], null, $fromCache, $fullOut);
 if ($opts['format'] === 'md') {

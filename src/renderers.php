@@ -49,6 +49,21 @@ function renderProjectEntry(string $heading, string $name, array $rec, int $minS
     if ($sec > 0) {
         $out .= '- _input activity:_ ' . fmtDur($activeSec) . ' (' . (int)round($activityRatio * 100) . "%)\n";
     }
+    foreach (($rec['external'] ?? []) as $source => $meta) {
+        $entries = (int)($meta['entries'] ?? 0);
+        $activity = (int)($meta['activity'] ?? 0);
+        $discussion = (int)($meta['discussion'] ?? 0);
+        if ($entries > 0 || $activity > 0 || $discussion > 0) {
+            $out .= '- _' . $source . ':_ ' . $entries . ' entries';
+            if ($activity > 0) {
+                $out .= ', ' . $activity . ' activity';
+            }
+            if ($discussion > 0) {
+                $out .= ', ' . $discussion . ' discussion';
+            }
+            $out .= "\n";
+        }
+    }
     if ($commits) {
         $out .= "- _commits (" . count($commits) . "):_\n";
         foreach ($commits as $c) {
@@ -192,6 +207,7 @@ function renderJson(array $bucket, array $unmatched, DateTimeImmutable $from, Da
                 'seconds'  => $rec['seconds']  ?? 0,
                 'active_seconds' => $rec['active_seconds'] ?? 0,
                 'activity_ratio' => $rec['activity_ratio'] ?? 0,
+                'external' => $rec['external'] ?? [],
                 'detail'   => $rec['detail']   ?? [],
                 'commits' => array_map(fn($c) => [
                     'time' => $c['dt']->setTimezone($tz)->format('c'),
@@ -226,17 +242,26 @@ function renderJson(array $bucket, array $unmatched, DateTimeImmutable $from, Da
  */
 function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to, DateTimeZone $tz): string
 {
-    $rows = ["date\tgrouping\tproject\tseconds\tactive_seconds\tactivity_ratio\tcommits"];
+    $rows = [
+        "date\tgrouping\tproject\tseconds\tactive_seconds\tactivity_ratio\tcommits\t"
+        . "harvest_entries\tharvest_discussion\tclickup_entries\tclickup_discussion",
+    ];
     $dates = array_keys($bucket);
     sort($dates);
     foreach ($dates as $date) {
         foreach ($bucket[$date] as $proj => $rec) {
             $grouping = $rec['grouping'] ?? '';
+            $harvest = $rec['external']['harvest'] ?? [];
+            $clickup = $rec['external']['clickup'] ?? [];
             $rows[] = "$date\t$grouping\t$proj\t"
                 . (int)($rec['seconds'] ?? 0)
                 . "\t" . (int)($rec['active_seconds'] ?? 0)
                 . "\t" . sprintf('%.3f', (float)($rec['activity_ratio'] ?? 0))
-                . "\t" . count($rec['commits'] ?? []);
+                . "\t" . count($rec['commits'] ?? [])
+                . "\t" . (int)($harvest['entries'] ?? 0)
+                . "\t" . (int)($harvest['discussion'] ?? 0)
+                . "\t" . (int)($clickup['entries'] ?? 0)
+                . "\t" . (int)($clickup['discussion'] ?? 0);
         }
     }
     return implode("\n", $rows) . "\n";

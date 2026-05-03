@@ -6,13 +6,14 @@ Context file for AI agents and future contributors. Keep this up to date when th
 
 ## What this project is
 
-A PHP CLI tool that aggregates local activity data from three sources and produces a project-attributed time report:
+A PHP CLI tool that aggregates local activity data from four source categories and produces a project-attributed time report:
 
 | Source | Data | Location |
 |---|---|---|
 | ActivityWatch | App/window focus events + AFK status + input slices (presses/clicks/mouse/scroll) | `~/Library/Application Support/activitywatch/` (SQLite) |
 | Chrome history | Browser visits with URLs and titles | `~/Library/Application Support/Google/Chrome/` (SQLite) |
 | Git | Commits authored by configured email(s) | All repos listed in `projects[*].repos` |
+| External APIs (optional) | Harvest + ClickUp time/activity rows (supports multiple PAT connections) | HTTPS APIs |
 
 Events are classified into named **projects** by matching signals (VSCode window title, browser domain, Slack workspace/channel, SSH hostname) against rules in `config.json`. Anything that doesn't match a project rule falls into catch-all buckets (`Browser (uncategorized)`, `VSCode (uncategorized)`, etc.).
 
@@ -32,6 +33,7 @@ src/
   loader-activitywatch.php  — loadActivityWatch(), loadAwSqlite()
   loader-chrome.php         — loadChromeHistory(), backfillChromeUrls(), bsearchRight()
   loader-git.php            — loadGitCommits()
+  loader-integrations.php   — loadIntegrationActivity(), loadHarvestTimeEntries(), loadClickUpTimeEntries()
   classifiers.php           — classifyVscode(), classifySlack(), classifySsh(),
                               projectForSignals(), isAfkAt(), classifyAndAggregate()
   renderers.php             — renderProjectEntry(), renderMarkdown(), renderJson(), renderTsv()
@@ -62,6 +64,7 @@ Logic is split across `src/` includes with no classes. All code is plain functio
 | `src/loader-activitywatch.php` | `loadActivityWatch`, `loadAwSqlite` |
 | `src/loader-chrome.php` | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight` |
 | `src/loader-git.php` | `loadGitCommits` |
+| `src/loader-integrations.php` | `loadIntegrationActivity`, `loadHarvestTimeEntries`, `loadClickUpTimeEntries` |
 | `src/classifiers.php` | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `isAfkAt`, `classifyAndAggregate` |
 | `src/renderers.php` | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv` |
 
@@ -72,12 +75,15 @@ Logic is split across `src/` includes with no classes. All code is plain functio
 ```
 loadActivityWatch ──┐
 loadChromeHistory ──┼── backfillChromeUrls ──► classifyAndAggregate ──► render*
-loadGitCommits ─────┘
+loadGitCommits ─────┤
+loadIntegrationActivity ─┘
 ```
 
 `backfillChromeUrls` fills in missing URLs on Chrome ActivityWatch events by correlating them with the Chrome history SQLite within a configurable time window (`chrome_correlation_window_seconds`).
 
 `classifyAndAggregate` returns `[$bucket, $unmatched]`. `$bucket` is indexed `[date][project]` with `seconds`, `detail` (broken down by kind: vscode/browser/slack/ssh/app), and `commits`. `$unmatched` records signals that didn't match any project rule, surfaced via `--show-unmatched`.
+
+External rows are classified by project mapping rules (`harvest_projects`, `clickup_tasks`) and add seconds/detail plus per-source counts (`entries`, `activity`, `discussion`) under each bucket record.
 
 When input buckets (`aw-watcher-input*`) are present, `classifyAndAggregate` also computes `active_seconds` and `activity_ratio` per `[date][project]` by overlapping focused window time with input slices that contain keyboard/mouse/scroll activity.
 
@@ -113,11 +119,18 @@ Defined and validated by `config.schema.json`. Key fields:
       "vscode_dirs": ["folder-name"],
       "domains":     ["*.example.com", "example.com"],
       "slack":       [{"workspace": "Name", "channel_glob": "proj-*"}],
-      "ssh_hosts":   ["hostname*"]
+      "ssh_hosts":   ["hostname*"],
+      "harvest_projects": ["Project Name*"],
+      "clickup_tasks": ["*task keyword*"]
     }
   },
   "personal_hosts": ["youtube.com", ...],
-  "personal_apps":  ["Discord", ...]
+  "personal_apps":  ["Discord", ...],
+  "ignored_projects": ["Project Name"],
+  "integrations": {
+    "harvest": [{"name": "Main", "account_id": "...", "token": "...", "user_id": "..."}],
+    "clickup": [{"name": "Main", "team_id": "...", "token": "...", "assignee": "me"}]
+  }
 }
 ```
 

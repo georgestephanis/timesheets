@@ -1,10 +1,10 @@
 # activity-report
 
-A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, and Git into a project-attributed time report.
+A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp APIs into a project-attributed time report.
 
 ## How it works
 
-Every few seconds, ActivityWatch records which app and window title is in focus. With `aw-watcher-input` enabled, it also records keyboard/mouse/scroll activity slices. This script reads that data, correlates it with Chrome browsing history and Git commits, and classifies each event into a named **project** based on rules you define in `config.json`. The result is a per-day, per-project breakdown of where your time went, including active-input metrics.
+Every few seconds, ActivityWatch records which app and window title is in focus. With `aw-watcher-input` enabled, it also records keyboard/mouse/scroll activity slices. This script reads that data, correlates it with Chrome browsing history, Git commits, and optional Harvest/ClickUp time-entry feeds, then classifies each event into a named **project** based on rules you define in `config.json`. The result is a per-day, per-project breakdown of where your time went, including active-input and external-integration metrics.
 
 ```
 ## 2026-04-28 (Mon) — 7h 22m active
@@ -83,6 +83,8 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 | `projects`                          | object      | Named project definitions (see below)                                                             |
 | `personal_hosts`                    | string[]    | Browser hostnames to bucket as personal, not work                                                 |
 | `personal_apps`                     | string[]    | App names (as reported by ActivityWatch) to bucket as personal                                    |
+| `ignored_projects`                  | string[]    | Project names to exclude from classification and reporting                                         |
+| `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`)                                              |
 
 ### Project signals
 
@@ -106,7 +108,38 @@ Each project in `projects` is an object whose keys are all optional — include 
     ],
 
     // SSH hostnames seen in terminal window titles — glob * supported
-    "ssh_hosts": ["acme-prod", "acme-staging*"]
+    "ssh_hosts": ["acme-prod", "acme-staging*"],
+
+    // Harvest project-name globs mapped into this local project
+    "harvest_projects": ["Acme*"],
+
+    // ClickUp task/description globs mapped into this local project
+    "clickup_tasks": ["*acme*"]
+}
+```
+
+### External integrations (optional)
+
+Multiple personal-access-token connections are supported for each provider:
+
+```jsonc
+"integrations": {
+    "harvest": [
+        {
+            "name": "Harvest Main",
+            "account_id": "123456",
+            "token": "HARVEST_PERSONAL_ACCESS_TOKEN",
+            "user_id": "1234567"
+        }
+    ],
+    "clickup": [
+        {
+            "name": "ClickUp Main",
+            "team_id": "1234567",
+            "token": "CLICKUP_PERSONAL_ACCESS_TOKEN",
+            "assignee": "me"
+        }
+    ]
 }
 ```
 

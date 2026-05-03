@@ -35,22 +35,23 @@ function main(array $config): void
     $cached = rangeIsHistorical($to, $tz) ? loadCachedSources($dir, $key) : null;
 
     if ($cached) {
-        ['events' => $events, 'chrome' => $chrome, 'commits' => $commits] = $cached;
+        ['events' => $events, 'chrome' => $chrome, 'commits' => $commits, 'external' => $external] = $cached;
     } else {
         $events  = loadActivityWatch($config, $from, $to);
         $chrome  = loadChromeHistory($config, $from, $to);
         $commits = loadGitCommits($config, $from, $to);
+        $external = loadIntegrationActivity($config, $from, $to);
         // Back-fill before caching so cached events already carry URLs.
         backfillChromeUrls($events, $chrome, (int)$config['chrome_correlation_window_seconds']);
     }
 
     $fullOpts = $opts;
     $fullOpts['project'] = null;
-    [$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $config, $tz, $fullOpts);
+    [$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $fullOpts);
 
     $hasProjectFilter = !empty($opts['project']);
     if ($hasProjectFilter) {
-        [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+        [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $opts);
     } else {
         [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
     }
@@ -69,7 +70,7 @@ function main(array $config): void
     };
 
     if (!$cached) {
-        saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits);
+        saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits, $external);
     }
     saveGeneratedReport($dir, $key, $from, $to, $format, null, $cached !== null, $fullOut);
 

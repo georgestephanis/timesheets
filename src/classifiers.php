@@ -212,6 +212,29 @@ function activeInputSecondsDuring(DateTimeImmutable $start, DateTimeImmutable $e
 }
 
 /**
+ * Resolves a project for an external integration row using project mapping rules.
+ */
+function projectForExternal(array $row, array $config): ?string
+{
+    $source = (string)($row['source'] ?? '');
+    $hint = (string)($row['project_hint'] ?? '');
+    if ($source === '' || $hint === '') {
+        return null;
+    }
+
+    foreach ($config['projects'] as $name => $p) {
+        if ($source === 'harvest' && !empty($p['harvest_projects']) && fnmatchAny($hint, $p['harvest_projects'])) {
+            return $name;
+        }
+        if ($source === 'clickup' && !empty($p['clickup_tasks']) && fnmatchAny($hint, $p['clickup_tasks'])) {
+            return $name;
+        }
+    }
+
+    return null;
+}
+
+/**
  * Classifies all ActivityWatch window events and git commits, then aggregates them
  * by date and project name.
  *
@@ -227,16 +250,17 @@ function activeInputSecondsDuring(DateTimeImmutable $start, DateTimeImmutable $e
  *
  * @param  array        $events   Window and AFK events from loadActivityWatch() after backfillChromeUrls().
  * @param  array        $commits  Commit rows from loadGitCommits().
+ * @param  array        $external External integration rows from loadIntegrationActivity().
  * @param  array        $config   Loaded config array.
  * @param  DateTimeZone $tz       Timezone used to bucket events into calendar dates.
  * @param  array        $opts     Parsed CLI options from parseArgs().
  * @return array{0: array<string, array<string, array<string, mixed>>>, 1: array<string, array<string, int>>}
  *         [$bucket, $unmatched]
  */
-function classifyAndAggregate(array $events, array $commits, array $config, DateTimeZone $tz, array $opts): array
+function classifyAndAggregate(array $events, array $commits, array $external, array $config, DateTimeZone $tz, array $opts): array
 {
     $bucket = []; // [date_iso][project] = ['seconds' => int, 'commits' => [...], 'detail' => [...]]
-    $unmatched = ['vscode' => [], 'browser' => [], 'slack' => [], 'apps' => []];
+    $unmatched = ['vscode' => [], 'browser' => [], 'slack' => [], 'apps' => [], 'harvest' => [], 'clickup' => []];
 
     $personalHosts = $config['personal_hosts'] ?? [];
     $personalApps  = $config['personal_apps']  ?? [];
@@ -374,6 +398,46 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
             continue;
         }
         $bucket[$date][$proj]['commits'][] = $c;
+    }
+
+    // External integrations
+    foreach ($external as $row) {
+        $sec = (float)($row['seconds'] ?? 0);
+        if ($sec <= 0) {
+            continue;
+        }
+
+        $source = (string)($row['source'] ?? 'external');
+        $proj = projectForExternal($row, $config);
+        $hint = (string)($row['project_hint'] ?? '');
+        $label = (string)($row['label'] ?? ($hint !== '' ? $hint : $source));
+        if (!$proj) {
+            $unmatched[$source][$hint !== '' ? $hint : '(unknown)'] = ($unmatched[$source][$hint !== '' ? $hint : '(unknown)'] ?? 0) + 1;
+            $proj = strtoupper($source) . ' (uncategorized)';
+        }
+
+        if (isset($ignoredProjects[$proj])) {
+            continue;
+        }
+        if (!$matchesFilter($proj)) {
+            continue;
+        }
+
+        $start = $row['start'] instanceof DateTimeImmutable
+            ? $row['start']
+            : new DateTimeImmutable((string)$row['start']);
+        $date = $start->setTimezone($tz)->format('Y-m-d');
+
+        $bucket[$date][$proj]['seconds'] = ($bucket[$date][$proj]['seconds'] ?? 0) + $sec;
+        $bucket[$date][$proj]['active_seconds'] = ($bucket[$date][$proj]['active_seconds'] ?? 0) + $sec;
+        $bucket[$date][$proj]['detail'][$source][$label] = ($bucket[$date][$proj]['detail'][$source][$label] ?? 0) + $sec;
+
+        $bucket[$date][$proj]['external'][$source]['entries'] = ($bucket[$date][$proj]['external'][$source]['entries'] ?? 0)
+            + (int)($row['entry_count'] ?? 1);
+        $bucket[$date][$proj]['external'][$source]['activity'] = ($bucket[$date][$proj]['external'][$source]['activity'] ?? 0)
+            + (int)($row['activity_count'] ?? 0);
+        $bucket[$date][$proj]['external'][$source]['discussion'] = ($bucket[$date][$proj]['external'][$source]['discussion'] ?? 0)
+            + (int)($row['discussion_count'] ?? 0);
     }
 
     // Attach grouping label from config so renderers don't need to re-inspect config.

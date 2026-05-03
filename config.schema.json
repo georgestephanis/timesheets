@@ -96,6 +96,25 @@
             "type": "array",
             "items": { "type": "string" },
             "default": []
+        },
+
+        "integrations": {
+            "description": "Optional external integrations for imported time/activity rows.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "harvest": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/harvest_connection" },
+                    "default": []
+                },
+                "clickup": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/clickup_connection" },
+                    "default": []
+                }
+            },
+            "default": {}
         }
     },
 
@@ -148,6 +167,20 @@
                     "minItems": 1
                 },
 
+                "harvest_projects": {
+                    "description": "Harvest project-name globs mapped to this local project.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                },
+
+                "clickup_tasks": {
+                    "description": "ClickUp task-name or description globs mapped to this local project.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                },
+
                 "grouping": {
                     "description": "Client or billing group this project belongs to. Projects with the same grouping are shown together under a shared section header in reports.",
                     "type": "string"
@@ -169,6 +202,30 @@
                     "description": "Glob pattern for channel names (case-insensitive). Omit to match any channel in the workspace.",
                     "type": "string"
                 }
+            }
+        },
+
+        "harvest_connection": {
+            "type": "object",
+            "required": ["name", "account_id", "token"],
+            "additionalProperties": false,
+            "properties": {
+                "name": { "type": "string" },
+                "account_id": { "type": "string" },
+                "token": { "type": "string" },
+                "user_id": { "oneOf": [{ "type": "integer" }, { "type": "string" }] }
+            }
+        },
+
+        "clickup_connection": {
+            "type": "object",
+            "required": ["name", "team_id", "token"],
+            "additionalProperties": false,
+            "properties": {
+                "name": { "type": "string" },
+                "team_id": { "type": "string" },
+                "token": { "type": "string" },
+                "assignee": { "type": "string" }
             }
         }
     }

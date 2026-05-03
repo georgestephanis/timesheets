@@ -49,7 +49,7 @@ function rangeIsHistorical(DateTimeImmutable $to, DateTimeZone $tz): bool
  *
  * @param  string $dir Absolute path to the per-range reports directory.
  * @param  string $key Date-range key from reportsCacheKey().
- * @return array{events: array, chrome: array, commits: array}|null
+ * @return array{events: array, chrome: array, commits: array, external: array}|null
  */
 function loadCachedSources(string $dir, string $key): ?array
 {
@@ -57,6 +57,7 @@ function loadCachedSources(string $dir, string $key): ?array
         'events'  => "$dir/activitywatch-$key.json",
         'chrome'  => "$dir/chrome-$key.json",
         'commits' => "$dir/commits-$key.json",
+        'external' => "$dir/integrations-$key.json",
     ];
     foreach ($paths as $path) {
         if (!file_exists($path)) {
@@ -75,6 +76,7 @@ function loadCachedSources(string $dir, string $key): ?array
         'events'  => deserializeEvents($raw['events']),
         'chrome'  => deserializeChrome($raw['chrome']),
         'commits' => deserializeCommits($raw['commits']),
+        'external' => deserializeExternal($raw['external']),
     ];
 }
 
@@ -92,6 +94,7 @@ function loadCachedSources(string $dir, string $key): ?array
  * @param array             $events  AW events (window + afk + input) after backfillChromeUrls().
  * @param array             $chrome  Raw Chrome history rows.
  * @param array             $commits Git commit rows.
+ * @param array             $external External integration rows.
  */
 function saveCachedSources(
     string $dir,
@@ -100,7 +103,8 @@ function saveCachedSources(
     DateTimeImmutable $to,
     array $events,
     array $chrome,
-    array $commits
+    array $commits,
+    array $external
 ): void {
     if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
         return;
@@ -111,10 +115,12 @@ function saveCachedSources(
         'activitywatch' => "activitywatch-$key.json",
         'chrome'        => "chrome-$key.json",
         'commits'       => "commits-$key.json",
+        'integrations'  => "integrations-$key.json",
     ];
     file_put_contents("$dir/{$files['activitywatch']}", json_encode(serializeEvents($events), $flags) . "\n");
     file_put_contents("$dir/{$files['chrome']}", json_encode(serializeChrome($chrome), $flags) . "\n");
     file_put_contents("$dir/{$files['commits']}", json_encode(serializeCommits($commits), $flags) . "\n");
+    file_put_contents("$dir/{$files['integrations']}", json_encode(serializeExternal($external), $flags) . "\n");
 
     appendToIndex(PROJECT_ROOT . '/reports/cache-data.jsonl', [
         'cached_at' => (new DateTimeImmutable('now'))->format('c'),
@@ -128,6 +134,7 @@ function saveCachedSources(
             'input_events'  => count($events['input'] ?? []),
             'chrome_rows'   => count($chrome),
             'commits'       => count($commits),
+            'external_rows' => count($external),
         ],
     ]);
 }
@@ -327,4 +334,40 @@ function deserializeCommits(array $data): array
         }
         return $c;
     }, $data);
+}
+
+/**
+ * Converts external integration rows to plain arrays.
+ *
+ * @param  list<array<string, mixed>> $rows
+ * @return list<array<string, mixed>>
+ */
+function serializeExternal(array $rows): array
+{
+    return array_map(function ($r) {
+        foreach (['start', 'end'] as $k) {
+            if (($r[$k] ?? null) instanceof DateTimeImmutable) {
+                $r[$k] = $r[$k]->format('c');
+            }
+        }
+        return $r;
+    }, $rows);
+}
+
+/**
+ * Reconstructs external integration rows from cached JSON.
+ *
+ * @param  list<array<string, mixed>> $rows
+ * @return list<array<string, mixed>>
+ */
+function deserializeExternal(array $rows): array
+{
+    return array_map(function ($r) {
+        foreach (['start', 'end'] as $k) {
+            if (is_string($r[$k] ?? null)) {
+                $r[$k] = new DateTimeImmutable($r[$k]);
+            }
+        }
+        return $r;
+    }, $rows);
 }
