@@ -183,6 +183,23 @@ function saveGeneratedReport(
 }
 
 /**
+ * Returns the path to the most recently saved report file matching the given key/slug/ext,
+ * or null if none exists. Timestamped filenames are ISO-sortable, so the lexicographic
+ * last result is the newest.
+ *
+ * @param string $dir  Absolute path to the per-range reports directory.
+ * @param string $key  Date-range key from reportsCacheKey().
+ * @param string $slug Project slug (e.g. '--my-project') or empty string.
+ * @param string $ext  File extension without leading dot: 'json', 'md', 'tsv'.
+ */
+function findLatestReport(string $dir, string $key, string $slug, string $ext): ?string
+{
+    $files = glob("$dir/report-$key$slug--*.$ext") ?: [];
+    sort($files);
+    return $files ? end($files) : null;
+}
+
+/**
  * Appends a single JSON object as a new line to a JSONL index file.
  *
  * Creates the file (and its parent reports/ directory) if they do not yet exist.
