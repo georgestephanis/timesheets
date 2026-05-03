@@ -159,12 +159,13 @@ function saveGeneratedReport(
     if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
         return;
     }
-    $ext     = match ($format) {
+    $ext       = match ($format) {
         'json' => 'json', 'tsv' => 'tsv', default => 'md'
     };
-    $slug    = $project !== null ? '--' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $project) : '';
-    $relBase = $from->format('Y-m') . '/' . $from->format('d');
-    $file    = "report-$key$slug.$ext";
+    $slug      = $project !== null ? '--' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $project) : '';
+    $timestamp = (new DateTimeImmutable('now'))->format('Ymd\THis');
+    $relBase   = $from->format('Y-m') . '/' . $from->format('d');
+    $file      = "report-$key$slug--$timestamp.$ext";
 
     file_put_contents("$dir/$file", $content);
 
