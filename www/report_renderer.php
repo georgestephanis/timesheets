@@ -85,11 +85,22 @@ if ($format === 'html') {
   .diff-banner--info    { background: #f0f9ff; border: 1px solid #bae6fd; color: #0c4a6e; }
   .diff-banner--clean   { background: #f0fdf4; border: 1px solid #bbf7d0; color: #14532d; }
   .diff-banner--changes { background: #fffbeb; border: 1px solid #fde68a; color: #78350f; }
+    .admin-panel { margin: 0.9rem 0; padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid #e5e7eb; background: #fafafa; }
+    .admin-panel h3 { margin: 0 0 0.4rem; font-size: 1rem; }
+    .admin-panel h4 { margin: 0.6rem 0 0.4rem; font-size: 0.92rem; color: #374151; }
+    .admin-panel p { margin: 0.2rem 0 0.5rem; color: #555; }
+    .admin-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.25rem 0; }
+    .admin-row .sig { min-width: 220px; }
+    .muted { color: #666; font-size: 0.85rem; }
+    .proj-actions { margin-left: 0.6rem; font-size: 0.82rem; }
+    .proj-actions a { color: #2563eb; text-decoration: none; }
+    .proj-actions a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
 <nav id="nav"></nav>
 <div id="diff-banner"></div>
+<div id="admin"></div>
 <main id="report"><p class="loading">Loading&hellip;</p></main>
 <script>
 const SITE = <?= $jsConfig ?>;
@@ -98,6 +109,8 @@ const SITE = <?= $jsConfig ?>;
 let currentParams = null;
 let currentData   = null;
 let currentBadge  = 'live';
+let personalProjectQueue = new Set();
+let showAdminPanel = false;
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function addDays(dateStr, n) {
@@ -177,9 +190,15 @@ function renderProject(tag, name, rec) {
     const sec     = rec.seconds || 0;
     const commits = rec.commits || [];
     if (sec < SITE.minSec && !commits.length) return '';
+
+    const isQueuedPersonal = personalProjectQueue.has(name);
+    const action = isQueuedPersonal
+        ? '<span class="proj-actions muted">queued for personal</span>'
+        : `<span class="proj-actions"><a href="#" data-flag-project="${esc(name)}">flag project as personal</a></span>`;
+
     const secStr = sec ? ` <span class="dur">&mdash; ${fmtDur(sec)}</span>` : '';
     const body   = renderDetail(rec.detail || {}) + renderCommits(commits);
-    return `<${tag}>${esc(name)}${secStr}</${tag}>${body ? `<ul>${body}</ul>` : ''}`;
+    return `<${tag}>${esc(name)}${secStr}${action}</${tag}>${body ? `<ul>${body}</ul>` : ''}`;
 }
 
 function filterProjectsForView(projects, projectFilter) {
@@ -233,6 +252,89 @@ function renderReport(data, projectFilter = '') {
     return blocks.join('\n');
 }
 
+function projectOptions(selected = '', kind = '') {
+    const opts = SITE.projects
+        .map(p => `<option value="${esc(p.name)}"${p.name === selected ? ' selected' : ''}>${esc(p.name)}</option>`)
+        .join('');
+
+    const personalOpt = (kind === 'browser' || kind === 'apps')
+        ? `<option value="__personal__"${selected === '__personal__' ? ' selected' : ''}>Personal</option>`
+        : '';
+
+    return `<option value="">Select project</option>${personalOpt}<option value="__new__">+ New project...</option>${opts}`;
+}
+
+function renderAdminPanel(data) {
+    const elAdmin = document.getElementById('admin');
+    if (!elAdmin) return;
+
+    if (!showAdminPanel) {
+        elAdmin.innerHTML = '';
+        return;
+    }
+
+    const queue = Array.from(personalProjectQueue.values()).sort();
+    const queueHtml = queue.length
+        ? `<div class="admin-row"><span>${queue.map(esc).join(', ')}</span><button class="btn" data-apply-personal>Apply personal flags</button></div>`
+        : '<p class="muted">No projects queued for personal-ignore.</p>';
+
+    const unmatched = data?.unmatched || {};
+    const kinds = ['vscode', 'browser', 'slack', 'apps'];
+    const rows = [];
+    for (const kind of kinds) {
+        const items = Object.entries(unmatched[kind] || {})
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 12);
+        if (!items.length) continue;
+
+        const sectionRows = items.map(([value, count]) => {
+            const encodedValue = encodeURIComponent(value);
+            return `<div class="admin-row">
+              <span class="sig"><code>${esc(value)}</code> <span class="muted">(${count})</span></span>
+                            <select data-reassign-project>${projectOptions('', kind)}</select>
+              <button class="btn" data-reassign data-kind="${esc(kind)}" data-value="${encodedValue}">Assign</button>
+            </div>`;
+        }).join('');
+        rows.push(`<h4>${esc(kind)}</h4>${sectionRows}`);
+    }
+
+    const unmatchedHtml = rows.length
+        ? rows.join('')
+        : '<p class="muted">No unmatched signals in this range.</p>';
+
+    elAdmin.innerHTML = `
+      <section class="admin-panel">
+        <h3>Classification Actions</h3>
+        <p>Queue projects to ignore as personal, and assign unmatched signals into project rules written to config.json.</p>
+        <h4>Queued Personal Flags</h4>
+        ${queueHtml}
+        <h4>Reassign Unmatched Signals</h4>
+        ${unmatchedHtml}
+      </section>
+    `;
+
+    bindAdminEvents();
+}
+
+async function postApi(payload) {
+    const res = await fetch('api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch {
+        throw new Error(text || `HTTP ${res.status}`);
+    }
+    if (!res.ok || data.error) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+    }
+    return data;
+}
+
 function renderCurrentView() {
     if (!currentData) return;
     const elReport = document.getElementById('report');
@@ -241,6 +343,7 @@ function renderCurrentView() {
     elNav.innerHTML = renderNav(currentParams || {}, currentData.from, currentData.to);
     elReport.innerHTML = renderReport(currentData, currentParams?.project || '');
     bindNavEvents();
+    renderAdminPanel(currentData);
 }
 
 // ── Diff ──────────────────────────────────────────────────────────────────────
@@ -304,6 +407,7 @@ function renderNav(params, fromRaw, toRaw) {
         ? '<span class="btn disabled">Next &rsaquo;</span>'
         : `<a class="btn" data-nav href="${esc(nextUrl)}">Next &rsaquo;</a>`;
     const rebuildLabel = currentBadge === 'cached' ? 'Rebuild from source' : currentBadge === 'rebuilt' ? 'Rebuild again' : 'Refresh';
+    const classifyLabel = showAdminPanel ? 'Hide Classification' : 'Classification';
 
     const cur = params.project || '';
     const sel = v => v === cur ? ' selected' : '';
@@ -349,6 +453,8 @@ function renderNav(params, fromRaw, toRaw) {
         ${projOpts}
       </select>
       <span class="sep">|</span>
+            <a class="btn" data-toggle-admin href="#">${esc(classifyLabel)}</a>
+            <span class="sep">|</span>
       <a class="btn" data-rebuild href="#">${esc(rebuildLabel)}</a>
     `;
 }
@@ -358,9 +464,11 @@ async function fetchAndRender(params, isRebuild = false) {
     const elReport = document.getElementById('report');
     const elNav    = document.getElementById('nav');
     const elBanner = document.getElementById('diff-banner');
+    const elAdmin = document.getElementById('admin');
 
     elReport.innerHTML = '<p class="loading">Loading&hellip;</p>';
     elBanner.innerHTML = '';
+    if (elAdmin) elAdmin.innerHTML = '';
 
     const prevData = currentData;
 
@@ -380,12 +488,7 @@ async function fetchAndRender(params, isRebuild = false) {
         currentData  = data;
         currentBadge = isRebuild ? 'rebuilt' : (res.headers.get('X-Report-Source') === 'cached' ? 'cached' : 'live');
 
-        // Use the resolved from/to from the response for nav date arithmetic.
-        const from = data.from;
-        const to   = data.to;
-
-        elNav.innerHTML    = renderNav(params, from, to);
-        elReport.innerHTML = renderReport(data, params.project || '');
+        renderCurrentView();
 
         if (isRebuild) {
             elBanner.innerHTML = renderDiffBanner(computeDiff(prevData, data), prevData !== null);
@@ -394,7 +497,75 @@ async function fetchAndRender(params, isRebuild = false) {
         bindNavEvents();
     } catch (err) {
         elReport.innerHTML = `<p class="error">Failed to load report: ${esc(err.message)}</p>`;
+        if (elAdmin) elAdmin.innerHTML = '';
     }
+}
+
+function bindAdminEvents() {
+    document.querySelectorAll('[data-flag-project]').forEach(el => {
+        el.addEventListener('click', e => {
+            e.preventDefault();
+            const name = el.getAttribute('data-flag-project') || '';
+            if (!name) return;
+            personalProjectQueue.add(name);
+            renderCurrentView();
+        });
+    });
+
+    const applyBtn = document.querySelector('[data-apply-personal]');
+    if (applyBtn) {
+        applyBtn.addEventListener('click', async e => {
+            e.preventDefault();
+            const projects = Array.from(personalProjectQueue.values());
+            if (!projects.length) return;
+            applyBtn.setAttribute('disabled', 'disabled');
+            try {
+                await postApi({ action: 'flag_projects_personal', projects });
+                personalProjectQueue = new Set();
+                await fetchAndRender(currentParams, true);
+            } catch (err) {
+                alert(`Failed to apply personal flags: ${err.message}`);
+            } finally {
+                applyBtn.removeAttribute('disabled');
+            }
+        });
+    }
+
+    document.querySelectorAll('[data-reassign]').forEach(btn => {
+        btn.addEventListener('click', async e => {
+            e.preventDefault();
+            const row = btn.closest('.admin-row');
+            const select = row?.querySelector('[data-reassign-project]');
+            let project = select?.value || '';
+            if (!project) {
+                alert('Select a project first.');
+                return;
+            }
+
+            let newProjectName = '';
+            if (project === '__new__') {
+                const entered = prompt('New project name:');
+                if (!entered || !entered.trim()) {
+                    return;
+                }
+                newProjectName = entered.trim();
+                project = newProjectName;
+            }
+
+            const kind = btn.getAttribute('data-kind') || '';
+            const rawValue = btn.getAttribute('data-value') || '';
+            const value = decodeURIComponent(rawValue);
+            btn.setAttribute('disabled', 'disabled');
+            try {
+                await postApi({ action: 'reassign_signal', project, kind, value, new_project_name: newProjectName });
+                await fetchAndRender(currentParams, true);
+            } catch (err) {
+                alert(`Failed to reassign signal: ${err.message}`);
+            } finally {
+                btn.removeAttribute('disabled');
+            }
+        });
+    });
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -479,6 +650,15 @@ function bindNavEvents() {
         rebuildBtn.addEventListener('click', e => {
             e.preventDefault();
             fetchAndRender(currentParams, true);
+        });
+    }
+
+    const toggleAdminBtn = nav.querySelector('[data-toggle-admin]');
+    if (toggleAdminBtn) {
+        toggleAdminBtn.addEventListener('click', e => {
+            e.preventDefault();
+            showAdminPanel = !showAdminPanel;
+            renderCurrentView();
         });
     }
 }

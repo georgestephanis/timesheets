@@ -34,6 +34,218 @@ if (!is_array($config)) {
     exit(1);
 }
 
+/**
+ * Writes config.json using pretty-printed JSON and a trailing newline.
+ */
+function saveConfigJson(string $configFile, array $config): void
+{
+    if (file_exists($configFile)) {
+        $backupDir = PROJECT_ROOT . '/reports/config';
+        if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true)) {
+            throw new RuntimeException('Failed to create config backup directory');
+        }
+
+        $stamp = (new DateTimeImmutable('now'))->format('Ymd\THis_u');
+        $backupPath = $backupDir . '/config.' . $stamp . '.json';
+        if (!copy($configFile, $backupPath)) {
+            throw new RuntimeException('Failed to backup config.json');
+        }
+    }
+
+    $json = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+    if ($json === false) {
+        throw new RuntimeException('Failed to encode config.json');
+    }
+    if (file_put_contents($configFile, $json, LOCK_EX) === false) {
+        throw new RuntimeException('Failed to write config.json');
+    }
+}
+
+/**
+ * Appends a value to an array key if not already present.
+ */
+function addUniqueValue(array &$arr, string $key, string $value): void
+{
+    $arr[$key] = $arr[$key] ?? [];
+    if (!in_array($value, $arr[$key], true)) {
+        $arr[$key][] = $value;
+    }
+}
+
+/**
+ * Parses a "Workspace / channel" signal label into parts.
+ *
+ * @return array{workspace: string, channel: string}|null
+ */
+function parseSlackSignal(string $value): ?array
+{
+    if (!str_contains($value, ' / ')) {
+        return null;
+    }
+    [$workspace, $channel] = explode(' / ', $value, 2);
+    $workspace = trim($workspace);
+    $channel = trim($channel);
+    if ($workspace === '' || $channel === '') {
+        return null;
+    }
+    return ['workspace' => $workspace, 'channel' => $channel];
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $raw = file_get_contents('php://input');
+    $payload = json_decode($raw ?: '{}', true);
+    if (!is_array($payload)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid JSON payload']);
+        exit(1);
+    }
+
+    $action = $payload['action'] ?? '';
+    if (!is_string($action) || $action === '') {
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing action']);
+        exit(1);
+    }
+
+    switch ($action) {
+        case 'flag_projects_personal':
+            $projects = $payload['projects'] ?? [];
+            if (!is_array($projects)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'projects must be an array']);
+                exit(1);
+            }
+            $config['ignored_projects'] = $config['ignored_projects'] ?? [];
+            foreach ($projects as $name) {
+                if (!is_string($name) || $name === '') {
+                    continue;
+                }
+                if (!array_key_exists($name, $config['projects'] ?? [])) {
+                    continue;
+                }
+                if (!in_array($name, $config['ignored_projects'], true)) {
+                    $config['ignored_projects'][] = $name;
+                }
+            }
+            saveConfigJson($configFile, $config);
+            echo json_encode(['ok' => true, 'ignored_projects' => $config['ignored_projects']]);
+            exit;
+
+        case 'reassign_signal':
+            $project = $payload['project'] ?? '';
+            $kind = $payload['kind'] ?? '';
+            $value = $payload['value'] ?? '';
+            $newProjectName = $payload['new_project_name'] ?? '';
+
+            if (
+                !is_string($project) || !is_string($kind) || !is_string($value) || !is_string($newProjectName)
+                || $project === '' || $kind === '' || $value === ''
+            ) {
+                http_response_code(400);
+                echo json_encode(['error' => 'project, kind, and value are required']);
+                exit(1);
+            }
+
+            if ($newProjectName !== '') {
+                if (!array_key_exists($newProjectName, $config['projects'] ?? [])) {
+                    $config['projects'][$newProjectName] = [];
+                }
+                $project = $newProjectName;
+            }
+
+            if ($project === '__personal__') {
+                switch ($kind) {
+                    case 'browser':
+                        if ($value === '(no url)') {
+                            http_response_code(400);
+                            echo json_encode(['error' => 'Cannot mark browser signal without host as personal']);
+                            exit(1);
+                        }
+                        addUniqueValue($config, 'personal_hosts', $value);
+                        break;
+                    case 'apps':
+                        addUniqueValue($config, 'personal_apps', str_starts_with($value, 'ssh:') ? substr($value, 4) : $value);
+                        break;
+                    default:
+                        http_response_code(400);
+                        echo json_encode(['error' => 'Personal reassignment is supported for browser and apps signals']);
+                        exit(1);
+                }
+
+                saveConfigJson($configFile, $config);
+                echo json_encode(['ok' => true]);
+                exit;
+            }
+
+            if (!array_key_exists($project, $config['projects'] ?? [])) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Unknown project']);
+                exit(1);
+            }
+
+            $p =& $config['projects'][$project];
+            switch ($kind) {
+                case 'vscode':
+                    addUniqueValue($p, 'vscode_dirs', $value);
+                    break;
+                case 'browser':
+                    if ($value === '(no url)') {
+                        http_response_code(400);
+                        echo json_encode(['error' => 'Cannot reassign browser signal without host']);
+                        exit(1);
+                    }
+                    addUniqueValue($p, 'domains', $value);
+                    break;
+                case 'slack':
+                    $parsed = parseSlackSignal($value);
+                    if ($parsed === null) {
+                        http_response_code(400);
+                        echo json_encode(['error' => 'Invalid slack signal format']);
+                        exit(1);
+                    }
+                    $p['slack'] = $p['slack'] ?? [];
+                    $rule = ['workspace' => $parsed['workspace']];
+                    if ($parsed['channel'] !== '__threads__' && $parsed['channel'] !== '__activity__' && $parsed['channel'] !== '__huddle__') {
+                        $rule['channel_glob'] = $parsed['channel'];
+                    }
+                    $exists = false;
+                    foreach ($p['slack'] as $existing) {
+                        if (
+                            ($existing['workspace'] ?? null) === $rule['workspace']
+                            && ($existing['channel_glob'] ?? null) === ($rule['channel_glob'] ?? null)
+                        ) {
+                            $exists = true;
+                            break;
+                        }
+                    }
+                    if (!$exists) {
+                        $p['slack'][] = $rule;
+                    }
+                    break;
+                case 'apps':
+                    if (str_starts_with($value, 'ssh:')) {
+                        addUniqueValue($p, 'ssh_hosts', substr($value, 4));
+                    } else {
+                        addUniqueValue($p, 'apps', $value);
+                    }
+                    break;
+                default:
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Unsupported kind']);
+                    exit(1);
+            }
+
+            saveConfigJson($configFile, $config);
+            echo json_encode(['ok' => true]);
+            exit;
+
+        default:
+            http_response_code(400);
+            echo json_encode(['error' => 'Unsupported action']);
+            exit(1);
+    }
+}
+
 require_once PROJECT_ROOT . '/src/helpers.php';
 require_once PROJECT_ROOT . '/src/cache.php';
 require_once PROJECT_ROOT . '/src/loader-activitywatch.php';

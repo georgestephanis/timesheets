@@ -82,6 +82,7 @@ function classifySsh(string $title): ?string
  *   2. host       — glob match against projects[*].domains
  *   3. slack      — workspace match (case-insensitive), then optional channel_glob
  *   4. ssh_host   — glob match against projects[*].ssh_hosts
+ *   5. app        — glob match against projects[*].apps
  *
  * @param  array<string, mixed> $sig    Signals extracted from the current event (vscode_dir, host, slack, ssh_host).
  * @param  array<string, mixed> $config Loaded config array.
@@ -121,6 +122,12 @@ function projectForSignals(array $sig, array $config): ?string
         // SSH host
         if (!empty($sig['ssh_host']) && !empty($p['ssh_hosts'])) {
             if (fnmatchAny($sig['ssh_host'], $p['ssh_hosts'])) {
+                return $name;
+            }
+        }
+        // App name
+        if (!empty($sig['app']) && !empty($p['apps'])) {
+            if (fnmatchAny($sig['app'], $p['apps'])) {
                 return $name;
             }
         }
@@ -233,6 +240,7 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
 
     $personalHosts = $config['personal_hosts'] ?? [];
     $personalApps  = $config['personal_apps']  ?? [];
+    $ignoredProjects = array_fill_keys($config['ignored_projects'] ?? [], true);
 
     $bumpDetail = function (string $date, string $proj, string $kind, string $label, float $sec) use (&$bucket) {
         $bucket[$date][$proj]['seconds'] = ($bucket[$date][$proj]['seconds'] ?? 0) + $sec;
@@ -335,14 +343,20 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
                 break;
 
             default:
-                if (in_array($ev['app'], $personalApps, true)) {
+                $sig['app'] = $ev['app'];
+                $proj = projectForSignals($sig, $config);
+                if (!$proj && in_array($ev['app'], $personalApps, true)) {
                     $proj = 'Personal apps';
-                } else {
+                } elseif (!$proj) {
                     $proj = $ev['app'] ? "App: {$ev['app']}" : 'Other';
                 }
                 if (!fnmatchAny($ev['app'], $personalApps) && str_starts_with($proj, 'App: ')) {
                     $unmatched['apps'][$ev['app']] = ($unmatched['apps'][$ev['app']] ?? 0) + 1;
                 }
+        }
+
+        if (isset($ignoredProjects[$proj])) {
+            continue;
         }
 
         if (!$matchesFilter($proj)) {

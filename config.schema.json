@@ -89,6 +89,13 @@
             "type": "array",
             "items": { "type": "string" },
             "default": []
+        },
+
+        "ignored_projects": {
+            "description": "Configured project names that should be ignored in classification and reports.",
+            "type": "array",
+            "items": { "type": "string" },
+            "default": []
         }
     },
 
@@ -129,6 +136,13 @@
 
                 "ssh_hosts": {
                     "description": "SSH hostnames matched against terminal window titles. Glob-style * is supported.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                },
+
+                "apps": {
+                    "description": "Application names (or glob patterns) matched against ActivityWatch app names.",
                     "type": "array",
                     "items": { "type": "string" },
                     "minItems": 1

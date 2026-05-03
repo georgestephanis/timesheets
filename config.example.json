@@ -34,7 +34,8 @@
         "Personal Projects": {
             "repos": ["~/code/my-side-project"],
             "vscode_dirs": ["my-side-project"],
-            "domains": ["my-side-project.com", "*.my-side-project.com"]
+            "domains": ["my-side-project.com", "*.my-side-project.com"],
+            "apps": ["my-side-project*app"]
         }
     },
 
@@ -54,5 +55,7 @@
         "instagram.com"
     ],
 
-    "personal_apps": ["Discord", "Messenger"]
+    "personal_apps": ["Discord", "Messenger"],
+
+    "ignored_projects": []
 }
