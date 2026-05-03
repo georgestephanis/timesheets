@@ -194,10 +194,19 @@ function resolveDateRange(array $opts, DateTimeZone $tz): array
 {
     $now = new DateTimeImmutable('now', $tz);
     if ($opts['from']) {
-        $from = new DateTimeImmutable($opts['from'] . ' 00:00:00', $tz);
-        $to = $opts['to']
-            ? new DateTimeImmutable($opts['to'] . ' 23:59:59', $tz)
-            : $now;
+        $fromInput = (string)$opts['from'];
+        $from = preg_match('/^\d{4}-\d{2}-\d{2}$/', $fromInput)
+            ? new DateTimeImmutable($fromInput . ' 00:00:00', $tz)
+            : new DateTimeImmutable($fromInput, $tz);
+
+        if ($opts['to']) {
+            $toInput = (string)$opts['to'];
+            $to = preg_match('/^\d{4}-\d{2}-\d{2}$/', $toInput)
+                ? new DateTimeImmutable($toInput . ' 23:59:59', $tz)
+                : new DateTimeImmutable($toInput, $tz);
+        } else {
+            $to = $now;
+        }
     } else {
         $days = $opts['days'] ?? 7;
         $to = $now;

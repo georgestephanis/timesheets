@@ -9,6 +9,16 @@
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-cache');
 
+set_exception_handler(function (Throwable $e): void {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode(['error' => $e->getMessage()]);
+    exit(1);
+});
+set_error_handler(function (int $errno, string $errstr): never {
+    throw new \ErrorException($errstr, $errno);
+});
+
 define('PROJECT_ROOT', dirname(__DIR__));
 
 $configFile = PROJECT_ROOT . '/config.json';

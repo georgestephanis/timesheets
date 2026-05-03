@@ -31,7 +31,11 @@ if ($format === 'html') {
     $jsConfig  = json_encode([
         'timezone'  => $config['timezone'],
         'minSec'    => (int)($config['min_event_seconds_to_show'] ?? 0),
-        'projects'  => array_keys($config['projects'] ?? []),
+        'projects'  => array_map(
+            fn($name, $p) => ['name' => $name, 'grouping' => $p['grouping'] ?? null],
+            array_keys($config['projects'] ?? []),
+            array_values($config['projects'] ?? [])
+        ),
         'today'     => (new DateTimeImmutable('now', $tz))->format('Y-m-d'),
         'yesterday' => (new DateTimeImmutable('yesterday', $tz))->format('Y-m-d'),
     ], JSON_UNESCAPED_UNICODE);
@@ -65,6 +69,10 @@ if ($format === 'html') {
   .sep { color: #ccc; }
   select { padding: 0.25rem 0.4rem; border: 1px solid #bbb; border-radius: 4px;
            font-size: 0.85rem; background: #f8f8f8; }
+    .date-form { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+    .date-form input[type="date"] { padding: 0.22rem 0.35rem; border: 1px solid #bbb; border-radius: 4px;
+                                                                        font-size: 0.85rem; background: #f8f8f8; }
+    .date-form .hint { font-size: 0.75rem; color: #666; }
   .badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px;
            font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
   .badge--live    { background: #d1fae5; color: #065f46; }
@@ -91,8 +99,10 @@ let currentBadge  = 'live';
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function addDays(dateStr, n) {
-    const [y, m, d] = dateStr.split('-').map(Number);
-    return new Date(y, m - 1, d + n).toLocaleDateString('sv'); // sv = YYYY-MM-DD
+    // Slice to 10 chars so ISO datetimes like "2026-05-01T00:00:00-04:00" work too.
+    const [y, m, d] = String(dateStr).slice(0, 10).split('-').map(Number);
+    const dt = new Date(y, m - 1, d + n);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
 function paramsFromUrl() {
@@ -245,7 +255,10 @@ function renderDiffBanner(changes, hadPrior) {
 }
 
 // ── Nav ───────────────────────────────────────────────────────────────────────
-function renderNav(params, from, to) {
+function renderNav(params, fromRaw, toRaw) {
+    // data.from / data.to are full ISO strings ("2026-05-01T00:00:00-04:00"); strip the time part.
+    const from = String(fromRaw).slice(0, 10);
+    const to   = String(toRaw).slice(0, 10);
     const rangeDays = Math.max(1, Math.round((new Date(`${to}T12:00:00`) - new Date(`${from}T12:00:00`)) / 86400000) + 1);
     const prevFrom  = addDays(from, -rangeDays),  prevTo  = addDays(from, -1);
     const nextFrom  = addDays(to,    1),           nextTo  = addDays(to,  rangeDays);
@@ -253,41 +266,52 @@ function renderNav(params, from, to) {
 
     const prevUrl   = buildPageUrl({ ...params, from: prevFrom, to: prevTo,   days: null });
     const nextUrl   = buildPageUrl({ ...params, from: nextFrom, to: nextTo,   days: null });
-    const todayUrl  = buildPageUrl({ ...params, from: SITE.today,     to: SITE.today,     days: null });
-    const yestUrl   = buildPageUrl({ ...params, from: SITE.yesterday, to: SITE.yesterday, days: null });
-    const w7Url     = buildPageUrl({ ...params, from: null, to: null, days: 7  });
-    const w30Url    = buildPageUrl({ ...params, from: null, to: null, days: 30 });
-
     const badge     = `<span class="badge badge--${currentBadge}">${currentBadge.charAt(0).toUpperCase() + currentBadge.slice(1)}</span>`;
     const nextBtn   = isFuture
         ? '<span class="btn disabled">Next &rsaquo;</span>'
         : `<a class="btn" data-nav href="${esc(nextUrl)}">Next &rsaquo;</a>`;
     const rebuildLabel = currentBadge === 'cached' ? 'Rebuild from source' : currentBadge === 'rebuilt' ? 'Rebuild again' : 'Refresh';
 
-    const projOpts  = ['', ...SITE.projects].map(p =>
-        `<option value="${esc(p)}"${p === (params.project||'') ? ' selected' : ''}>${p ? esc(p) : 'All projects'}</option>`
-    ).join('');
+    const cur = params.project || '';
+    const sel = v => v === cur ? ' selected' : '';
 
-    // Raw-format links point at the current resolved range via report_renderer.php.
-    const rawBase = new URLSearchParams({ from, to, ...(params.project ? { project: params.project } : {}) });
+    // Bucket projects by grouping, preserving config order.
+    const groups    = {};
+    const ungrouped = [];
+    for (const p of SITE.projects) {
+        p.grouping ? (groups[p.grouping] ??= []).push(p.name) : ungrouped.push(p.name);
+    }
+
+    let projOpts = `<option value=""${sel('')}>All projects</option>`;
+    for (const [group, names] of Object.entries(groups)) {
+        const gVal = `group:${group}`;
+        projOpts += `<optgroup label="${esc(group)}">`;
+        projOpts += `<option value="${esc(gVal)}"${sel(gVal)}>All ${esc(group)} projects</option>`;
+        for (const name of names) {
+            projOpts += `<option value="${esc(name)}"${sel(name)}>${esc(name)}</option>`;
+        }
+        projOpts += `</optgroup>`;
+    }
+    for (const name of ungrouped) {
+        projOpts += `<option value="${esc(name)}"${sel(name)}>${esc(name)}</option>`;
+    }
 
     return `
       ${badge}
       <a class="btn" data-nav href="${esc(prevUrl)}">&lsaquo; Prev</a>
       ${nextBtn}
       <span class="sep">|</span>
-      <a class="btn" data-nav href="${esc(todayUrl)}">Today</a>
-      <a class="btn" data-nav href="${esc(yestUrl)}">Yesterday</a>
-      <a class="btn" data-nav href="${esc(w7Url)}">7 days</a>
-      <a class="btn" data-nav href="${esc(w30Url)}">30 days</a>
-      <span class="sep">|</span>
+            <form class="date-form" data-date-form>
+                <input type="date" data-date-from value="${esc(from)}" aria-label="Start date" required>
+                <span>&rarr;</span>
+                <input type="date" data-date-to value="${esc(to)}" aria-label="End date">
+                <button class="btn" type="submit">Apply</button>
+                <span class="hint">Leave end blank for one day</span>
+            </form>
+            <span class="sep">|</span>
       <select data-project-select>
         ${projOpts}
       </select>
-      <span class="sep">|</span>
-      <a class="btn" href="?${rawBase}&format=md">md</a>
-      <a class="btn" href="?${rawBase}&format=json">json</a>
-      <a class="btn" href="?${rawBase}&format=tsv">tsv</a>
       <span class="sep">|</span>
       <a class="btn" data-rebuild href="#">${esc(rebuildLabel)}</a>
     `;
@@ -306,9 +330,16 @@ async function fetchAndRender(params, isRebuild = false) {
 
     try {
         const res  = await fetch(buildApiUrl(params, isRebuild));
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
+        const text = await res.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            // PHP returned an HTML error page — strip tags for a readable message.
+            const plain = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400);
+            throw new Error(plain || `HTTP ${res.status}`);
+        }
+        if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
 
         currentData  = data;
         currentBadge = isRebuild ? 'rebuilt' : (res.headers.get('X-Report-Source') === 'cached' ? 'cached' : 'live');
@@ -352,10 +383,27 @@ function bindNavEvents() {
         });
     });
 
+    const dateForm = nav.querySelector('[data-date-form]');
+    if (dateForm) {
+        dateForm.addEventListener('submit', e => {
+            e.preventDefault();
+            const fromInput = nav.querySelector('[data-date-from]');
+            const toInput = nav.querySelector('[data-date-to]');
+            const from = fromInput?.value || '';
+            const to = toInput?.value || from;
+            if (!from) return;
+            navigateTo({ from, to, days: null });
+        });
+    }
+
     const sel = nav.querySelector('[data-project-select]');
     if (sel) {
         sel.addEventListener('change', () => {
-            navigateTo({ project: sel.value, from: currentData?.from, to: currentData?.to, days: null });
+            const fromInput = nav.querySelector('[data-date-from]');
+            const toInput = nav.querySelector('[data-date-to]');
+            const from = fromInput?.value || String(currentData?.from ?? '').slice(0, 10);
+            const to = toInput?.value || from || String(currentData?.to ?? '').slice(0, 10);
+            navigateTo({ project: sel.value, from, to, days: null });
         });
     }
 

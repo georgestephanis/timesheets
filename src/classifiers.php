@@ -187,6 +187,18 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
         $bucket[$date][$proj]['detail'][$kind][$label] = ($bucket[$date][$proj]['detail'][$kind][$label] ?? 0) + $sec;
     };
 
+    // Returns true if $proj should be included given the --project / group: filter.
+    $matchesFilter = static function (string $proj) use ($opts, $config): bool {
+        $filter = $opts['project'];
+        if (!$filter) {
+            return true;
+        }
+        if (str_starts_with($filter, 'group:')) {
+            return ($config['projects'][$proj]['grouping'] ?? null) === substr($filter, 6);
+        }
+        return $proj === $filter;
+    };
+
     foreach ($events['window'] as $ev) {
         // afk filter (use mid-point)
         $midTs = ($ev['start']->getTimestamp() + $ev['end']->getTimestamp()) / 2;
@@ -277,7 +289,7 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
                 }
         }
 
-        if ($opts['project'] && $proj !== $opts['project']) {
+        if (!$matchesFilter($proj)) {
             continue;
         }
         $bumpDetail($date, $proj, $detailKind, $detailLabel, $sec);
@@ -287,7 +299,7 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
     foreach ($commits as $c) {
         $date = $c['dt']->setTimezone($tz)->format('Y-m-d');
         $proj = $c['project'];
-        if ($opts['project'] && $proj !== $opts['project']) {
+        if (!$matchesFilter($proj)) {
             continue;
         }
         $bucket[$date][$proj]['commits'][] = $c;
