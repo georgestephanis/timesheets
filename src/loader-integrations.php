@@ -39,7 +39,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
                 $rows[] = $row;
             }
         } catch (RuntimeException $e) {
-            fwrite(STDERR, "warning: [$label] " . $e->getMessage() . "\n");
+            integrationWarning("[$label] " . $e->getMessage());
         }
     }
 
@@ -62,7 +62,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
                 $rows[] = $row;
             }
         } catch (RuntimeException $e) {
-            fwrite(STDERR, "warning: [$label] " . $e->getMessage() . "\n");
+            integrationWarning("[$label] " . $e->getMessage());
         }
     }
 
@@ -84,6 +84,20 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
 
     usort($rows, fn($a, $b) => $a['start'] <=> $b['start']);
     return $rows;
+}
+
+/**
+ * Emits a warning in both CLI and web contexts.
+ */
+function integrationWarning(string $message): void
+{
+    $line = 'warning: ' . $message;
+    if (defined('STDERR')) {
+        fwrite(STDERR, $line . "\n");
+        return;
+    }
+
+    error_log($line);
 }
 
 /**
