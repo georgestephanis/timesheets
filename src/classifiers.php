@@ -153,6 +153,58 @@ function isAfkAt(DateTimeImmutable $t, array $afk): bool
 }
 
 /**
+ * Converts a DateTimeImmutable to a Unix timestamp float with microsecond precision.
+ */
+function dtToFloatTs(DateTimeImmutable $dt): float
+{
+    return $dt->getTimestamp() + ((int)$dt->format('u') / 1_000_000);
+}
+
+/**
+ * Returns the overlap (seconds) between a window event and active input slices.
+ *
+ * $cursor is advanced past finished input rows to keep repeated calls efficient
+ * while iterating chronologically ordered window events.
+ *
+ * @param list<array{start: DateTimeImmutable, end: DateTimeImmutable, active?: bool}> $input
+ */
+function activeInputSecondsDuring(DateTimeImmutable $start, DateTimeImmutable $end, array $input, int &$cursor): float
+{
+    if ($input === []) {
+        return 0.0;
+    }
+
+    $startTs = dtToFloatTs($start);
+    $endTs = dtToFloatTs($end);
+    if ($endTs <= $startTs) {
+        return 0.0;
+    }
+
+    $n = count($input);
+    while ($cursor < $n && dtToFloatTs($input[$cursor]['end']) <= $startTs) {
+        $cursor++;
+    }
+
+    $sum = 0.0;
+    for ($i = $cursor; $i < $n; $i++) {
+        $inStart = dtToFloatTs($input[$i]['start']);
+        if ($inStart >= $endTs) {
+            break;
+        }
+        if (empty($input[$i]['active'])) {
+            continue;
+        }
+        $inEnd = dtToFloatTs($input[$i]['end']);
+        $overlap = min($endTs, $inEnd) - max($startTs, $inStart);
+        if ($overlap > 0) {
+            $sum += $overlap;
+        }
+    }
+
+    return min($sum, $endTs - $startTs);
+}
+
+/**
  * Classifies all ActivityWatch window events and git commits, then aggregates them
  * by date and project name.
  *
@@ -187,6 +239,21 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
         $bucket[$date][$proj]['detail'][$kind][$label] = ($bucket[$date][$proj]['detail'][$kind][$label] ?? 0) + $sec;
     };
 
+    $input = $events['input'] ?? [];
+    $inputCursor = 0;
+
+    // Returns true if $proj should be included given the --project / group: filter.
+    $matchesFilter = static function (string $proj) use ($opts, $config): bool {
+        $filter = $opts['project'];
+        if (!$filter) {
+            return true;
+        }
+        if (str_starts_with($filter, 'group:')) {
+            return ($config['projects'][$proj]['grouping'] ?? null) === substr($filter, 6);
+        }
+        return $proj === $filter;
+    };
+
     foreach ($events['window'] as $ev) {
         // afk filter (use mid-point)
         $midTs = ($ev['start']->getTimestamp() + $ev['end']->getTimestamp()) / 2;
@@ -195,10 +262,11 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
             continue;
         }
 
-        $sec = max(0, $ev['end']->getTimestamp() - $ev['start']->getTimestamp());
+        $sec = max(0.0, dtToFloatTs($ev['end']) - dtToFloatTs($ev['start']));
         if ($sec <= 0) {
             continue;
         }
+        $activeSec = activeInputSecondsDuring($ev['start'], $ev['end'], $input, $inputCursor);
         $date = $ev['start']->setTimezone($tz)->format('Y-m-d');
 
         $sig = [];
@@ -277,17 +345,18 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
                 }
         }
 
-        if ($opts['project'] && $proj !== $opts['project']) {
+        if (!$matchesFilter($proj)) {
             continue;
         }
         $bumpDetail($date, $proj, $detailKind, $detailLabel, $sec);
+        $bucket[$date][$proj]['active_seconds'] = ($bucket[$date][$proj]['active_seconds'] ?? 0) + $activeSec;
     }
 
     // Commits
     foreach ($commits as $c) {
         $date = $c['dt']->setTimezone($tz)->format('Y-m-d');
         $proj = $c['project'];
-        if ($opts['project'] && $proj !== $opts['project']) {
+        if (!$matchesFilter($proj)) {
             continue;
         }
         $bucket[$date][$proj]['commits'][] = $c;
@@ -297,6 +366,9 @@ function classifyAndAggregate(array $events, array $commits, array $config, Date
     foreach (array_keys($bucket) as $date) {
         foreach (array_keys($bucket[$date]) as $proj) {
             $bucket[$date][$proj]['grouping'] = $config['projects'][$proj]['grouping'] ?? null;
+            $sec = (float)($bucket[$date][$proj]['seconds'] ?? 0);
+            $activeSec = (float)($bucket[$date][$proj]['active_seconds'] ?? 0);
+            $bucket[$date][$proj]['activity_ratio'] = $sec > 0 ? min(1.0, $activeSec / $sec) : 0.0;
         }
     }
 

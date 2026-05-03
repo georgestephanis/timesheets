@@ -1,10 +1,10 @@
 # activity-report
 
-A single-file PHP CLI tool that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, and Git into a project-attributed time report.
+A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, and Git into a project-attributed time report.
 
 ## How it works
 
-Every few seconds, ActivityWatch records which app and window title is in focus. This script reads that data, correlates it with Chrome browsing history and Git commits, and classifies each event into a named **project** based on rules you define in `config.json`. The result is a per-day, per-project breakdown of where your time went.
+Every few seconds, ActivityWatch records which app and window title is in focus. With `aw-watcher-input` enabled, it also records keyboard/mouse/scroll activity slices. This script reads that data, correlates it with Chrome browsing history and Git commits, and classifies each event into a named **project** based on rules you define in `config.json`. The result is a per-day, per-project breakdown of where your time went, including active-input metrics.
 
 ```
 ## 2026-04-28 (Mon) — 7h 22m active
@@ -12,6 +12,7 @@ Every few seconds, ActivityWatch records which app and window title is in focus.
 ### Acme Corp — 4h 15m
 - vscode: acme-backend (2h 40m), acme-frontend (1h 10m)
 - browser: staging.acme.com (18m), docs.acme.com (7m)
+- input activity: 2h 58m (70%)
 - commits (3):
     - `09:14` `a1b2c3d4` Fix null pointer in auth middleware
     - `11:02` `e5f6a7b8` Add unit tests for token refresh
@@ -70,18 +71,18 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 
 ### Top-level fields
 
-| Field | Type | Description |
-|---|---|---|
-| `timezone` | string | IANA timezone name for all output (e.g. `America/New_York`) |
-| `paths.activitywatch` | string | Path to ActivityWatch data directory |
-| `paths.chrome` | string | Path to Chrome user-data directory |
-| `paths.chrome_profiles` | array\|null | Profile folders to scan; `null` = auto-discover all |
-| `git_authors` | string[] | Your commit author email address(es) |
-| `chrome_correlation_window_seconds` | int | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120) |
-| `min_event_seconds_to_show` | int | Hide activity segments shorter than this (default 30) |
-| `projects` | object | Named project definitions (see below) |
-| `personal_hosts` | string[] | Browser hostnames to bucket as personal, not work |
-| `personal_apps` | string[] | App names (as reported by ActivityWatch) to bucket as personal |
+| Field                               | Type        | Description                                                                                       |
+| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
+| `timezone`                          | string      | IANA timezone name for all output (e.g. `America/New_York`)                                       |
+| `paths.activitywatch`               | string      | Path to ActivityWatch data directory                                                              |
+| `paths.chrome`                      | string      | Path to Chrome user-data directory                                                                |
+| `paths.chrome_profiles`             | array\|null | Profile folders to scan; `null` = auto-discover all                                               |
+| `git_authors`                       | string[]    | Your commit author email address(es)                                                              |
+| `chrome_correlation_window_seconds` | int         | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120) |
+| `min_event_seconds_to_show`         | int         | Hide activity segments shorter than this (default 30)                                             |
+| `projects`                          | object      | Named project definitions (see below)                                                             |
+| `personal_hosts`                    | string[]    | Browser hostnames to bucket as personal, not work                                                 |
+| `personal_apps`                     | string[]    | App names (as reported by ActivityWatch) to bucket as personal                                    |
 
 ### Project signals
 
@@ -119,11 +120,29 @@ php activity-report.php --show-unmatched
 
 ## Output formats
 
-| Format | Flag | Use case |
-|---|---|---|
-| Markdown | `--format md` (default) | Reading in terminal or pasting into a doc |
-| JSON | `--format json` | Piping into `jq`, importing into a spreadsheet |
-| TSV | `--format tsv` | Opening in Excel / Numbers |
+| Format   | Flag                    | Use case                                       |
+| -------- | ----------------------- | ---------------------------------------------- |
+| Markdown | `--format md` (default) | Reading in terminal or pasting into a doc      |
+| JSON     | `--format json`         | Piping into `jq`, importing into a spreadsheet |
+| TSV      | `--format tsv`          | Opening in Excel / Numbers                     |
+
+## HTML Output
+
+If you'd like to start a HTTP webserver locally, run the following:
+
+```bash
+php -S localhost:8000 www/index.php
+```
+
+This will give you a UI to view the reports more aesthetically than markdown, if desired.
+
+The web UI always fetches and caches full-range JSON snapshots; project/group filtering in the UI is applied client-side to the already-loaded data.
+
+## Report artifacts and filtering
+
+- Generated report artifacts are persisted as full-range snapshots for each date range.
+- CLI `--project` filtering still controls what is printed to STDOUT.
+- Non-HTML outputs can still be requested with `--format`, but saved artifacts remain full-range.
 
 ## Development
 
@@ -141,14 +160,16 @@ npm run format        # reformat JSON files with Prettier
 npm run format:check  # dry-run check (used in CI)
 ```
 
-### Adding a new signal type or output format
+## Adding a new signal type or output format
 
-The codebase is intentionally a single file with no classes. See [AGENTS.md](AGENTS.md) for a full map of functions and the data flow.
+The codebase is intentionally function-oriented with no classes. See [AGENTS.md](AGENTS.md) for a full map of functions and the data flow.
 
 ## Project structure
 
 ```
-activity-report.php   — entire application
+activity-report.php   — entry point + config/bootstrap
+src/                  — functional modules (cli/loaders/classifiers/renderers/cache/helpers)
+www/                  — local web UI + API router
 config.json           — your local config (gitignored)
 config.example.json   — safe-to-commit template
 config.schema.json    — JSON Schema for editor validation

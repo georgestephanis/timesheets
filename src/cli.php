@@ -44,21 +44,41 @@ function main(array $config): void
         backfillChromeUrls($events, $chrome, (int)$config['chrome_correlation_window_seconds']);
     }
 
-    [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+    $fullOpts = $opts;
+    $fullOpts['project'] = null;
+    [$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $config, $tz, $fullOpts);
+
+    $hasProjectFilter = !empty($opts['project']);
+    if ($hasProjectFilter) {
+        [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $config, $tz, $opts);
+    } else {
+        [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
+    }
 
     $format = $opts['format'];
     $out = match ($format) {
         'json' => renderJson($bucket, $unmatched, $from, $to, $tz),
         'tsv'  => renderTsv($bucket, $from, $to, $tz),
-        default => renderMarkdown($bucket, $unmatched, $from, $to, $tz, $opts, $config),
+        default => renderMarkdown($bucket ?? [], $unmatched, $from, $to, $tz, $opts, $config),
+    };
+
+    $fullOut = match ($format) {
+        'json' => renderJson($fullBucket, $fullUnmatched, $from, $to, $tz),
+        'tsv'  => renderTsv($fullBucket, $from, $to, $tz),
+        default => renderMarkdown($fullBucket ?? [], $fullUnmatched, $from, $to, $tz, $fullOpts, $config),
     };
 
     if (!$cached) {
         saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits);
     }
-    saveGeneratedReport($dir, $key, $from, $to, $format, $opts['project'], $cached !== null, $out);
+    saveGeneratedReport($dir, $key, $from, $to, $format, null, $cached !== null, $fullOut);
 
-    fwrite(STDOUT, $out);
+    if ($format === 'md') {
+        $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
+        saveGeneratedReport($dir, $key, $from, $to, 'json', null, $cached !== null, $jsonOut);
+    }
+
+    echo $out;
 }
 
 /**
@@ -189,10 +209,19 @@ function resolveDateRange(array $opts, DateTimeZone $tz): array
 {
     $now = new DateTimeImmutable('now', $tz);
     if ($opts['from']) {
-        $from = new DateTimeImmutable($opts['from'] . ' 00:00:00', $tz);
-        $to = $opts['to']
-            ? new DateTimeImmutable($opts['to'] . ' 23:59:59', $tz)
-            : $now;
+        $fromInput = (string)$opts['from'];
+        $from = preg_match('/^\d{4}-\d{2}-\d{2}$/', $fromInput)
+            ? new DateTimeImmutable($fromInput . ' 00:00:00', $tz)
+            : new DateTimeImmutable($fromInput, $tz);
+
+        if ($opts['to']) {
+            $toInput = (string)$opts['to'];
+            $to = preg_match('/^\d{4}-\d{2}-\d{2}$/', $toInput)
+                ? new DateTimeImmutable($toInput . ' 23:59:59', $tz)
+                : new DateTimeImmutable($toInput, $tz);
+        } else {
+            $to = $now;
+        }
     } else {
         $days = $opts['days'] ?? 7;
         $to = $now;

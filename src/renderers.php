@@ -21,6 +21,8 @@ declare(strict_types=1);
 function renderProjectEntry(string $heading, string $name, array $rec, int $minSec, DateTimeZone $tz): string
 {
     $sec     = $rec['seconds'] ?? 0;
+    $activeSec = $rec['active_seconds'] ?? 0;
+    $activityRatio = (float)($rec['activity_ratio'] ?? 0.0);
     $commits = $rec['commits'] ?? [];
     if ($sec < $minSec && !$commits) {
         return '';
@@ -43,6 +45,9 @@ function renderProjectEntry(string $heading, string $name, array $rec, int $minS
         if ($bits) {
             $out .= "- _$kind:_ " . implode(', ', $bits) . "\n";
         }
+    }
+    if ($sec > 0) {
+        $out .= '- _input activity:_ ' . fmtDur($activeSec) . ' (' . (int)round($activityRatio * 100) . "%)\n";
     }
     if ($commits) {
         $out .= "- _commits (" . count($commits) . "):_\n";
@@ -185,6 +190,8 @@ function renderJson(array $bucket, array $unmatched, DateTimeImmutable $from, Da
             $clean[$date][$name] = [
                 'grouping' => $rec['grouping'] ?? null,
                 'seconds'  => $rec['seconds']  ?? 0,
+                'active_seconds' => $rec['active_seconds'] ?? 0,
+                'activity_ratio' => $rec['activity_ratio'] ?? 0,
                 'detail'   => $rec['detail']   ?? [],
                 'commits' => array_map(fn($c) => [
                     'time' => $c['dt']->setTimezone($tz)->format('c'),
@@ -219,13 +226,17 @@ function renderJson(array $bucket, array $unmatched, DateTimeImmutable $from, Da
  */
 function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to, DateTimeZone $tz): string
 {
-    $rows = ["date\tgrouping\tproject\tseconds\tcommits"];
+    $rows = ["date\tgrouping\tproject\tseconds\tactive_seconds\tactivity_ratio\tcommits"];
     $dates = array_keys($bucket);
     sort($dates);
     foreach ($dates as $date) {
         foreach ($bucket[$date] as $proj => $rec) {
             $grouping = $rec['grouping'] ?? '';
-            $rows[] = "$date\t$grouping\t$proj\t" . (int)($rec['seconds'] ?? 0) . "\t" . count($rec['commits'] ?? []);
+            $rows[] = "$date\t$grouping\t$proj\t"
+                . (int)($rec['seconds'] ?? 0)
+                . "\t" . (int)($rec['active_seconds'] ?? 0)
+                . "\t" . sprintf('%.3f', (float)($rec['activity_ratio'] ?? 0))
+                . "\t" . count($rec['commits'] ?? []);
         }
     }
     return implode("\n", $rows) . "\n";
