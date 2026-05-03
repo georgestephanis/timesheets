@@ -256,6 +256,12 @@
             "properties": {
                 "name": { "type": "string" },
                 "token": { "type": "string" },
+                "usernames": {
+                    "description": "GitHub login names used to match PR/issue/comment activity.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                },
                 "authors": {
                     "description": "GitHub usernames or emails used to filter commit activity. Falls back to git_authors when omitted.",
                     "type": "array",

@@ -244,7 +244,7 @@ function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to
 {
     $rows = [
         "date\tgrouping\tproject\tseconds\tactive_seconds\tactivity_ratio\tcommits\t"
-        . "harvest_entries\tharvest_discussion\tclickup_entries\tclickup_discussion\tgithub_entries\tgithub_activity",
+        . "harvest_entries\tharvest_discussion\tclickup_entries\tclickup_discussion\tgithub_entries\tgithub_activity\tgithub_discussion",
     ];
     $dates = array_keys($bucket);
     sort($dates);
@@ -264,7 +264,8 @@ function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to
                 . "\t" . (int)($clickup['entries'] ?? 0)
                 . "\t" . (int)($clickup['discussion'] ?? 0)
                 . "\t" . (int)($github['entries'] ?? 0)
-                . "\t" . (int)($github['activity'] ?? 0);
+                . "\t" . (int)($github['activity'] ?? 0)
+                . "\t" . (int)($github['discussion'] ?? 0);
         }
     }
     return implode("\n", $rows) . "\n";

@@ -90,6 +90,7 @@
         "github": [
             {
                 "name": "GitHub via gh",
+                "usernames": ["your-github-login"],
                 "authors": ["you@example.com"]
             }
         ]
