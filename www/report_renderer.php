@@ -109,6 +109,7 @@ const SITE = <?= $jsConfig ?>;
 let currentParams = null;
 let currentData   = null;
 let currentBadge  = 'live';
+let currentCacheAgeSec = 0;
 let personalProjectQueue = new Set();
 let showAdminPanel = false;
 
@@ -161,6 +162,17 @@ function fmtDur(sec) {
     if (m >= 60) return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
     if (m >= 1)  return `${m}m`;
     return `${Math.floor(sec)}s`;
+}
+
+function fmtAge(sec) {
+    const s = Math.max(0, Math.floor(Number(sec) || 0));
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ${String(m % 60).padStart(2, '0')}m`;
+    const d = Math.floor(h / 24);
+    return `${d}d ${String(h % 24).padStart(2, '0')}h`;
 }
 
 // ── Renderers ─────────────────────────────────────────────────────────────────
@@ -264,6 +276,16 @@ function projectOptions(selected = '', kind = '') {
     return `<option value="">Select project</option>${personalOpt}<option value="__new__">+ New project...</option>${opts}`;
 }
 
+function projectOptionsSimple(selected = '') {
+    return SITE.projects
+        .map(p => `<option value="${esc(p.name)}"${p.name === selected ? ' selected' : ''}>${esc(p.name)}</option>`)
+        .join('');
+}
+
+function getProjectMeta(name) {
+    return SITE.projects.find(p => p.name === name) || null;
+}
+
 function renderAdminPanel(data) {
     const elAdmin = document.getElementById('admin');
     if (!elAdmin) return;
@@ -279,6 +301,7 @@ function renderAdminPanel(data) {
         : '<p class="muted">No projects queued for personal-ignore.</p>';
 
     const unmatched = data?.unmatched || {};
+    const firstProject = SITE.projects[0]?.name || '';
     const kinds = ['vscode', 'browser', 'slack', 'apps'];
     const rows = [];
     for (const kind of kinds) {
@@ -302,12 +325,19 @@ function renderAdminPanel(data) {
         ? rows.join('')
         : '<p class="muted">No unmatched signals in this range.</p>';
 
-    elAdmin.innerHTML = `
+        elAdmin.innerHTML = `
       <section class="admin-panel">
-        <h3>Classification Actions</h3>
-        <p>Queue projects to ignore as personal, and assign unmatched signals into project rules written to config.json.</p>
+                <h3>Config Actions</h3>
+                <p>Queue projects to ignore as personal, assign unmatched signals, and manage project groupings in config.json.</p>
         <h4>Queued Personal Flags</h4>
         ${queueHtml}
+                <h4>Project Grouping</h4>
+                <div class="admin-row">
+                    <select data-group-project>${projectOptionsSimple(firstProject)}</select>
+                    <input type="text" data-group-name placeholder="Group name (blank to clear)">
+                    <button class="btn" data-save-group>Save grouping</button>
+                </div>
+                <p class="muted">Set any new group name to create it automatically.</p>
         <h4>Reassign Unmatched Signals</h4>
         ${unmatchedHtml}
       </section>
@@ -402,12 +432,16 @@ function renderNav(params, fromRaw, toRaw) {
 
     const prevUrl   = buildPageUrl({ ...params, from: prevFrom, to: prevTo,   days: null });
     const nextUrl   = buildPageUrl({ ...params, from: nextFrom, to: nextTo,   days: null });
-    const badge     = `<span class="badge badge--${currentBadge}">${currentBadge.charAt(0).toUpperCase() + currentBadge.slice(1)}</span>`;
     const nextBtn   = isFuture
         ? '<span class="btn disabled">Next &rsaquo;</span>'
         : `<a class="btn" data-nav href="${esc(nextUrl)}">Next &rsaquo;</a>`;
-    const rebuildLabel = currentBadge === 'cached' ? 'Rebuild from source' : currentBadge === 'rebuilt' ? 'Rebuild again' : 'Refresh';
-    const classifyLabel = showAdminPanel ? 'Hide Classification' : 'Classification';
+    let rebuildLabel = 'Refresh';
+    if (currentBadge === 'cached') {
+        rebuildLabel = `Rebuild from source (cached ${fmtAge(currentCacheAgeSec)} ago)`;
+    } else if (currentBadge === 'rebuilt') {
+        rebuildLabel = 'Rebuild again';
+    }
+    const configLabel = showAdminPanel ? 'Hide Config' : 'Config';
 
     const cur = params.project || '';
     const sel = v => v === cur ? ' selected' : '';
@@ -434,8 +468,7 @@ function renderNav(params, fromRaw, toRaw) {
     }
 
     return `
-      ${badge}
-      <a class="btn" data-nav href="${esc(prevUrl)}">&lsaquo; Prev</a>
+    <a class="btn" data-nav href="${esc(prevUrl)}">&lsaquo; Prev</a>
       ${nextBtn}
       <span class="sep">|</span>
             <form class="date-form" data-date-form>
@@ -453,7 +486,7 @@ function renderNav(params, fromRaw, toRaw) {
         ${projOpts}
       </select>
       <span class="sep">|</span>
-            <a class="btn" data-toggle-admin href="#">${esc(classifyLabel)}</a>
+            <a class="btn" data-toggle-admin href="#">${esc(configLabel)}</a>
             <span class="sep">|</span>
       <a class="btn" data-rebuild href="#">${esc(rebuildLabel)}</a>
     `;
@@ -487,14 +520,13 @@ async function fetchAndRender(params, isRebuild = false) {
 
         currentData  = data;
         currentBadge = isRebuild ? 'rebuilt' : (res.headers.get('X-Report-Source') === 'cached' ? 'cached' : 'live');
+        currentCacheAgeSec = Number(res.headers.get('X-Report-Age-Seconds') || 0);
 
         renderCurrentView();
 
         if (isRebuild) {
             elBanner.innerHTML = renderDiffBanner(computeDiff(prevData, data), prevData !== null);
         }
-
-        bindNavEvents();
     } catch (err) {
         elReport.innerHTML = `<p class="error">Failed to load report: ${esc(err.message)}</p>`;
         if (elAdmin) elAdmin.innerHTML = '';
@@ -565,6 +597,45 @@ function bindAdminEvents() {
                 btn.removeAttribute('disabled');
             }
         });
+    });
+
+    const groupProjectSel = document.querySelector('[data-group-project]');
+    const groupNameInput = document.querySelector('[data-group-name]');
+    const saveGroupBtn = document.querySelector('[data-save-group]');
+
+    const syncGroupingField = () => {
+        const projectName = groupProjectSel?.value || '';
+        const meta = getProjectMeta(projectName);
+        if (groupNameInput) {
+            groupNameInput.value = meta?.grouping || '';
+        }
+    };
+
+    groupProjectSel?.addEventListener('change', syncGroupingField);
+    syncGroupingField();
+
+    saveGroupBtn?.addEventListener('click', async e => {
+        e.preventDefault();
+        const project = groupProjectSel?.value || '';
+        const grouping = (groupNameInput?.value || '').trim();
+        if (!project) {
+            alert('Select a project first.');
+            return;
+        }
+
+        saveGroupBtn.setAttribute('disabled', 'disabled');
+        try {
+            await postApi({ action: 'set_project_grouping', project, grouping });
+            const meta = getProjectMeta(project);
+            if (meta) {
+                meta.grouping = grouping || null;
+            }
+            await fetchAndRender(currentParams, true);
+        } catch (err) {
+            alert(`Failed to save grouping: ${err.message}`);
+        } finally {
+            saveGroupBtn.removeAttribute('disabled');
+        }
     });
 }
 

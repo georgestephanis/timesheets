@@ -239,6 +239,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['ok' => true]);
             exit;
 
+        case 'set_project_grouping':
+            $project = $payload['project'] ?? '';
+            $grouping = $payload['grouping'] ?? '';
+            if (!is_string($project) || !is_string($grouping) || $project === '') {
+                http_response_code(400);
+                echo json_encode(['error' => 'project and grouping are required']);
+                exit(1);
+            }
+            if (!array_key_exists($project, $config['projects'] ?? [])) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Unknown project']);
+                exit(1);
+            }
+
+            $grouping = trim($grouping);
+            if ($grouping === '') {
+                unset($config['projects'][$project]['grouping']);
+            } else {
+                $config['projects'][$project]['grouping'] = $grouping;
+            }
+
+            saveConfigJson($configFile, $config);
+            echo json_encode(['ok' => true]);
+            exit;
+
         default:
             http_response_code(400);
             echo json_encode(['error' => 'Unsupported action']);
@@ -278,7 +303,9 @@ $hasProjectFilter = !empty($opts['project']);
 if (!$rebuild && !$hasProjectFilter && rangeIsHistorical($to, $tz)) {
     $latest = findLatestReport($dir, $key, '', 'json');
     if ($latest) {
+        $ageSec = max(0, time() - (int)filemtime($latest));
         header('X-Report-Source: cached');
+        header('X-Report-Age-Seconds: ' . (string)$ageSec);
         readfile($latest);
         exit;
     }
@@ -316,4 +343,5 @@ if (!$fromCache) {
 saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $fullOut);
 
 header('X-Report-Source: generated');
+header('X-Report-Age-Seconds: 0');
 echo $out;
