@@ -216,6 +216,11 @@ function activeInputSecondsDuring(DateTimeImmutable $start, DateTimeImmutable $e
  */
 function projectForExternal(array $row, array $config): ?string
 {
+    $explicitProject = (string)($row['project'] ?? '');
+    if ($explicitProject !== '' && isset($config['projects'][$explicitProject])) {
+        return $explicitProject;
+    }
+
     $source = (string)($row['source'] ?? '');
     $hint = (string)($row['project_hint'] ?? '');
     if ($source === '' || $hint === '') {
@@ -260,7 +265,7 @@ function projectForExternal(array $row, array $config): ?string
 function classifyAndAggregate(array $events, array $commits, array $external, array $config, DateTimeZone $tz, array $opts): array
 {
     $bucket = []; // [date_iso][project] = ['seconds' => int, 'commits' => [...], 'detail' => [...]]
-    $unmatched = ['vscode' => [], 'browser' => [], 'slack' => [], 'apps' => [], 'harvest' => [], 'clickup' => []];
+    $unmatched = ['vscode' => [], 'browser' => [], 'slack' => [], 'apps' => [], 'harvest' => [], 'clickup' => [], 'github' => []];
 
     $personalHosts = $config['personal_hosts'] ?? [];
     $personalApps  = $config['personal_apps']  ?? [];
@@ -403,10 +408,6 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
     // External integrations
     foreach ($external as $row) {
         $sec = (float)($row['seconds'] ?? 0);
-        if ($sec <= 0) {
-            continue;
-        }
-
         $source = (string)($row['source'] ?? 'external');
         $proj = projectForExternal($row, $config);
         $hint = (string)($row['project_hint'] ?? '');
@@ -428,9 +429,11 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
             : new DateTimeImmutable((string)$row['start']);
         $date = $start->setTimezone($tz)->format('Y-m-d');
 
-        $bucket[$date][$proj]['seconds'] = ($bucket[$date][$proj]['seconds'] ?? 0) + $sec;
-        $bucket[$date][$proj]['active_seconds'] = ($bucket[$date][$proj]['active_seconds'] ?? 0) + $sec;
-        $bucket[$date][$proj]['detail'][$source][$label] = ($bucket[$date][$proj]['detail'][$source][$label] ?? 0) + $sec;
+        if ($sec > 0) {
+            $bucket[$date][$proj]['seconds'] = ($bucket[$date][$proj]['seconds'] ?? 0) + $sec;
+            $bucket[$date][$proj]['active_seconds'] = ($bucket[$date][$proj]['active_seconds'] ?? 0) + $sec;
+            $bucket[$date][$proj]['detail'][$source][$label] = ($bucket[$date][$proj]['detail'][$source][$label] ?? 0) + $sec;
+        }
 
         $bucket[$date][$proj]['external'][$source]['entries'] = ($bucket[$date][$proj]['external'][$source]['entries'] ?? 0)
             + (int)($row['entry_count'] ?? 1);

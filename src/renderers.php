@@ -244,7 +244,7 @@ function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to
 {
     $rows = [
         "date\tgrouping\tproject\tseconds\tactive_seconds\tactivity_ratio\tcommits\t"
-        . "harvest_entries\tharvest_discussion\tclickup_entries\tclickup_discussion",
+        . "harvest_entries\tharvest_discussion\tclickup_entries\tclickup_discussion\tgithub_entries\tgithub_activity",
     ];
     $dates = array_keys($bucket);
     sort($dates);
@@ -253,6 +253,7 @@ function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to
             $grouping = $rec['grouping'] ?? '';
             $harvest = $rec['external']['harvest'] ?? [];
             $clickup = $rec['external']['clickup'] ?? [];
+            $github = $rec['external']['github'] ?? [];
             $rows[] = "$date\t$grouping\t$proj\t"
                 . (int)($rec['seconds'] ?? 0)
                 . "\t" . (int)($rec['active_seconds'] ?? 0)
@@ -261,7 +262,9 @@ function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to
                 . "\t" . (int)($harvest['entries'] ?? 0)
                 . "\t" . (int)($harvest['discussion'] ?? 0)
                 . "\t" . (int)($clickup['entries'] ?? 0)
-                . "\t" . (int)($clickup['discussion'] ?? 0);
+                . "\t" . (int)($clickup['discussion'] ?? 0)
+                . "\t" . (int)($github['entries'] ?? 0)
+                . "\t" . (int)($github['activity'] ?? 0);
         }
     }
     return implode("\n", $rows) . "\n";

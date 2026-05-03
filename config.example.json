@@ -18,6 +18,15 @@
         "Acme Corp": {
             "grouping": "Acme",
             "repos": ["~/code/acme-backend", "~/code/acme-frontend"],
+            "repo_remotes": {
+                "~/code/acme-backend": {
+                    "origin": "git@github.com:example/acme-backend.git"
+                },
+                "~/code/acme-frontend": {
+                    "origin": "git@github.com:example/acme-frontend.git",
+                    "upstream": "git@github.com:upstream/acme-frontend.git"
+                }
+            },
             "vscode_dirs": ["acme-backend", "acme-frontend", "acme"],
             "domains": ["acme.com", "*.acme.com", "acme.local", "acme.wp.local"],
             "harvest_projects": ["Acme*"],
@@ -76,6 +85,12 @@
                 "team_id": ["1234567", "7654321"],
                 "token": "CLICKUP_PERSONAL_ACCESS_TOKEN",
                 "assignee": "me"
+            }
+        ],
+        "github": [
+            {
+                "name": "GitHub via gh",
+                "authors": ["you@example.com"]
             }
         ]
     }

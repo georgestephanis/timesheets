@@ -66,6 +66,20 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
         }
     }
 
+    foreach (($integrations['github'] ?? []) as $idx => $conn) {
+        if (!is_array($conn)) {
+            continue;
+        }
+        $label = (string)($conn['name'] ?? "github[$idx]");
+        try {
+            foreach (loadGitHubActivity($conn, $config, $from, $to) as $row) {
+                $rows[] = $row;
+            }
+        } catch (RuntimeException $e) {
+            integrationWarning("[$label] " . $e->getMessage());
+        }
+    }
+
     if ($configDirty) {
         $configFile = PROJECT_ROOT . '/config.json';
         $existing = is_file($configFile) ? (json_decode((string)file_get_contents($configFile), true) ?? []) : [];
@@ -190,6 +204,199 @@ function resolveClickUpUserId(array $conn): ?string
     } catch (RuntimeException $e) {
         return null;
     }
+}
+
+/**
+ * Loads GitHub commit activity for repos associated with configured projects.
+ *
+ * @param  array             $conn   GitHub integration config.
+ * @param  array             $config Full app config.
+ * @param  DateTimeImmutable $from
+ * @param  DateTimeImmutable $to
+ * @return list<array<string, mixed>>
+ */
+function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from, DateTimeImmutable $to): array
+{
+    $rows = [];
+    $seen = [];
+
+    $reposByProject = githubReposByProject($config);
+    if ($reposByProject === []) {
+        return [];
+    }
+
+    $authors = $conn['authors'] ?? ($config['git_authors'] ?? []);
+    if (!is_array($authors) || $authors === []) {
+        return [];
+    }
+    $authors = array_values(array_filter(array_map('strval', $authors), fn($a) => $a !== ''));
+    if ($authors === []) {
+        return [];
+    }
+
+    $connection = (string)($conn['name'] ?? 'github');
+    foreach ($reposByProject as $project => $repos) {
+        foreach (array_keys($repos) as $repoFullName) {
+            foreach ($authors as $author) {
+                $path = '/repos/' . $repoFullName . '/commits?' . http_build_query([
+                    'since' => $from->setTimezone(new DateTimeZone('UTC'))->format('c'),
+                    'until' => $to->setTimezone(new DateTimeZone('UTC'))->format('c'),
+                    'author' => $author,
+                    'per_page' => 100,
+                ]);
+
+                $json = githubGetJson($path, $conn);
+                if (!is_array($json)) {
+                    continue;
+                }
+
+                foreach ($json as $commit) {
+                    if (!is_array($commit)) {
+                        continue;
+                    }
+                    $sha = (string)($commit['sha'] ?? '');
+                    if ($sha === '') {
+                        continue;
+                    }
+                    if (isset($seen[$repoFullName . '#' . $sha])) {
+                        continue;
+                    }
+                    $seen[$repoFullName . '#' . $sha] = true;
+
+                    $iso = (string)($commit['commit']['author']['date'] ?? '');
+                    if ($iso === '') {
+                        continue;
+                    }
+                    try {
+                        $start = new DateTimeImmutable($iso);
+                    } catch (Throwable) {
+                        continue;
+                    }
+
+                    $message = trim((string)($commit['commit']['message'] ?? 'GitHub commit'));
+                    $rows[] = [
+                        'source' => 'github',
+                        'connection' => $connection,
+                        'project' => $project,
+                        'start' => $start,
+                        'end' => $start,
+                        // Keep as 0 so this contributes counts/activity metadata, not tracked time.
+                        'seconds' => 0,
+                        'project_hint' => $repoFullName,
+                        'label' => $repoFullName . ': ' . strtok($message, "\n"),
+                        'entry_count' => 1,
+                        'activity_count' => 1,
+                        'discussion_count' => 0,
+                    ];
+                }
+            }
+        }
+    }
+
+    return $rows;
+}
+
+/**
+ * Calls GitHub REST API using gh CLI auth when available, with token fallback.
+ *
+ * @return array<mixed>
+ */
+function githubGetJson(string $pathWithQuery, array $conn): array
+{
+    $token = (string)($conn['token'] ?? '');
+
+    // Prefer explicit token when configured.
+    if ($token !== '') {
+        $url = 'https://api.github.com' . $pathWithQuery;
+        return httpGetJson($url, [
+            'Authorization: Bearer ' . $token,
+            'Accept: application/vnd.github+json',
+            'User-Agent: activity-report',
+        ]);
+    }
+
+    $gh = trim((string)shell_exec('command -v gh 2>/dev/null'));
+    if ($gh === '') {
+        throw new RuntimeException('GitHub integration requires gh CLI auth or integrations.github[*].token');
+    }
+
+    $cmd = 'gh api ' . escapeshellarg($pathWithQuery) . ' 2>/dev/null';
+    $out = shell_exec($cmd);
+    if (!is_string($out) || trim($out) === '') {
+        throw new RuntimeException('gh api request failed for ' . $pathWithQuery);
+    }
+
+    $json = json_decode($out, true);
+    if (!is_array($json)) {
+        throw new RuntimeException('Invalid JSON from gh api for ' . $pathWithQuery);
+    }
+
+    return $json;
+}
+
+/**
+ * Builds project => github_repo_full_name set from repo_remotes and local git remotes.
+ *
+ * @param  array $config Full app config.
+ * @return array<string, array<string, bool>>
+ */
+function githubReposByProject(array $config): array
+{
+    $result = [];
+    foreach (($config['projects'] ?? []) as $project => $p) {
+        if (!is_array($p)) {
+            continue;
+        }
+
+        foreach (($p['repo_remotes'] ?? []) as $repoPath => $remotes) {
+            if (!is_array($remotes)) {
+                continue;
+            }
+            foreach ($remotes as $url) {
+                if (!is_string($url) || $url === '') {
+                    continue;
+                }
+                $full = githubRepoFromRemoteUrl($url);
+                if ($full !== null) {
+                    $result[$project][$full] = true;
+                }
+            }
+        }
+
+        // Fallback for projects without repo_remotes snapshots.
+        foreach (($p['repos'] ?? []) as $repoPath) {
+            if (!is_string($repoPath) || $repoPath === '') {
+                continue;
+            }
+            $abs = expandPath($repoPath);
+            if (!is_dir($abs . '/.git')) {
+                continue;
+            }
+            $url = trim((string)shell_exec(
+                'git -C ' . escapeshellarg($abs) . ' remote get-url origin 2>/dev/null'
+            ));
+            if ($url === '') {
+                continue;
+            }
+            $full = githubRepoFromRemoteUrl($url);
+            if ($full !== null) {
+                $result[$project][$full] = true;
+            }
+        }
+    }
+
+    return $result;
+}
+
+/**
+ * Parses owner/repo from common GitHub remote URL formats.
+ */
+function githubRepoFromRemoteUrl(string $url): ?string
+{
+    if (preg_match('#github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$#i', $url, $m)) {
+        return $m[1] . '/' . $m[2];
+    }
+    return null;
 }
 
 /**

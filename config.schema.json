@@ -112,6 +112,11 @@
                     "type": "array",
                     "items": { "$ref": "#/$defs/clickup_connection" },
                     "default": []
+                },
+                "github": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/github_connection" },
+                    "default": []
                 }
             },
             "default": {}
@@ -130,6 +135,15 @@
                     "type": "array",
                     "items": { "type": "string" },
                     "minItems": 1
+                },
+
+                "repo_remotes": {
+                    "description": "Snapshot of git remote names/URLs keyed by local repo path for cross-reference when paths change.",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": { "type": "string" }
+                    }
                 },
 
                 "vscode_dirs": {
@@ -232,6 +246,22 @@
                 },
                 "token": { "type": "string" },
                 "assignee": { "type": "string" }
+            }
+        },
+
+        "github_connection": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+                "name": { "type": "string" },
+                "token": { "type": "string" },
+                "authors": {
+                    "description": "GitHub usernames or emails used to filter commit activity. Falls back to git_authors when omitted.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                }
             }
         }
     }
