@@ -13,7 +13,7 @@ A PHP CLI tool that aggregates local activity data from four source categories a
 | ActivityWatch            | App/window focus events + AFK status + input slices (presses/clicks/mouse/scroll) | `~/Library/Application Support/activitywatch/` (SQLite) |
 | Chrome history           | Browser visits with URLs and titles                                               | `~/Library/Application Support/Google/Chrome/` (SQLite) |
 | Git                      | Commits authored by configured email(s)                                           | All repos listed in `projects[*].repos`                 |
-| External APIs (optional) | Harvest + ClickUp time/activity rows (supports multiple PAT connections)          | HTTPS APIs                                              |
+| External APIs (optional) | Harvest + ClickUp time/activity rows plus GitHub commit activity (supports multiple connections) | HTTPS APIs                                              |
 
 Events are classified into named **projects** by matching signals (VSCode window title, browser domain, Slack workspace/channel, SSH hostname) against rules in `config.json`. Anything that doesn't match a project rule falls into catch-all buckets (`Browser (uncategorized)`, `VSCode (uncategorized)`, etc.).
 
@@ -49,6 +49,8 @@ package.json                — dev dep: prettier ^3.0
 tools/
   sync-integration-projects.php    — discovers Harvest/ClickUp project catalogs and merges mappings into config.json
   cleanup-integration-projects.php — conservative merge of newly added integration project stubs back into existing projects
+  sync-repo-remotes.php            — snapshots git remote URLs per configured repo into projects[*].repo_remotes
+  ensure-github-integration.php    — adds a default integrations.github entry (gh-auth) to config.json if missing
 ```
 
 `vendor/` and `node_modules/` are installed locally but not committed.
@@ -84,9 +86,9 @@ loadIntegrationActivity ─┘
 
 `backfillChromeUrls` fills in missing URLs on Chrome ActivityWatch events by correlating them with the Chrome history SQLite within a configurable time window (`chrome_correlation_window_seconds`).
 
-`classifyAndAggregate` returns `[$bucket, $unmatched]`. `$bucket` is indexed `[date][project]` with `seconds`, `detail` (broken down by kind: vscode/browser/slack/ssh/app), and `commits`. `$unmatched` records signals that didn't match any project rule, surfaced via `--show-unmatched`.
+`classifyAndAggregate` returns `[$bucket, $unmatched]`. `$bucket` is indexed `[date][project]` with `seconds`, `detail` (broken down by kind: vscode/browser/slack/ssh/app/github), and `commits`. `$unmatched` records signals that didn't match any project rule, surfaced via `--show-unmatched`.
 
-External rows are classified by project mapping rules (`harvest_projects`, `clickup_tasks`) and add seconds/detail plus per-source counts (`entries`, `activity`, `discussion`) under each bucket record.
+External rows are classified by project mapping rules (`harvest_projects`, `clickup_tasks`) or explicit project attribution (GitHub rows derived from `projects[*].repo_remotes` / `projects[*].repos`) and add seconds/detail plus per-source counts (`entries`, `activity`, `discussion`) under each bucket record.
 
 When input buckets (`aw-watcher-input*`) are present, `classifyAndAggregate` also computes `active_seconds` and `activity_ratio` per `[date][project]` by overlapping focused window time with input slices that contain keyboard/mouse/scroll activity.
 
@@ -132,7 +134,8 @@ Defined and validated by `config.schema.json`. Key fields:
   "ignored_projects": ["Project Name"],
   "integrations": {
     "harvest": [{"name": "Main", "account_id": "...", "token": "...", "user_id": "..."}],
-    "clickup": [{"name": "Main", "team_id": "...", "token": "...", "assignee": "me"}]
+    "clickup": [{"name": "Main", "team_id": "...", "token": "...", "assignee": "123456"}],
+    "github": [{"name": "GitHub via gh", "authors": ["you@example.com"]}]
   }
 }
 ```
@@ -211,6 +214,22 @@ php tools/cleanup-integration-projects.php --baseline reports/config/config.sync
 ```
 
 Cleanup only merges high-confidence name matches back into existing projects and leaves ambiguous additions untouched.
+
+### Git remote snapshot tool
+
+Keep local-repo cross-reference metadata current in `projects[*].repo_remotes`:
+
+```bash
+php tools/sync-repo-remotes.php
+```
+
+What this does:
+
+- Reads all configured `projects[*].repos` paths.
+- Queries `git remote` / `git remote get-url` for each local repo that exists.
+- Writes `repo_remotes` in `config.json` keyed by local repo path with remote name → URL mappings.
+- Removes stale `repo_remotes` entries for projects that no longer have remotes.
+- Creates a backup in `reports/config/` before writing.
 
 ---
 
