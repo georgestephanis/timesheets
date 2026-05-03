@@ -83,7 +83,7 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 | `projects`                          | object      | Named project definitions (see below)                                                             |
 | `personal_hosts`                    | string[]    | Browser hostnames to bucket as personal, not work                                                 |
 | `personal_apps`                     | string[]    | App names (as reported by ActivityWatch) to bucket as personal                                    |
-| `ignored_projects`                  | string[]    | Project names to exclude from classification and reporting                                         |
+| `ignored_projects`                  | string[]    | Project names to exclude from classification and reporting                                        |
 | `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`)                                              |
 
 ### Project signals

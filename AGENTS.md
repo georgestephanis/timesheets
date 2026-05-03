@@ -8,12 +8,12 @@ Context file for AI agents and future contributors. Keep this up to date when th
 
 A PHP CLI tool that aggregates local activity data from four source categories and produces a project-attributed time report:
 
-| Source | Data | Location |
-|---|---|---|
-| ActivityWatch | App/window focus events + AFK status + input slices (presses/clicks/mouse/scroll) | `~/Library/Application Support/activitywatch/` (SQLite) |
-| Chrome history | Browser visits with URLs and titles | `~/Library/Application Support/Google/Chrome/` (SQLite) |
-| Git | Commits authored by configured email(s) | All repos listed in `projects[*].repos` |
-| External APIs (optional) | Harvest + ClickUp time/activity rows (supports multiple PAT connections) | HTTPS APIs |
+| Source                   | Data                                                                              | Location                                                |
+| ------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| ActivityWatch            | App/window focus events + AFK status + input slices (presses/clicks/mouse/scroll) | `~/Library/Application Support/activitywatch/` (SQLite) |
+| Chrome history           | Browser visits with URLs and titles                                               | `~/Library/Application Support/Google/Chrome/` (SQLite) |
+| Git                      | Commits authored by configured email(s)                                           | All repos listed in `projects[*].repos`                 |
+| External APIs (optional) | Harvest + ClickUp time/activity rows (supports multiple PAT connections)          | HTTPS APIs                                              |
 
 Events are classified into named **projects** by matching signals (VSCode window title, browser domain, Slack workspace/channel, SSH hostname) against rules in `config.json`. Anything that doesn't match a project rule falls into catch-all buckets (`Browser (uncategorized)`, `VSCode (uncategorized)`, etc.).
 
@@ -56,17 +56,17 @@ package.json                — dev dep: prettier ^3.0
 
 Logic is split across `src/` includes with no classes. All code is plain functions grouped by concern. `activity-report.php` is a thin entry point that loads config, defines `PROJECT_ROOT`, requires all includes, and calls `main()`.
 
-| File | Functions |
-|---|---|
-| `src/cli.php` | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange` |
-| `src/helpers.php` | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime` |
-| `src/cache.php` | `reportsDir`, `reportsCacheKey`, `rangeIsHistorical`, `loadCachedSources`, `saveCachedSources`, `saveGeneratedReport`, `appendToIndex`, serialize/deserialize pairs |
-| `src/loader-activitywatch.php` | `loadActivityWatch`, `loadAwSqlite` |
-| `src/loader-chrome.php` | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight` |
-| `src/loader-git.php` | `loadGitCommits` |
-| `src/loader-integrations.php` | `loadIntegrationActivity`, `loadHarvestTimeEntries`, `loadClickUpTimeEntries` |
-| `src/classifiers.php` | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `isAfkAt`, `classifyAndAggregate` |
-| `src/renderers.php` | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv` |
+| File                           | Functions                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/cli.php`                  | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange`                                                                                               |
+| `src/helpers.php`              | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime`                                                                                            |
+| `src/cache.php`                | `reportsDir`, `reportsCacheKey`, `rangeIsHistorical`, `loadCachedSources`, `saveCachedSources`, `saveGeneratedReport`, `appendToIndex`, serialize/deserialize pairs |
+| `src/loader-activitywatch.php` | `loadActivityWatch`, `loadAwSqlite`                                                                                                                                 |
+| `src/loader-chrome.php`        | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight`                                                                                                           |
+| `src/loader-git.php`           | `loadGitCommits`                                                                                                                                                    |
+| `src/loader-integrations.php`  | `loadIntegrationActivity`, `loadHarvestTimeEntries`, `loadClickUpTimeEntries`                                                                                       |
+| `src/classifiers.php`          | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `isAfkAt`, `classifyAndAggregate`                                                            |
+| `src/renderers.php`            | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv`                                                                                                   |
 
 `PROJECT_ROOT` is defined as `__DIR__` in `activity-report.php`. Cache functions in `src/cache.php` use `PROJECT_ROOT` (not `__DIR__`) so that `reports/` always resolves to the project root regardless of include depth.
 
@@ -163,6 +163,7 @@ composer lint:fix    # auto-fix what phpcs can fix
 ```
 
 Ruleset: PSR-12 via `phpcs.xml.dist`. Two sniffs are excluded:
+
 - `PSR1.Files.SideEffects` — the shebang CLI script intentionally mixes declarations and a top-level `main()` call.
 - `PSR12.Files.FileHeader` — the shebang line before `<?php` confuses the header-order check.
 
@@ -175,7 +176,7 @@ npm run format        # rewrite JSON files in place
 npm run format:check  # dry-run, exits non-zero if anything would change
 ```
 
-Covers `config.example.json`, `config.schema.json`, `composer.json`, `package.json`.  
+Covers `config.example.json`, `config.schema.json`, `composer.json`, `package.json`.
 `config.json` is gitignored so prettier touches it locally but it is never committed.
 
 ### JSON Schema validation
