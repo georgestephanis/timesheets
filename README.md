@@ -48,7 +48,8 @@ npm install        # installs Prettier
 ```
 php activity-report.php [options]
 
-  --days N             Look back N days (default 7)
+    No args              Generate one full report per day for the prior 7 completed days
+    --days N             Look back N days
   --from YYYY-MM-DD    Explicit start date (overrides --days)
   --to   YYYY-MM-DD    Explicit end date (default = today)
   --project NAME       Filter output to one project
@@ -64,6 +65,8 @@ The script is executable, so you can also run it directly if `php` is on your PA
 chmod +x activity-report.php
 ./activity-report.php --days 14 --format json > report.json
 ```
+
+With no flags, the CLI backfills daily artifacts for the previous seven completed calendar days. Each day is generated as its own single-day report. If a day's newest full report was created before midnight at the end of that day, it is regenerated; otherwise the existing artifact is kept.
 
 ## Configuration
 

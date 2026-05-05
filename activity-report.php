@@ -19,7 +19,7 @@ declare(strict_types=1);
  *   - SSH hostnames (matched against Terminal window titles)
  *
  * Usage:
- *   php activity-report.php                         # last 7 days, markdown
+ *   php activity-report.php                         # prior 7 completed days, one report per day
  *   php activity-report.php --days 3                # last 3 days
  *   php activity-report.php --from 2026-04-15 --to 2026-04-29
  *   php activity-report.php --project "Acme Corp"   # filter to one project

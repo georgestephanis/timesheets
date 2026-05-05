@@ -17,7 +17,8 @@ const VERSION = '0.1.0';
  */
 function main(array $config): void
 {
-    $opts = parseArgs($GLOBALS['argv'] ?? []);
+    $argv = $GLOBALS['argv'] ?? [];
+    $opts = parseArgs($argv);
     if ($opts['help']) {
         printHelp();
         exit(0);
@@ -27,8 +28,102 @@ function main(array $config): void
         exit(0);
     }
 
-    $tz  = new DateTimeZone($config['timezone']);
+    $tz = new DateTimeZone($config['timezone']);
+    if (invokedWithoutOptions($argv)) {
+        backfillRecentDailyReports($config, $tz);
+        return;
+    }
+
     [$from, $to] = resolveDateRange($opts, $tz);
+    echo generateReport($config, $opts, $tz, $from, $to);
+}
+
+/**
+ * Returns true when the script was invoked without any CLI options beyond the script name.
+ *
+ * @param string[] $argv Raw argument vector, including the script name.
+ */
+function invokedWithoutOptions(array $argv): bool
+{
+    return count($argv) <= 1;
+}
+
+/**
+ * Generates any missing or incomplete single-day reports for the previous seven completed days.
+ *
+ * A day is considered complete once a full unfiltered report exists with a generation
+ * timestamp at or after the following midnight in the configured timezone.
+ *
+ * @param array<string, mixed> $config Loaded and validated config array.
+ */
+function backfillRecentDailyReports(array $config, DateTimeZone $tz): void
+{
+    $today = new DateTimeImmutable('today', $tz);
+    $generated = [];
+    $skipped = [];
+
+    for ($daysAgo = 7; $daysAgo >= 1; $daysAgo--) {
+        $day = $today->sub(new DateInterval("P{$daysAgo}D"));
+        if (dailyReportNeedsRefresh($day, $tz)) {
+            $opts = [
+                'days' => null,
+                'from' => $day->format('Y-m-d'),
+                'to' => $day->format('Y-m-d'),
+                'project' => null,
+                'format' => 'md',
+                'show_unmatched' => false,
+                'list_projects' => false,
+                'help' => false,
+            ];
+            $from = $day->setTime(0, 0, 0);
+            $to = $day->setTime(23, 59, 59);
+            generateReport($config, $opts, $tz, $from, $to);
+            $generated[] = $day->format('Y-m-d');
+            continue;
+        }
+
+        $skipped[] = $day->format('Y-m-d');
+    }
+
+    foreach ($generated as $date) {
+        fwrite(STDOUT, "generated $date\n");
+    }
+    foreach ($skipped as $date) {
+        fwrite(STDOUT, "kept $date\n");
+    }
+}
+
+/**
+ * Returns true when a daily report is missing or only has artifacts generated before the day ended.
+ */
+function dailyReportNeedsRefresh(DateTimeImmutable $day, DateTimeZone $tz): bool
+{
+    $from = $day->setTime(0, 0, 0);
+    $to = $day->setTime(23, 59, 59);
+    $dir = reportsDir($from);
+    $key = reportsCacheKey($from, $to);
+    $latestGeneratedAt = findLatestFullReportGeneratedAt($dir, $key, $tz);
+    if ($latestGeneratedAt === null) {
+        return true;
+    }
+
+    $dayCompletedAt = $from->modify('+1 day');
+    return $latestGeneratedAt < $dayCompletedAt;
+}
+
+/**
+ * Loads, classifies, renders, and persists a report for a concrete date range.
+ *
+ * @param array<string, mixed> $config Loaded and validated config array.
+ * @param array<string, mixed> $opts   Parsed CLI options controlling output.
+ */
+function generateReport(
+    array $config,
+    array $opts,
+    DateTimeZone $tz,
+    DateTimeImmutable $from,
+    DateTimeImmutable $to
+): string {
 
     $dir    = reportsDir($from);
     $key    = reportsCacheKey($from, $to);
@@ -79,7 +174,7 @@ function main(array $config): void
         saveGeneratedReport($dir, $key, $from, $to, 'json', null, $cached !== null, $jsonOut);
     }
 
-    echo $out;
+    return $out;
 }
 
 /**
@@ -155,7 +250,9 @@ function printHelp(): void
     fwrite(STDOUT, <<<TXT
 activity-report.php v0.1.0 — clusters local activity by project.
 
-  --days N             Look back N days (default 7).
+    No args              Generate one full report per day for the prior 7 completed days.
+
+    --days N             Look back N days.
   --from YYYY-MM-DD    Explicit start date (overrides --days).
   --to   YYYY-MM-DD    Explicit end date (default = today).
   --project NAME       Show only this project.

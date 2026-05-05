@@ -156,7 +156,8 @@ All project keys are optional — list only the signals that apply. Glob `*` is 
 ## CLI flags
 
 ```
---days N              Look back N days (default 7)
+No args               Generate one full report per day for the prior 7 completed days
+--days N              Look back N days
 --from YYYY-MM-DD     Explicit start (overrides --days)
 --to   YYYY-MM-DD     Explicit end (default = now)
 --project NAME        Filter output to one project
@@ -165,6 +166,8 @@ All project keys are optional — list only the signals that apply. Glob `*` is 
 --list-projects       Print project names and their signals, then exit
 -h, --help            Usage
 ```
+
+When invoked with no CLI flags, `activity-report.php` backfills the prior seven completed days as seven separate single-day reports. A day is regenerated only if its latest full report artifact was created before that day completed; otherwise the existing artifact is left in place.
 
 ---
 

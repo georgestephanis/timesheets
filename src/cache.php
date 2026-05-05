@@ -208,6 +208,42 @@ function findLatestReport(string $dir, string $key, string $slug, string $ext): 
 }
 
 /**
+ * Returns the generation timestamp of the newest full-range report for the given key,
+ * or null if no unfiltered report artifact exists.
+ *
+ * Full-range reports have filenames like report-YYYY-MM-DD--YYYYMMDDTHHMMSS.md.
+ * Project-filtered variants include an extra slug segment and are ignored here.
+ *
+ * @param string       $dir Absolute path to the per-range reports directory.
+ * @param string       $key Date-range key from reportsCacheKey().
+ * @param DateTimeZone $tz  Timezone used to interpret the filename timestamp.
+ */
+function findLatestFullReportGeneratedAt(string $dir, string $key, DateTimeZone $tz): ?DateTimeImmutable
+{
+    $latest = null;
+    foreach (['md', 'json', 'tsv'] as $ext) {
+        $pattern = '/^report-' . preg_quote($key, '/') . '--(\d{8}T\d{6})\.' . preg_quote($ext, '/') . '$/';
+        foreach (glob("$dir/report-$key--*.$ext") ?: [] as $path) {
+            $name = basename($path);
+            if (!preg_match($pattern, $name, $matches)) {
+                continue;
+            }
+
+            $generatedAt = DateTimeImmutable::createFromFormat('Ymd\\THis', $matches[1], $tz);
+            if ($generatedAt === false) {
+                continue;
+            }
+
+            if ($latest === null || $generatedAt > $latest) {
+                $latest = $generatedAt;
+            }
+        }
+    }
+
+    return $latest;
+}
+
+/**
  * Appends a single JSON object as a new line to a JSONL index file.
  *
  * Creates the file (and its parent reports/ directory) if they do not yet exist.
