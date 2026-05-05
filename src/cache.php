@@ -42,6 +42,14 @@ function rangeIsHistorical(DateTimeImmutable $to, DateTimeZone $tz): bool
 }
 
 /**
+ * Returns the cache key for a full-day bucket.
+ */
+function dailyCacheKey(DateTimeImmutable $day): string
+{
+    return $day->format('Y-m-d');
+}
+
+/**
  * Tries to load previously cached source data (AW events, Chrome rows, commits) from disk.
  *
  * Returns null if any of the three cache files is missing or contains invalid JSON,
@@ -78,6 +86,17 @@ function loadCachedSources(string $dir, string $key): ?array
         'commits' => deserializeCommits($raw['commits']),
         'external' => deserializeExternal($raw['external']),
     ];
+}
+
+/**
+ * Loads a full-day cached source bundle for the given calendar day, if present.
+ *
+ * @return array{events: array, chrome: array, commits: array, external: array}|null
+ */
+function loadDailyCachedSources(DateTimeImmutable $day): ?array
+{
+    $dayStart = $day->setTime(0, 0, 0);
+    return loadCachedSources(reportsDir($dayStart), dailyCacheKey($dayStart));
 }
 
 /**
@@ -137,6 +156,127 @@ function saveCachedSources(
             'external_rows' => count($external),
         ],
     ]);
+}
+
+/**
+ * Writes a full-day source cache bundle for the given calendar day.
+ *
+ * @param array{window: array, afk: array, input?: array} $events
+ * @param array                                            $chrome
+ * @param array                                            $commits
+ * @param array                                            $external
+ */
+function saveDailyCachedSources(
+    DateTimeImmutable $day,
+    array $events,
+    array $chrome,
+    array $commits,
+    array $external
+): void {
+    $dayStart = $day->setTime(0, 0, 0);
+    $dayEnd = $day->setTime(23, 59, 59);
+    saveCachedSources(
+        reportsDir($dayStart),
+        dailyCacheKey($dayStart),
+        $dayStart,
+        $dayEnd,
+        $events,
+        $chrome,
+        $commits,
+        $external
+    );
+}
+
+/**
+ * Returns each calendar day touched by the requested range, normalised to midnight.
+ *
+ * @return list<DateTimeImmutable>
+ */
+function rangeDays(DateTimeImmutable $from, DateTimeImmutable $to, DateTimeZone $tz): array
+{
+    $days = [];
+    $cursor = $from->setTimezone($tz)->setTime(0, 0, 0);
+    $last = $to->setTimezone($tz)->setTime(0, 0, 0);
+
+    while ($cursor <= $last) {
+        $days[] = $cursor;
+        $cursor = $cursor->modify('+1 day');
+    }
+
+    return $days;
+}
+
+/**
+ * Merges multiple source bundles into one combined bundle.
+ *
+ * @param  list<array{events: array, chrome: array, commits: array, external: array}> $bundles
+ * @return array{events: array, chrome: array, commits: array, external: array}
+ */
+function mergeSourceBundles(array $bundles): array
+{
+    $merged = [
+        'events' => ['window' => [], 'afk' => [], 'input' => []],
+        'chrome' => [],
+        'commits' => [],
+        'external' => [],
+    ];
+
+    foreach ($bundles as $bundle) {
+        $merged['events']['window'] = array_merge($merged['events']['window'], $bundle['events']['window']);
+        $merged['events']['afk'] = array_merge($merged['events']['afk'], $bundle['events']['afk']);
+        $merged['events']['input'] = array_merge($merged['events']['input'], $bundle['events']['input'] ?? []);
+        $merged['chrome'] = array_merge($merged['chrome'], $bundle['chrome']);
+        $merged['commits'] = array_merge($merged['commits'], $bundle['commits']);
+        $merged['external'] = array_merge($merged['external'], $bundle['external']);
+    }
+
+    return $merged;
+}
+
+/**
+ * Trims a combined source bundle back to the exact requested range.
+ *
+ * @param  array{events: array, chrome: array, commits: array, external: array} $bundle
+ * @return array{events: array, chrome: array, commits: array, external: array}
+ */
+function filterSourcesToRange(array $bundle, DateTimeImmutable $from, DateTimeImmutable $to): array
+{
+    $inRange = static fn(DateTimeImmutable $dt): bool => $dt >= $from && $dt <= $to;
+
+    $filterEvents = static function (array $rows) use ($from, $to): array {
+        return array_values(array_filter($rows, static function (array $row) use ($from, $to): bool {
+            $start = $row['start'] ?? null;
+            $end = $row['end'] ?? null;
+            return $start instanceof DateTimeImmutable
+                && $end instanceof DateTimeImmutable
+                && $end >= $from
+                && $start <= $to;
+        }));
+    };
+
+    return [
+        'events' => [
+            'window' => $filterEvents($bundle['events']['window']),
+            'afk' => $filterEvents($bundle['events']['afk']),
+            'input' => $filterEvents($bundle['events']['input'] ?? []),
+        ],
+        'chrome' => array_values(array_filter(
+            $bundle['chrome'],
+            static fn(array $row): bool => ($row['time'] ?? null) instanceof DateTimeImmutable && $inRange($row['time'])
+        )),
+        'commits' => array_values(array_filter(
+            $bundle['commits'],
+            static fn(array $row): bool => ($row['dt'] ?? null) instanceof DateTimeImmutable && $inRange($row['dt'])
+        )),
+        'external' => array_values(array_filter($bundle['external'], static function (array $row) use ($from, $to): bool {
+            $start = $row['start'] ?? null;
+            $end = $row['end'] ?? null;
+            return $start instanceof DateTimeImmutable
+                && $end instanceof DateTimeImmutable
+                && $end >= $from
+                && $start <= $to;
+        })),
+    ];
 }
 
 /**

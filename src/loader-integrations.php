@@ -76,6 +76,10 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
             continue;
         }
         $label = (string)($conn['name'] ?? "github[$idx]");
+        if (PHP_SAPI !== 'cli') {
+            integrationWarning("[$label] skipped in web requests; prebuild daily caches via CLI to include GitHub activity");
+            continue;
+        }
         try {
             foreach (loadGitHubActivity($conn, $config, $from, $to) as $row) {
                 $rows[] = $row;

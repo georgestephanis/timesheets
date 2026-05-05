@@ -124,21 +124,16 @@ function generateReport(
     DateTimeImmutable $from,
     DateTimeImmutable $to
 ): string {
+    [
+        'events' => $events,
+        'chrome' => $chrome,
+        'commits' => $commits,
+        'external' => $external,
+        'from_cache' => $fromCache,
+    ] = loadSourcesForRange($config, $tz, $from, $to);
 
-    $dir    = reportsDir($from);
-    $key    = reportsCacheKey($from, $to);
-    $cached = rangeIsHistorical($to, $tz) ? loadCachedSources($dir, $key) : null;
-
-    if ($cached) {
-        ['events' => $events, 'chrome' => $chrome, 'commits' => $commits, 'external' => $external] = $cached;
-    } else {
-        $events  = loadActivityWatch($config, $from, $to);
-        $chrome  = loadChromeHistory($config, $from, $to);
-        $commits = loadGitCommits($config, $from, $to);
-        $external = loadIntegrationActivity($config, $from, $to);
-        // Back-fill before caching so cached events already carry URLs.
-        backfillChromeUrls($events, $chrome, (int)$config['chrome_correlation_window_seconds']);
-    }
+    $dir = reportsDir($from);
+    $key = reportsCacheKey($from, $to);
 
     $fullOpts = $opts;
     $fullOpts['project'] = null;
@@ -164,17 +159,92 @@ function generateReport(
         default => renderMarkdown($fullBucket ?? [], $fullUnmatched, $from, $to, $tz, $fullOpts, $config),
     };
 
-    if (!$cached) {
-        saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits, $external);
-    }
-    saveGeneratedReport($dir, $key, $from, $to, $format, null, $cached !== null, $fullOut);
+    saveGeneratedReport($dir, $key, $from, $to, $format, null, $fromCache, $fullOut);
 
     if ($format === 'md') {
         $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
-        saveGeneratedReport($dir, $key, $from, $to, 'json', null, $cached !== null, $jsonOut);
+        saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $jsonOut);
     }
 
     return $out;
+}
+
+/**
+ * Loads source data for the requested range using only daily cache buckets.
+ *
+ * Historical full days are read from or written to one-day caches. Incomplete current-day
+ * slices are loaded fresh and are not cached.
+ *
+ * @param  array<string, mixed> $config Loaded and validated config array.
+ * @return array{events: array, chrome: array, commits: array, external: array, from_cache: bool}
+ */
+function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable $from, DateTimeImmutable $to): array
+{
+    $bundles = [];
+    $fromCache = true;
+
+    foreach (rangeDays($from, $to, $tz) as $day) {
+        $dayStart = $day->setTime(0, 0, 0);
+        $dayEnd = $day->setTime(23, 59, 59);
+        $sliceFrom = $from > $dayStart ? $from : $dayStart;
+        $sliceTo = $to < $dayEnd ? $to : $dayEnd;
+        $isFullDay = $sliceFrom == $dayStart && $sliceTo == $dayEnd;
+        $isHistoricalDay = rangeIsHistorical($dayEnd, $tz);
+
+        if ($isFullDay && $isHistoricalDay) {
+            $cached = loadDailyCachedSources($dayStart);
+            if ($cached !== null) {
+                $bundles[] = $cached;
+                continue;
+            }
+        }
+
+        $bundles[] = loadFreshSourceSlice($config, $sliceFrom, $sliceTo);
+        $fromCache = false;
+
+        if ($isFullDay && $isHistoricalDay) {
+            $fullDayBundle = end($bundles);
+            saveDailyCachedSources(
+                $dayStart,
+                $fullDayBundle['events'],
+                $fullDayBundle['chrome'],
+                $fullDayBundle['commits'],
+                $fullDayBundle['external']
+            );
+        }
+    }
+
+    $filtered = filterSourcesToRange(mergeSourceBundles($bundles), $from, $to);
+
+    return [
+        'events' => $filtered['events'],
+        'chrome' => $filtered['chrome'],
+        'commits' => $filtered['commits'],
+        'external' => $filtered['external'],
+        'from_cache' => $fromCache,
+    ];
+}
+
+/**
+ * Loads a fresh source bundle for one contiguous time slice and applies Chrome backfill.
+ *
+ * @param  array<string, mixed> $config Loaded and validated config array.
+ * @return array{events: array, chrome: array, commits: array, external: array}
+ */
+function loadFreshSourceSlice(array $config, DateTimeImmutable $from, DateTimeImmutable $to): array
+{
+    $events = loadActivityWatch($config, $from, $to);
+    $chrome = loadChromeHistory($config, $from, $to);
+    $commits = loadGitCommits($config, $from, $to);
+    $external = loadIntegrationActivity($config, $from, $to);
+    backfillChromeUrls($events, $chrome, (int) $config['chrome_correlation_window_seconds']);
+
+    return [
+        'events' => $events,
+        'chrome' => $chrome,
+        'commits' => $commits,
+        'external' => $external,
+    ];
 }
 
 /**

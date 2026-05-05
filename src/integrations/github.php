@@ -13,6 +13,8 @@ declare(strict_types=1);
  */
 function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from, DateTimeImmutable $to): array
 {
+    $maxPages = 1;
+    $deadline = PHP_SAPI === 'cli' ? null : microtime(true) + 8.0;
     $rows = [];
     $seen = [];
 
@@ -39,14 +41,22 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
 
     foreach ($reposByProject as $project => $repos) {
         foreach (array_keys($repos) as $repoFullName) {
+            if (githubBudgetExceeded($deadline)) {
+                return $rows;
+            }
+
             // Commits
             foreach ($authors as $author) {
+                if (githubBudgetExceeded($deadline)) {
+                    return $rows;
+                }
+
                 $commitPath = '/repos/' . $repoFullName . '/commits?' . http_build_query([
                     'since' => $fromIso,
                     'until' => $toIso,
                     'author' => $author,
                 ]);
-                $commits = githubPaginatedGet($commitPath, $conn, 10);
+                $commits = githubPaginatedGet($commitPath, $conn, $maxPages);
                 foreach ($commits as $commit) {
                     if (!is_array($commit)) {
                         continue;
@@ -80,6 +90,9 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
             }
 
             // Pull requests
+            if (githubBudgetExceeded($deadline)) {
+                return $rows;
+            }
             $pulls = githubPaginatedGet(
                 '/repos/' . $repoFullName . '/pulls?' . http_build_query([
                     'state' => 'all',
@@ -87,7 +100,7 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
                     'direction' => 'desc',
                 ]),
                 $conn,
-                10
+                $maxPages
             );
             foreach ($pulls as $pr) {
                 if (!is_array($pr)) {
@@ -126,6 +139,9 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
             }
 
             // Issues (excluding pull requests)
+            if (githubBudgetExceeded($deadline)) {
+                return $rows;
+            }
             $issues = githubPaginatedGet(
                 '/repos/' . $repoFullName . '/issues?' . http_build_query([
                     'state' => 'all',
@@ -134,7 +150,7 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
                     'direction' => 'desc',
                 ]),
                 $conn,
-                10
+                $maxPages
             );
             foreach ($issues as $issue) {
                 if (!is_array($issue) || isset($issue['pull_request'])) {
@@ -172,10 +188,13 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
             }
 
             // Issue comments authored by the actor(s)
+            if (githubBudgetExceeded($deadline)) {
+                return $rows;
+            }
             $issueComments = githubPaginatedGet(
                 '/repos/' . $repoFullName . '/issues/comments?' . http_build_query(['since' => $fromIso]),
                 $conn,
-                10
+                $maxPages
             );
             foreach ($issueComments as $comment) {
                 if (!is_array($comment)) {
@@ -212,10 +231,13 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
             }
 
             // PR review comments authored by the actor(s)
+            if (githubBudgetExceeded($deadline)) {
+                return $rows;
+            }
             $reviewComments = githubPaginatedGet(
                 '/repos/' . $repoFullName . '/pulls/comments?' . http_build_query(['since' => $fromIso]),
                 $conn,
-                10
+                $maxPages
             );
             foreach ($reviewComments as $comment) {
                 if (!is_array($comment)) {
@@ -254,6 +276,14 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
     }
 
     return $rows;
+}
+
+/**
+ * Returns true when the optional GitHub fetch deadline has been reached.
+ */
+function githubBudgetExceeded(?float $deadline): bool
+{
+    return $deadline !== null && microtime(true) >= $deadline;
 }
 
 /**
@@ -359,6 +389,9 @@ function githubDateInRange(string $iso, DateTimeImmutable $from, DateTimeImmutab
  */
 function githubGetJson(string $pathWithQuery, array $conn): array
 {
+    static $ghPath = null;
+    static $ghAuthReady = null;
+
     $token = (string)($conn['token'] ?? '');
 
     // Prefer explicit token when configured.
@@ -371,13 +404,24 @@ function githubGetJson(string $pathWithQuery, array $conn): array
         ]);
     }
 
-    $gh = trim((string)shell_exec('command -v gh 2>/dev/null'));
-    if ($gh === '') {
+    if ($ghPath === null) {
+        $which = githubRunCommandWithTimeout('command -v gh 2>/dev/null', 2);
+        $ghPath = trim((string)$which);
+    }
+    if ($ghPath === '') {
         throw new RuntimeException('GitHub integration requires gh CLI auth or integrations.github[*].token');
     }
 
-    $cmd = 'gh api ' . escapeshellarg($pathWithQuery) . ' 2>/dev/null';
-    $out = shell_exec($cmd);
+    if ($ghAuthReady === null) {
+        $authCheck = githubRunCommandWithTimeout('GH_PROMPT_DISABLED=1 gh auth status >/dev/null 2>&1; echo $?', 4);
+        $ghAuthReady = trim((string)$authCheck) === '0';
+    }
+    if ($ghAuthReady !== true) {
+        throw new RuntimeException('gh CLI is not authenticated; run gh auth login or configure integrations.github[*].token');
+    }
+
+    $cmd = 'GH_PROMPT_DISABLED=1 gh api --cache 1h ' . escapeshellarg($pathWithQuery) . ' 2>/dev/null';
+    $out = githubRunCommandWithTimeout($cmd, 8);
     if (!is_string($out) || trim($out) === '') {
         throw new RuntimeException('gh api request failed for ' . $pathWithQuery);
     }
@@ -388,6 +432,63 @@ function githubGetJson(string $pathWithQuery, array $conn): array
     }
 
     return $json;
+}
+
+/**
+ * Executes a shell command with a hard timeout and returns stdout, or null on timeout/failure.
+ */
+function githubRunCommandWithTimeout(string $command, int $timeoutSeconds): ?string
+{
+    $descriptors = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+
+    $process = proc_open($command, $descriptors, $pipes);
+    if (!is_resource($process)) {
+        return null;
+    }
+
+    fclose($pipes[0]);
+    stream_set_blocking($pipes[1], false);
+    stream_set_blocking($pipes[2], false);
+
+    $stdout = '';
+    $stderr = '';
+    $deadline = microtime(true) + max(1, $timeoutSeconds);
+
+    while (true) {
+        $status = proc_get_status($process);
+        $running = (bool)($status['running'] ?? false);
+
+        $stdout .= stream_get_contents($pipes[1]);
+        $stderr .= stream_get_contents($pipes[2]);
+
+        if (!$running) {
+            break;
+        }
+
+        if (microtime(true) >= $deadline) {
+            proc_terminate($process);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($process);
+            return null;
+        }
+
+        usleep(50_000);
+    }
+
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $exitCode = proc_close($process);
+
+    if ($exitCode !== 0) {
+        return null;
+    }
+
+    return $stdout;
 }
 
 /**

@@ -9,6 +9,10 @@
 header('Content-Type: application/json; charset=UTF-8');
 header('Cache-Control: no-cache');
 
+if (function_exists('set_time_limit')) {
+    set_time_limit(0);
+}
+
 set_exception_handler(function (Throwable $e): void {
     http_response_code(500);
     header('Content-Type: application/json; charset=UTF-8');
@@ -313,18 +317,13 @@ if (!$rebuild && !$hasProjectFilter && rangeIsHistorical($to, $tz)) {
 }
 
 // Generate fresh data.
-$cached    = rangeIsHistorical($to, $tz) ? loadCachedSources($dir, $key) : null;
-$fromCache = $cached !== null;
-
-if ($fromCache) {
-    ['events' => $events, 'chrome' => $chrome, 'commits' => $commits, 'external' => $external] = $cached;
-} else {
-    $events  = loadActivityWatch($config, $from, $to);
-    $chrome  = loadChromeHistory($config, $from, $to);
-    $commits = loadGitCommits($config, $from, $to);
-    $external = loadIntegrationActivity($config, $from, $to);
-    backfillChromeUrls($events, $chrome, (int)$config['chrome_correlation_window_seconds']);
-}
+[
+    'events' => $events,
+    'chrome' => $chrome,
+    'commits' => $commits,
+    'external' => $external,
+    'from_cache' => $fromCache,
+] = loadSourcesForRange($config, $tz, $from, $to);
 
 $fullOpts = $opts;
 $fullOpts['project'] = null;
@@ -339,9 +338,6 @@ if ($hasProjectFilter) {
 $out = renderJson($bucket, $unmatched, $from, $to, $tz);
 $fullOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
 
-if (!$fromCache) {
-    saveCachedSources($dir, $key, $from, $to, $events, $chrome, $commits, $external);
-}
 saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $fullOut);
 
 header('X-Report-Source: generated');

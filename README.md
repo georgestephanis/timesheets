@@ -177,6 +177,8 @@ The web UI always fetches and caches full-range JSON snapshots; project/group fi
 ## Report artifacts and filtering
 
 - Generated report artifacts are persisted as full-range snapshots for each date range.
+- Raw source caches are persisted only as single-day JSON buckets under `reports/YYYY-MM/DD/`.
+- Multi-day reports reuse those daily source caches for completed days instead of writing range-wide source caches.
 - CLI `--project` filtering still controls what is printed to STDOUT.
 - Non-HTML outputs can still be requested with `--format`, but saved artifacts remain full-range.
 

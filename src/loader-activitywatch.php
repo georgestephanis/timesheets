@@ -21,21 +21,21 @@ declare(strict_types=1);
 function loadActivityWatch(array $config, DateTimeImmutable $from, DateTimeImmutable $to): array
 {
     $base = expandPath($config['paths']['activitywatch']);
-     $fallback = ['window' => [], 'afk' => [], 'input' => []];
+    $fallback = ['window' => [], 'afk' => [], 'input' => []];
 
     foreach (['aw-server-rust/sqlite.db', 'aw-server/peewee-sqlite.v2.db'] as $rel) {
         $path = "$base/$rel";
         if (file_exists($path)) {
             $copy = copyForRead($path);
             if (!$copy) {
-                fwrite(STDERR, "warning: could not copy $path\n");
+                awWarning("could not copy $path");
                 continue;
             }
 
             try {
                 $loaded = loadAwSqlite($copy, $from, $to);
             } catch (Throwable $e) {
-                fwrite(STDERR, "warning: could not parse $path ({$e->getMessage()})\n");
+                awWarning("could not parse $path ({$e->getMessage()})");
                 continue;
             }
 
@@ -51,8 +51,22 @@ function loadActivityWatch(array $config, DateTimeImmutable $from, DateTimeImmut
         return $fallback;
     }
 
-    fwrite(STDERR, "warning: no ActivityWatch sqlite found under $base\n");
+    awWarning("no ActivityWatch sqlite found under $base");
     return ['window' => [], 'afk' => [], 'input' => []];
+}
+
+/**
+ * Emits a warning in both CLI and web contexts.
+ */
+function awWarning(string $message): void
+{
+    $line = 'warning: ' . $message;
+    if (defined('STDERR')) {
+        fwrite(STDERR, $line . "\n");
+        return;
+    }
+
+    error_log($line);
 }
 
 /**
