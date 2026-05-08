@@ -11,6 +11,8 @@
 
     "git_authors": ["you@example.com"],
 
+    "discover_repos": "github_desktop",
+
     "chrome_correlation_window_seconds": 120,
     "min_event_seconds_to_show": 30,
 

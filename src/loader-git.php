@@ -25,12 +25,34 @@ function loadGitCommits(array $config, DateTimeImmutable $from, DateTimeImmutabl
         return [];
     }
 
+    // Explicitly configured repos per project.
     $repos = [];
     foreach ($config['projects'] as $proj => $p) {
         foreach ($p['repos'] ?? [] as $r) {
             $repos[expandPath($r)] = $proj;
         }
     }
+
+    // Auto-discover repos from GitHub Desktop when requested.
+    if (($config['discover_repos'] ?? null) === 'github_desktop') {
+        require_once __DIR__ . '/loader-github-desktop.php';
+        foreach (discoverGitHubDesktopRepos() as $path => $info) {
+            if (isset($repos[$path])) {
+                continue; // already mapped by explicit config — don't override
+            }
+            // Match to an existing project by repo basename (case-insensitive), else
+            // use the repo name itself so commits still appear under a named project.
+            $matched = null;
+            foreach (array_keys($config['projects']) as $projName) {
+                if (strcasecmp($projName, $info['name']) === 0) {
+                    $matched = $projName;
+                    break;
+                }
+            }
+            $repos[$path] = $matched ?? $info['name'];
+        }
+    }
+
     if (!$repos) {
         return [];
     }
