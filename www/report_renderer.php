@@ -48,7 +48,16 @@ if ($format === 'html') {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Activity Report</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 0 auto; padding: 0 1rem 2rem; line-height: 1.6; }
+  body { font-family: system-ui, sans-serif; max-width: 1160px; margin: 0 auto; padding: 0 1rem 2rem; line-height: 1.6; }
+  #content-wrap { display: flex; gap: 2rem; align-items: flex-start; }
+  #report { flex: 1 1 0; min-width: 0; }
+  #harvest-sidebar { flex: 0 0 190px; position: sticky; top: 3.8rem; max-height: calc(100vh - 4.5rem); overflow-y: auto; font-size: 0.82rem; }
+  .harvest-sidebar-title { margin: 0 0 0.6rem; font-size: 0.9rem; color: #444; border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; }
+  .harvest-day { margin-bottom: 0.9rem; }
+  .harvest-day-date { font-weight: 600; color: #333; }
+  .harvest-day-total { font-size: 1rem; color: #111; }
+  .harvest-entries { margin: 0.2rem 0 0; padding-left: 0; list-style: none; color: #555; }
+  .harvest-entries li { margin: 0.15rem 0; }
   h1 { margin-top: 0.5em; }
   h2, h3, h4 { margin-top: 1.5em; }
   h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
@@ -101,7 +110,10 @@ if ($format === 'html') {
 <nav id="nav"></nav>
 <div id="diff-banner"></div>
 <div id="admin"></div>
+<div id="content-wrap">
 <main id="report"><p class="loading">Loading&hellip;</p></main>
+<aside id="harvest-sidebar"></aside>
+</div>
 <script>
 const SITE = <?= $jsConfig ?>;
 
@@ -365,6 +377,46 @@ async function postApi(payload) {
     return data;
 }
 
+function renderHarvestSidebar(data) {
+    const el = document.getElementById('harvest-sidebar');
+    if (!el) return;
+
+    const days = Object.keys(data.days || {}).sort().reverse();
+
+    // Collect harvest seconds per label per day.
+    const dayEntries = [];
+    for (const date of days) {
+        const entryMap = {};
+        for (const rec of Object.values(data.days[date] || {})) {
+            for (const [label, sec] of Object.entries(rec.detail?.harvest || {})) {
+                entryMap[label] = (entryMap[label] || 0) + sec;
+            }
+        }
+        const totalSec = Object.values(entryMap).reduce((s, v) => s + v, 0);
+        if (totalSec > 0) dayEntries.push({ date, entryMap, totalSec });
+    }
+
+    if (!dayEntries.length) {
+        el.innerHTML = '';
+        return;
+    }
+
+    let html = '<p class="harvest-sidebar-title">Harvest logged</p>';
+    for (const { date, entryMap, totalSec } of dayEntries) {
+        const dow = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
+        const entries = Object.entries(entryMap).sort(([, a], [, b]) => b - a);
+        html += `<div class="harvest-day">`;
+        html += `<div class="harvest-day-date">${esc(date)} <span class="dow">(${dow})</span></div>`;
+        html += `<div class="harvest-day-total">${fmtDur(totalSec)}</div>`;
+        html += `<ul class="harvest-entries">`;
+        for (const [label, sec] of entries) {
+            html += `<li>${esc(label)}: <span class="dur">${fmtDur(sec)}</span></li>`;
+        }
+        html += `</ul></div>`;
+    }
+    el.innerHTML = html;
+}
+
 function renderCurrentView() {
     if (!currentData) return;
     const elReport = document.getElementById('report');
@@ -374,6 +426,7 @@ function renderCurrentView() {
     elReport.innerHTML = renderReport(currentData, currentParams?.project || '');
     bindNavEvents();
     renderAdminPanel(currentData);
+    renderHarvestSidebar(currentData);
 }
 
 // ── Diff ──────────────────────────────────────────────────────────────────────
@@ -502,6 +555,8 @@ async function fetchAndRender(params, isRebuild = false) {
     elReport.innerHTML = '<p class="loading">Loading&hellip;</p>';
     elBanner.innerHTML = '';
     if (elAdmin) elAdmin.innerHTML = '';
+    const elSidebar = document.getElementById('harvest-sidebar');
+    if (elSidebar) elSidebar.innerHTML = '';
 
     const prevData = currentData;
 
