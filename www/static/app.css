@@ -121,7 +121,7 @@ ul {
     color: #555;
 }
 .dow {
-    color: #888;
+    color: #666;
 }
 em {
     color: #555;
@@ -161,10 +161,12 @@ nav {
 .btn:hover {
     background: #e8e8e8;
 }
-.btn.disabled {
+.btn.disabled,
+.btn:disabled {
     color: #aaa;
     border-color: #ddd;
     pointer-events: none;
+    cursor: default;
 }
 .sep {
     color: #ccc;

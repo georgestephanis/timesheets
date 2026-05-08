@@ -57,7 +57,7 @@ if ($format === 'html') {
 <div id="diff-banner"></div>
 <div id="admin"></div>
 <div id="content-wrap">
-<main id="report"><p class="loading">Loading&hellip;</p></main>
+<main id="report" aria-live="polite"><p class="loading">Loading&hellip;</p></main>
 <aside id="harvest-sidebar"></aside>
 </div>
 <script>const SITE = <?= $jsConfig ?>;</script>

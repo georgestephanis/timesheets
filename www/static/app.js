@@ -306,7 +306,7 @@ function renderAdminPanel(data) {
                 const encodedValue = encodeURIComponent(value);
                 return `<div class="admin-row">
               <span class="sig"><code>${esc(value)}</code> <span class="muted">(${count})</span></span>
-                            <select data-reassign-project>${projectOptions("", kind)}</select>
+                            <select aria-label="Assign ${esc(value)} to project" data-reassign-project>${projectOptions("", kind)}</select>
               <button class="btn" data-reassign data-kind="${esc(kind)}" data-value="${encodedValue}">Assign</button>
             </div>`;
             })
@@ -324,16 +324,16 @@ function renderAdminPanel(data) {
         ${queueHtml}
                 <h4>Project Grouping</h4>
                 <div class="admin-row">
-                    <select data-group-project>${projectOptionsSimple(firstProject)}</select>
+                    <select aria-label="Project" data-group-project>${projectOptionsSimple(firstProject)}</select>
                     ${
                         Object.keys(SITE.groupings).length
-                            ? `<select data-group-name>
+                            ? `<select aria-label="Grouping" data-group-name>
                             <option value="">(none)</option>
                             ${Object.keys(SITE.groupings)
                                 .map((g) => `<option value="${esc(g)}">${esc(g)}</option>`)
                                 .join("")}
                            </select>`
-                            : `<input type="text" data-group-name placeholder="Group name (blank to clear)">`
+                            : `<input type="text" aria-label="Grouping" data-group-name placeholder="Group name (blank to clear)">`
                     }
                     <button class="btn" data-save-group>Save grouping</button>
                 </div>
@@ -530,7 +530,7 @@ function renderNav(params, fromRaw, toRaw) {
     const prevUrl = buildPageUrl({ ...params, from: prevFrom, to: prevTo, days: null });
     const nextUrl = buildPageUrl({ ...params, from: nextFrom, to: nextTo, days: null });
     const nextBtn = isFuture
-        ? '<span class="btn disabled">Next &rsaquo;</span>'
+        ? '<button type="button" class="btn" disabled aria-disabled="true">Next &rsaquo;</button>'
         : `<a class="btn" data-nav href="${esc(nextUrl)}">Next &rsaquo;</a>`;
     let rebuildLabel = "Refresh";
     if (currentBadge === "cached") {
@@ -651,6 +651,7 @@ async function fetchAndRender(params, isRebuild = false) {
         renderCurrentView();
 
         if (isRebuild) {
+            document.querySelector("[data-rebuild]")?.focus();
             elBanner.innerHTML = renderDiffBanner(computeDiff(prevData, data), prevData !== null);
         }
     } catch (err) {
@@ -878,6 +879,19 @@ function bindNavEvents() {
 window.addEventListener("popstate", (e) => {
     currentParams = e.state || paramsFromUrl();
     fetchAndRender(currentParams);
+});
+
+document.addEventListener("keydown", (e) => {
+    // Don't intercept when focus is inside a form element or a modifier key is held.
+    const tag = document.activeElement?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const navLinks = document.querySelectorAll("[data-nav]");
+    if (e.key === "ArrowLeft" && navLinks[0]) {
+        navLinks[0].click();
+    } else if (e.key === "ArrowRight" && navLinks[1]) {
+        navLinks[1].click();
+    }
 });
 
 // ── Init ──────────────────────────────────────────────────────────────────────

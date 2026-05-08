@@ -297,16 +297,21 @@ is complete; most of these are now standard JS-project work.
       `<button type="button">` throughout. Done for: Add end date, Single day,
       Config/admin toggle, Rebuild, and "flag project as personal". CSS updated
       to match `.proj-actions button` alongside `.proj-actions a`.
-- [ ] **(P2, s)** `.btn.disabled` uses `pointer-events: none` instead of the
-      `disabled` attribute. Add `aria-disabled="true"` and intercept clicks.
-- [ ] **(P2, s)** Add `aria-live="polite"` to `#report` so screen readers
+- [x] **(P2, s)** `.btn.disabled` uses `pointer-events: none` instead of the
+      `disabled` attribute. Disabled Next button changed from `<span class="btn disabled">`
+      to `<button disabled aria-disabled="true">`. CSS now covers both `.btn.disabled`
+      and `.btn:disabled` with `cursor: default`.
+- [x] **(P2, s)** Add `aria-live="polite"` to `#report` so screen readers
       announce content changes after navigation/rebuild.
-- [ ] **(P2, s)** `<select>` and `<input>` elements in the admin panel have no
-      labels (only placeholders). Add visible or `aria-label` labels.
-- [ ] **(P2, s)** `.dur` / `.dow` text uses `#888` on white — ~3.5:1 contrast,
-      below WCAG AA. Darken to `#666` (4.5:1) or larger.
-- [ ] **(P3, s)** Restore focus to the trigger element after a rebuild.
-- [ ] **(P3, s)** `←`/`→` keyboard shortcuts for Prev/Next nav.
+- [x] **(P2, s)** `<select>` and `<input>` elements in the admin panel had no
+      labels. Added `aria-label` to all three: "Project", "Grouping" (select/input),
+      and per-signal "Assign X to project" on reassign selects.
+- [x] **(P2, s)** `.dow` text was `#888` (~3.5:1 contrast). Darkened to `#666`
+      (≥4.5:1, WCAG AA). `.dur` was already `#555`, unchanged.
+- [x] **(P3, s)** Restore focus to the Rebuild button after a rebuild completes
+      (`document.querySelector("[data-rebuild]")?.focus()` after `renderCurrentView`).
+- [x] **(P3, s)** `←`/`→` keyboard shortcuts for Prev/Next nav. Skipped when
+      focus is in INPUT/TEXTAREA/SELECT or a modifier key is held.
 
 ### State / coupling
 
