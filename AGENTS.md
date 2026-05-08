@@ -6,56 +6,76 @@ Context file for AI agents and future contributors. Keep this up to date when th
 
 ## What this project is
 
-A PHP CLI tool that aggregates local activity data from four source categories and produces a project-attributed time report:
+A PHP CLI tool + local web UI that aggregates local activity data from four source categories and produces a project-attributed time report:
 
-| Source                   | Data                                                                              | Location                                                |
-| ------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| ActivityWatch            | App/window focus events + AFK status + input slices (presses/clicks/mouse/scroll) | `~/Library/Application Support/activitywatch/` (SQLite) |
-| Chrome history           | Browser visits with URLs and titles                                               | `~/Library/Application Support/Google/Chrome/` (SQLite) |
-| Git                      | Commits authored by configured email(s)                                           | All repos listed in `projects[*].repos`                 |
-| External APIs (optional) | Harvest + ClickUp time/activity rows plus GitHub commit activity (supports multiple connections) | HTTPS APIs                                              |
+| Source                   | Data                                                                              | Location                                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| ActivityWatch            | App/window focus events + AFK status + input slices (presses/clicks/mouse/scroll) | `~/Library/Application Support/activitywatch/` (SQLite)                                                                 |
+| Chrome history           | Browser visits with URLs and titles                                               | `~/Library/Application Support/Google/Chrome/` (SQLite)                                                                 |
+| Git                      | Commits authored by configured email(s)                                           | All repos in `projects[*].repos`, plus any discovered via GitHub Desktop when `discover_repos: "github_desktop"` is set |
+| External APIs (optional) | Harvest + ClickUp time/activity rows; GitHub commit/PR/issue activity             | HTTPS APIs                                                                                                              |
 
-Events are classified into named **projects** by matching signals (VSCode window title, browser domain, Slack workspace/channel, SSH hostname) against rules in `config.json`. Anything that doesn't match a project rule falls into catch-all buckets (`Browser (uncategorized)`, `VSCode (uncategorized)`, etc.).
+Events are classified into named **projects** by matching signals (VSCode window title, browser domain, Slack workspace/channel, SSH hostname) against rules in `config.json`. Unmatched events fall into catch-all buckets (`Browser (uncategorized)`, `VSCode (uncategorized)`, etc.).
 
 ---
 
 ## File map
 
 ```
-activity-report.php         — entry point: config load, PROJECT_ROOT, require_once, main()
+activity-report.php              — entry point: config load, PROJECT_ROOT, require_once, main()
 src/
-  cli.php                   — main(), parseArgs(), printHelp(), printProjects(), resolveDateRange(), VERSION
-  helpers.php               — expandPath(), fnmatchAny(), fmtDur(), copyForRead(), pdo(), chromeTime()
-  cache.php                 — reportsDir(), reportsCacheKey(), rangeIsHistorical(), loadCachedSources(),
-                              saveCachedSources(), saveGeneratedReport(), appendToIndex(),
-                              serializeEvents/deserializeEvents, serializeChrome/deserializeChrome,
-                              serializeCommits/deserializeCommits
-  loader-activitywatch.php  — loadActivityWatch(), loadAwSqlite()
-  loader-chrome.php         — loadChromeHistory(), backfillChromeUrls(), bsearchRight()
-  loader-git.php            — loadGitCommits()
-  loader-integrations.php   — loadIntegrationActivity(), integrationWarning(), backupConfigSnapshot()
+  cli.php                        — main(), parseArgs(), printHelp(), printProjects(),
+                                   resolveDateRange(), generateReport(),
+                                   loadSourcesForRange(config, tz, from, to, rebuild=false),
+                                   loadFreshSourceSlice(), backfillRecentDailyReports(),
+                                   dailyReportNeedsRefresh(), invokedWithoutOptions()
+  helpers.php                    — expandPath(), fnmatchAny(), fmtDur(), copyForRead(), pdo(), chromeTime()
+  cache.php                      — reportsDir(), reportsCacheKey(), rangeIsHistorical(),
+                                   rangeDays(), mergeSourceBundles(), filterSourcesToRange(),
+                                   loadCachedSources(), saveCachedSources(),
+                                   loadDailyCachedSources(), saveDailyCachedSources(),
+                                   findLatestReport(), findLatestFullReportGeneratedAt(),
+                                   saveGeneratedReport(), appendToIndex(),
+                                   serialize/deserialize pairs for events/chrome/commits/external
+  loader-activitywatch.php       — loadActivityWatch(), loadAwSqlite()
+  loader-chrome.php              — loadChromeHistory(), backfillChromeUrls(), bsearchRight()
+  loader-git.php                 — loadGitCommits()  (reads projects[*].repos + optional GitHub Desktop discovery)
+  loader-github-desktop.php      — githubDesktopLevelDbPath(), scanLevelDbForPaths(),
+                                   discoverGitHubDesktopRepos(withTimestamps=false)
+  loader-integrations.php        — loadIntegrationActivity(), integrationWarning(),
+                                   getIntegrationWarnings(), backupConfigSnapshot()
   integrations/
-    shared.php              — idLooksStandard(), httpGetJson()
-    harvest.php             — resolveHarvestUserId(), loadHarvestTimeEntries()
-    clickup.php             — resolveClickUpUserId(), loadClickUpTimeEntries()
-    github.php              — loadGitHubActivity(), github* helpers
-  classifiers.php           — classifyVscode(), classifySlack(), classifySsh(),
-                              projectForSignals(), isAfkAt(), classifyAndAggregate()
-  renderers.php             — renderProjectEntry(), renderMarkdown(), renderJson(), renderTsv()
-config.json                 — local config, gitignored, never committed
-config.example.json         — safe-to-commit template with dummy data
-config.schema.json          — JSON Schema (draft 2020-12) for both config files
-phpcs.xml.dist              — PHP_CodeSniffer ruleset (PSR-12 + CLI exceptions)
-composer.json               — dev dep: squizlabs/php_codesniffer ^3.9
-package.json                — dev dep: prettier ^3.0
-.prettierrc.json            — 4-space indent, 120-char print width
-.prettierignore             — excludes vendor/ and node_modules/
-.gitignore                  — excludes config.json, vendor/, node_modules/
+    shared.php                   — idLooksStandard(), httpGetJson()
+    harvest.php                  — resolveHarvestUserId(), loadHarvestTimeEntries()
+    clickup.php                  — resolveClickUpUserId(), loadClickUpTimeEntries()
+    github.php                   — loadGitHubActivity(), github* helpers  [CLI-only; skipped in web]
+  classifiers.php                — classifyVscode(), classifySlack(), classifySsh(),
+                                   projectForSignals(), projectForExternal(),
+                                   isAfkAt(), activeInputSecondsDuring(),
+                                   classifyAndAggregate()
+  renderers.php                  — renderProjectEntry(), renderMarkdown(),
+                                   renderJson(bucket, unmatched, from, to, tz, warnings=[]),
+                                   renderTsv()
+www/
+  index.php                      — router for `php -S localhost:8000 www/index.php`
+  api.php                        — JSON data endpoint; GET = fetch/rebuild report,
+                                   POST = config mutations (flag_projects_personal,
+                                   reassign_signal, set_project_grouping)
+  report_renderer.php            — HTML shell + ~800 lines of client-side JS;
+                                   non-HTML formats also served here via full PHP pipeline
 tools/
-  sync-integration-projects.php    — discovers Harvest/ClickUp project catalogs and merges mappings into config.json
-  cleanup-integration-projects.php — conservative merge of newly added integration project stubs back into existing projects
-  sync-repo-remotes.php            — snapshots git remote URLs per configured repo into projects[*].repo_remotes
-  ensure-github-integration.php    — adds a default integrations.github entry (gh-auth) to config.json if missing
+  list-github-desktop-repos.php  — lists GitHub Desktop repos sorted by last commit;
+                                   --apply adds unconfigured ones to config.json with backup
+  sync-integration-projects.php  — pulls Harvest/ClickUp catalogs → harvest_projects/clickup_tasks mappings
+  cleanup-integration-projects.php — merges high-confidence integration stubs into existing projects
+  sync-repo-remotes.php          — snapshots git remote URLs into projects[*].repo_remotes
+  ensure-github-integration.php  — adds default integrations.github entry (gh-auth) if absent
+config.json                      — local config, gitignored, never committed
+config.example.json              — safe-to-commit template with dummy data
+config.schema.json               — JSON Schema (draft 2020-12) for both config files
+phpcs.xml.dist                   — PHP_CodeSniffer ruleset (PSR-12 + CLI exceptions)
+composer.json                    — dev dep: squizlabs/php_codesniffer ^3.9
+package.json                     — dev dep: prettier ^3.0
 ```
 
 `vendor/` and `node_modules/` are installed locally but not committed.
@@ -66,49 +86,72 @@ tools/
 
 Logic is split across `src/` includes with no classes. All code is plain functions grouped by concern. `activity-report.php` is a thin entry point that loads config, defines `PROJECT_ROOT`, requires all includes, and calls `main()`.
 
-| File                           | Functions                                                                                                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/cli.php`                  | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange`                                                                                               |
-| `src/helpers.php`              | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime`                                                                                            |
-| `src/cache.php`                | `reportsDir`, `reportsCacheKey`, `rangeIsHistorical`, `loadCachedSources`, `saveCachedSources`, `saveGeneratedReport`, `appendToIndex`, serialize/deserialize pairs |
-| `src/loader-activitywatch.php` | `loadActivityWatch`, `loadAwSqlite`                                                                                                                                 |
-| `src/loader-chrome.php`        | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight`                                                                                                           |
-| `src/loader-git.php`           | `loadGitCommits`                                                                                                                                                    |
-| `src/loader-integrations.php`  | `loadIntegrationActivity`, `integrationWarning`, `backupConfigSnapshot`                                                                                             |
-| `src/integrations/shared.php`  | `idLooksStandard`, `httpGetJson`                                                                                                                                      |
-| `src/integrations/harvest.php` | `resolveHarvestUserId`, `loadHarvestTimeEntries`                                                                                                                     |
-| `src/integrations/clickup.php` | `resolveClickUpUserId`, `loadClickUpTimeEntries`                                                                                                                     |
-| `src/integrations/github.php`  | `loadGitHubActivity`, `githubActorLogins`, `githubPaginatedGet`, `githubDateInRange`, `githubGetJson`, `githubReposByProject`, `githubRepoFromRemoteUrl`         |
-| `src/classifiers.php`          | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `isAfkAt`, `classifyAndAggregate`                                                            |
-| `src/renderers.php`            | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv`                                                                                                   |
+| File                            | Key functions                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/cli.php`                   | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange`, `generateReport`, `loadSourcesForRange`, `loadFreshSourceSlice`, `backfillRecentDailyReports`                                                                                                                                                                      |
+| `src/helpers.php`               | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime`                                                                                                                                                                                                                                                                  |
+| `src/cache.php`                 | `reportsDir`, `reportsCacheKey`, `rangeIsHistorical`, `rangeDays`, `mergeSourceBundles`, `filterSourcesToRange`, `loadCachedSources`, `saveCachedSources`, `loadDailyCachedSources`, `saveDailyCachedSources`, `findLatestReport`, `findLatestFullReportGeneratedAt`, `saveGeneratedReport`, `appendToIndex`, serialize/deserialize pairs |
+| `src/loader-activitywatch.php`  | `loadActivityWatch`, `loadAwSqlite`                                                                                                                                                                                                                                                                                                       |
+| `src/loader-chrome.php`         | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight`                                                                                                                                                                                                                                                                                 |
+| `src/loader-git.php`            | `loadGitCommits`                                                                                                                                                                                                                                                                                                                          |
+| `src/loader-github-desktop.php` | `githubDesktopLevelDbPath`, `scanLevelDbForPaths`, `discoverGitHubDesktopRepos`                                                                                                                                                                                                                                                           |
+| `src/loader-integrations.php`   | `loadIntegrationActivity`, `integrationWarning`, `getIntegrationWarnings`, `backupConfigSnapshot`                                                                                                                                                                                                                                         |
+| `src/integrations/shared.php`   | `idLooksStandard`, `httpGetJson`                                                                                                                                                                                                                                                                                                          |
+| `src/integrations/harvest.php`  | `resolveHarvestUserId`, `loadHarvestTimeEntries`                                                                                                                                                                                                                                                                                          |
+| `src/integrations/clickup.php`  | `resolveClickUpUserId`, `loadClickUpTimeEntries`                                                                                                                                                                                                                                                                                          |
+| `src/integrations/github.php`   | `loadGitHubActivity`, `githubActorLogins`, `githubPaginatedGet`, `githubDateInRange`, `githubGetJson`, `githubReposByProject`, `githubRepoFromRemoteUrl`                                                                                                                                                                                  |
+| `src/classifiers.php`           | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `projectForExternal`, `isAfkAt`, `activeInputSecondsDuring`, `classifyAndAggregate`                                                                                                                                                                                |
+| `src/renderers.php`             | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv`                                                                                                                                                                                                                                                                         |
 
-`PROJECT_ROOT` is defined as `__DIR__` in `activity-report.php`. Cache functions in `src/cache.php` use `PROJECT_ROOT` (not `__DIR__`) so that `reports/` always resolves to the project root regardless of include depth.
+`PROJECT_ROOT` is defined as `__DIR__` in `activity-report.php`. Cache functions in `src/cache.php` use `PROJECT_ROOT` so `reports/` always resolves to the project root regardless of include depth.
 
 ### Data flow
 
 ```
-loadActivityWatch ──┐
-loadChromeHistory ──┼── backfillChromeUrls ──► classifyAndAggregate ──► render*
-loadGitCommits ─────┤
-loadIntegrationActivity ─┘
+loadActivityWatch ──────────────┐
+loadChromeHistory ──┬── backfill┤
+loadGitCommits ─────┤           ├──► classifyAndAggregate ──► render*
+loadIntegrationActivity ────────┘
 ```
 
-`backfillChromeUrls` fills in missing URLs on Chrome ActivityWatch events by correlating them with the Chrome history SQLite within a configurable time window (`chrome_correlation_window_seconds`).
+**`loadSourcesForRange(config, tz, from, to, rebuild=false)`** coordinates multi-day fetching. For each calendar day in the range:
 
-`classifyAndAggregate` returns `[$bucket, $unmatched]`. `$bucket` is indexed `[date][project]` with `seconds`, `detail` (broken down by kind: vscode/browser/slack/ssh/app/github), and `commits`. `$unmatched` records signals that didn't match any project rule, surfaced via `--show-unmatched`.
+- If the day is a complete historical day and `$rebuild` is `false`, it attempts to load a per-day source cache from `reports/YYYY-MM/DD/`. On a cache hit, that day's raw data is reused without hitting any APIs.
+- On a cache miss (or when `$rebuild=true`), it calls `loadFreshSourceSlice`, which calls all four loaders and runs `backfillChromeUrls`. The result is saved as the per-day source cache for future requests.
 
-External rows are classified by project mapping rules (`harvest_projects`, `clickup_tasks`) or explicit project attribution (GitHub rows derived from `projects[*].repo_remotes` / `projects[*].repos`) and add seconds/detail plus per-source counts (`entries`, `activity`, `discussion`) under each bucket record.
+Passing `rebuild=true` bypasses **and overwrites** the per-day source caches. This is how "Rebuild from source" in the web UI ensures stale or empty caches (e.g. caches written before an integration was configured) get refreshed.
 
-When input buckets (`aw-watcher-input*`) are present, `classifyAndAggregate` also computes `active_seconds` and `activity_ratio` per `[date][project]` by overlapping focused window time with input slices that contain keyboard/mouse/scroll activity.
+**`backfillChromeUrls`** fills in missing URLs on Chrome ActivityWatch events by correlating window-focus times with the Chrome history SQLite within `chrome_correlation_window_seconds`.
+
+**`classifyAndAggregate`** returns `[$bucket, $unmatched]`. `$bucket` is indexed `[date][project]` with `seconds`, `active_seconds`, `activity_ratio`, `detail` (broken down by kind: vscode/browser/slack/ssh/app/harvest/clickup/github), `external` (per-source entry/activity/discussion counts), and `commits`. `$unmatched` records signals that didn't match any project rule.
 
 ### Signal matching priority (inside `projectForSignals`)
 
-1. VSCode directory name (case-insensitive exact match)
+1. VSCode directory name (case-insensitive exact match against `vscode_dirs`)
 2. Browser hostname (glob match against `domains`)
-3. Slack workspace + optional channel glob
+3. Slack workspace + optional `channel_glob`
 4. SSH hostname (glob match against `ssh_hosts`)
+5. App name (glob match against `apps`)
 
-Git commits bypass `projectForSignals` entirely — they are pre-attributed to a project when `loadGitCommits` walks `projects[*].repos`.
+Git commits bypass `projectForSignals` entirely — they are pre-attributed at load time by `loadGitCommits` walking `projects[*].repos`.
+
+External integration rows (Harvest, ClickUp) are matched by `projectForExternal` using `harvest_projects` and `clickup_tasks` globs. GitHub rows are attributed via `repo_remotes`/`repos` lookups at fetch time.
+
+### Integration warnings
+
+`integrationWarning(message)` collects messages in a request-scoped global (`$_integrationWarnings`) in addition to writing them to `STDERR` (CLI) or `error_log` (web). Call `getIntegrationWarnings()` after the loading phase to retrieve them. In `api.php`, warnings are appended to the JSON response under `"warnings": [...]` for live/rebuild requests. Cached responses served via `readfile()` do not carry warnings — they reflect transient connection state at generation time, not at cache-serve time. The web UI renders an amber banner when `data.warnings` is non-empty.
+
+### GitHub Desktop repo discovery
+
+`discoverGitHubDesktopRepos(withTimestamps=false)` reads GitHub Desktop's Chromium IndexedDB as raw bytes from:
+
+```
+~/Library/Application Support/GitHub Desktop/IndexedDB/file__0.indexeddb.leveldb/
+```
+
+`scanLevelDbForPaths` extracts `/Users/...` strings via regex from `.log` and `.ldb` files. Paths appearing in `.log` (the active write-ahead log, containing the most recent writes) are tagged `recent`; paths only in `.ldb` (older compacted sorted-string tables) are tagged `archive`. After filtering to paths that have a `.git` directory, the results are returned as `[path => [name, recent, last_commit_ts]]`.
+
+`loadGitCommits` checks `config['discover_repos']`; when it equals `'github_desktop'`, it calls `discoverGitHubDesktopRepos()` and appends discovered repos to the explicit `repos` map. Explicitly configured repos take precedence — discovered repos that are already mapped to a project are not re-mapped.
 
 ---
 
@@ -118,45 +161,99 @@ Defined and validated by `config.schema.json`. Key fields:
 
 ```jsonc
 {
-  "timezone": "America/New_York",       // IANA tz for all output
-  "paths": {
-    "activitywatch": "~/...",
-    "chrome": "~/...",
-    "chrome_profiles": null             // null = all profiles; or ["Default", "Profile 1"]
-  },
-  "git_authors": ["you@example.com"],   // one or more commit-author emails
-  "chrome_correlation_window_seconds": 120,
-  "min_event_seconds_to_show": 30,
-  "projects": {
-    "Project Name": {
-      "repos":       ["~/path/to/repo"],
-      "vscode_dirs": ["folder-name"],
-      "domains":     ["*.example.com", "example.com"],
-      "slack":       [{"workspace": "Name", "channel_glob": "proj-*"}],
-      "ssh_hosts":   ["hostname*"],
-      "harvest_projects": ["Project Name*"],
-      "clickup_tasks": ["*task keyword*"]
-    }
-  },
-  "personal_hosts": ["youtube.com", ...],
-  "personal_apps":  ["Discord", ...],
-  "ignored_projects": ["Project Name"],
-  "integrations": {
-    "harvest": [{"name": "Main", "account_id": "...", "token": "...", "user_id": "..."}],
-    "clickup": [{"name": "Main", "team_id": "...", "token": "...", "assignee": "123456"}],
-    "github": [{"name": "GitHub via gh", "authors": ["you@example.com"]}]
-  }
+    "timezone": "America/New_York",
+    "paths": {
+        "activitywatch": "~/...",
+        "chrome": "~/...",
+        "chrome_profiles": null, // null = all profiles; or ["Default", "Profile 1"]
+    },
+    "git_authors": ["you@example.com"],
+    "discover_repos": "github_desktop", // optional; auto-discovers repos from GitHub Desktop
+    "chrome_correlation_window_seconds": 120,
+    "min_event_seconds_to_show": 30,
+    "projects": {
+        "Project Name": {
+            "grouping": "Group Label", // optional; groups related projects under a shared header
+            "repos": ["~/path/to/repo"],
+            "vscode_dirs": ["folder-name"],
+            "domains": ["*.example.com"],
+            "slack": [{ "workspace": "Name", "channel_glob": "proj-*" }],
+            "ssh_hosts": ["hostname*"],
+            "apps": ["AppName"],
+            "harvest_projects": ["Project Name*"],
+            "clickup_tasks": ["*task keyword*"],
+            "repo_remotes": {
+                // written by sync-repo-remotes.php; used by GitHub integration
+                "~/path/to/repo": { "origin": "git@github.com:org/repo.git" },
+            },
+        },
+    },
+    "personal_hosts": ["youtube.com"],
+    "personal_apps": ["Discord"],
+    "ignored_projects": ["Project Name"],
+    "integrations": {
+        "harvest": [{ "name": "Main", "account_id": "...", "token": "...", "user_id": "..." }],
+        "clickup": [{ "name": "Main", "team_id": "...", "token": "...", "assignee": "123456" }],
+        "github": [{ "name": "GitHub via gh", "authors": ["you@example.com"] }],
+    },
 }
 ```
 
-All project keys are optional — list only the signals that apply. Glob `*` is supported in `domains`, `slack[*].channel_glob`, and `ssh_hosts`.
+`user_id` (Harvest) and `assignee` (ClickUp) are auto-resolved from `/v2/users/me` / `/api/v2/user` on first run and written back to `config.json` automatically.
+
+All project keys are optional — list only the signals that apply. Glob `*` is supported in `domains`, `slack[*].channel_glob`, `ssh_hosts`, `harvest_projects`, `clickup_tasks`, and `apps`.
+
+---
+
+## JSON output shape
+
+`renderJson` produces:
+
+```jsonc
+{
+    "from": "2026-05-08T00:00:00-04:00",
+    "to": "2026-05-08T23:59:59-04:00",
+    "tz": "America/New_York",
+    "days": {
+        "2026-05-08": {
+            "Project Name": {
+                "grouping": "Group Label",
+                "seconds": 3600,
+                "active_seconds": 2700,
+                "activity_ratio": 0.75,
+                "detail": {
+                    "vscode": { "folder-name": 3600 },
+                    "browser": { "example.com": 900 },
+                    "harvest": { "Client / Project / Task": 3600 }, // Harvest seconds appear here
+                },
+                "external": {
+                    "harvest": { "entries": 1, "activity": 1, "discussion": 0 },
+                    "clickup": { "entries": 0, "activity": 0, "discussion": 0 },
+                    "github": { "entries": 2, "activity": 1, "discussion": 3 },
+                },
+                "commits": [
+                    { "time": "2026-05-08T09:14:00-04:00", "sha": "a1b2c3d4...", "subj": "...", "repo": "~/..." },
+                ],
+            },
+        },
+    },
+    "unmatched": {
+        "vscode": { "unknown-dir": 5 },
+        "browser": { "example.com": 3 },
+    },
+    "warnings": ["[Harvest Main] HTTP 401 from api.harvestapp.com: Invalid token"],
+    // "warnings" key only present when non-empty; only included in live responses, not cached files
+}
+```
+
+The Harvest sidebar in the web UI sums `detail.harvest[*]` values per day across all projects — this covers both categorized entries and the `HARVEST (uncategorized)` bucket.
 
 ---
 
 ## CLI flags
 
 ```
-No args               Generate one full report per day for the prior 7 completed days
+No args               Backfill prior 7 completed days (skips days already current)
 --days N              Look back N days
 --from YYYY-MM-DD     Explicit start (overrides --days)
 --to   YYYY-MM-DD     Explicit end (default = now)
@@ -167,7 +264,31 @@ No args               Generate one full report per day for the prior 7 completed
 -h, --help            Usage
 ```
 
-When invoked with no CLI flags, `activity-report.php` backfills the prior seven completed days as seven separate single-day reports. A day is regenerated only if its latest full report artifact was created before that day completed; otherwise the existing artifact is left in place.
+---
+
+## Web UI
+
+Served by `php -S localhost:8000 www/index.php`. `www/index.php` routes all requests to `www/report_renderer.php`.
+
+- **HTML requests** (`?format=html`, the default): `report_renderer.php` returns a static HTML shell with a `SITE` config object (timezone, projects list, `harvestConfigured` flag) and ~800 lines of client-side JavaScript. Data is fetched async from `api.php`.
+- **Non-HTML requests** (`?format=json|md|tsv`): the full PHP pipeline runs server-side and streams the result directly.
+- **`api.php` GET**: accepts `from`, `to`, `days`, `project`, `rebuild`. Serves cached JSON with `X-Report-Source: cached` when available; generates fresh data with `X-Report-Source: generated` otherwise. `rebuild=1` bypasses both the report cache and per-day source caches.
+- **`api.php` POST**: `action` field dispatches to `flag_projects_personal`, `reassign_signal`, or `set_project_grouping`, all of which mutate `config.json` with a backup.
+
+### SITE config object (injected by report_renderer.php)
+
+```js
+const SITE = {
+    timezone: "America/New_York",
+    minSec: 30,
+    projects: [{ name: "...", grouping: "..." }],
+    today: "2026-05-08",
+    yesterday: "2026-05-07",
+    harvestConfigured: true, // true when integrations.harvest[] is non-empty in config.json
+};
+```
+
+`harvestConfigured` controls whether the Harvest sidebar renders. When `true`, every day in the report gets a sidebar entry — 0m for days with no logged Harvest time.
 
 ---
 
@@ -180,12 +301,7 @@ composer lint        # check — exits non-zero if violations found
 composer lint:fix    # auto-fix what phpcs can fix
 ```
 
-Ruleset: PSR-12 via `phpcs.xml.dist`. Two sniffs are excluded:
-
-- `PSR1.Files.SideEffects` — the shebang CLI script intentionally mixes declarations and a top-level `main()` call.
-- `PSR12.Files.FileHeader` — the shebang line before `<?php` confuses the header-order check.
-
-Line limit is raised to 160 (some function signatures are legitimately long).
+Ruleset: PSR-12 via `phpcs.xml.dist`. Two sniffs excluded: `PSR1.Files.SideEffects` (shebang CLI script) and `PSR12.Files.FileHeader` (shebang before `<?php`). Line limit raised to 160.
 
 ### JSON formatting (prettier)
 
@@ -194,63 +310,51 @@ npm run format        # rewrite JSON files in place
 npm run format:check  # dry-run, exits non-zero if anything would change
 ```
 
-Covers `config.example.json`, `config.schema.json`, `composer.json`, `package.json`.
-`config.json` is gitignored so prettier touches it locally but it is never committed.
+Covers `config.example.json`, `config.schema.json`, `composer.json`, `package.json`. `config.json` is gitignored so prettier touches it locally but it is never committed.
 
-### JSON Schema validation
+### Maintenance tools
 
-`config.json` and `config.example.json` both carry a `"$schema": "./config.schema.json"` pointer. Editors that support JSON Schema (VS Code, JetBrains) will validate and autocomplete config files automatically.
+All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<timestamp>.json` before writing.
 
-### Integration project sync tools
+**`list-github-desktop-repos.php`**
 
-Use these scripts to keep external project names linked into local `projects` mappings:
+- Reads GitHub Desktop's IndexedDB LevelDB for repo paths.
+- Sorts by last commit date; marks repos from the active `.log` file as RECENT.
+- Dry-run by default; `--apply` adds unconfigured repos to `config.json`.
+- Repos matching an existing project by basename go into that project's `repos` list; others create new project stubs.
 
-```bash
-php tools/sync-integration-projects.php
-```
+**`sync-integration-projects.php`**
 
-What this does:
+- Queries Harvest projects via `GET /v2/projects` (falls back to time-entry scan if unauthorized).
+- Queries ClickUp names via team → spaces → folders → lists.
+- Case-insensitive matches reuse existing projects; new names create stubs.
+- Adds `harvest_projects` (exact names) and `clickup_tasks` (`*Name*` globs).
 
-- Queries Harvest projects via `GET /v2/projects` (active projects).
-- If Harvest project listing is unauthorized for a token/account, falls back to `GET /v2/time_entries` and extracts `project.name` values seen in the past year.
-- Queries ClickUp names via team → spaces → folders → lists (including folderless lists).
-- Reuses an existing local project on case-insensitive name match; otherwise creates a new project stub.
-- Adds Harvest mappings under `harvest_projects` as exact names.
-- Adds ClickUp mappings under `clickup_tasks` as `*Name*` globs.
+**`cleanup-integration-projects.php`** (`--baseline <backup> --dry-run|--apply`)
 
-Conservative cleanup (optional):
+- Merges high-confidence name-matched stubs back into existing projects.
+- Leaves ambiguous additions untouched.
 
-```bash
-php tools/cleanup-integration-projects.php --baseline reports/config/config.sync.<timestamp>.json --dry-run
-php tools/cleanup-integration-projects.php --baseline reports/config/config.sync.<timestamp>.json --apply
-```
+**`sync-repo-remotes.php`**
 
-Cleanup only merges high-confidence name matches back into existing projects and leaves ambiguous additions untouched.
+- Reads all `projects[*].repos` paths; queries `git remote` / `git remote get-url`.
+- Writes `repo_remotes` in config; removes stale entries.
 
-### Git remote snapshot tool
+**`ensure-github-integration.php`**
 
-Keep local-repo cross-reference metadata current in `projects[*].repo_remotes`:
-
-```bash
-php tools/sync-repo-remotes.php
-```
-
-What this does:
-
-- Reads all configured `projects[*].repos` paths.
-- Queries `git remote` / `git remote get-url` for each local repo that exists.
-- Writes `repo_remotes` in `config.json` keyed by local repo path with remote name → URL mappings.
-- Removes stale `repo_remotes` entries for projects that no longer have remotes.
-- Creates a backup in `reports/config/` before writing.
+- Adds a default `integrations.github` entry using `gh` auth if none exists.
 
 ---
 
 ## Conventions
 
-- **No classes.** Keep everything as plain functions. Only introduce a class if the complexity genuinely demands it and you've discussed it first.
-- **No autoloader.** The project is intentionally dependency-free at runtime — `vendor/` contains only dev tools. New modules go in `src/` and get a `require_once` line in `activity-report.php`.
-- **Schema stays in sync.** Whenever a new config key is added or an existing key's shape changes, update `config.schema.json` and `config.example.json` in the same change.
+- **No classes.** Plain functions only. Introduce a class only if complexity genuinely demands it after discussion.
+- **No autoloader.** Runtime is dependency-free (`vendor/` contains only dev tools). New modules go in `src/` with a `require_once` in `activity-report.php`.
+- **Schema stays in sync.** Whenever a config key is added or its shape changes, update `config.schema.json` and `config.example.json` in the same commit.
 - **Run linters before committing.** `composer lint` must exit 0. `npm run format:check` must exit 0.
-- **`config.json` is never committed.** It contains real email addresses, repo paths, and workspace names. It is in `.gitignore`.
-- **Config backups live in `reports/config/`.** Any tool or runtime path that mutates `config.json` must write a timestamped backup into `reports/config/` first (do not create root-level `config.json.bak*` files).
-- **Cache stays flat JSON, not SQLite.** Raw source caches are stored only as per-day JSON files under `reports/YYYY-MM/DD/`, and wider report ranges compose those daily buckets instead of creating separate range-wide source caches. The volumes are tiny (one person, one day), files are transparent and easy to inspect or delete, and selective invalidation is just `rm -rf reports/YYYY-MM/DD/`. A SQLite cache would add complexity without meaningful benefit. If cross-range aggregate queries become a priority in future, build a thin read layer over the already-generated report files rather than re-doing raw event storage in SQLite.
+- **`config.json` is never committed.** It contains real email addresses, tokens, repo paths, and workspace names. It is in `.gitignore`.
+- **Config backups live in `reports/config/`.** Any code path that mutates `config.json` must write a timestamped backup there first. Never create root-level `config.json.bak*` files.
+- **Warnings are collected, not just logged.** `integrationWarning()` writes to STDERR/error_log AND appends to `$_integrationWarnings`. Always call `getIntegrationWarnings()` after the loading phase and include the result in JSON responses. Do not include warnings in files written to the report cache — they reflect transient state.
+- **Rebuild clears source caches.** Pass `rebuild=true` to `loadSourcesForRange` whenever the caller intends a full refresh. This ensures per-day source caches can't silently persist stale or empty data indefinitely.
+- **Cache stays flat JSON, not SQLite.** Raw source caches are per-day JSON files under `reports/YYYY-MM/DD/`. Wider date ranges compose daily buckets rather than writing range-wide source caches. Files are transparent, trivially inspectable, and selectively invalidated with `rm -rf reports/YYYY-MM/DD/`. If cross-range aggregate queries become a priority, build a thin read layer over existing report files rather than introducing SQLite for raw event storage.
+- **GitHub integration is CLI-only.** `loadGitHubActivity` is skipped when `PHP_SAPI !== 'cli'` to avoid blocking web page loads. Rely on the daily cron job or direct CLI invocation to populate GitHub data into per-day source caches.

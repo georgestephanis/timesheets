@@ -1,12 +1,12 @@
 1 | To Do:
 2 |
-3 | * Generate prettier reports -- html maybe?  Easier to view tables that way anyways. (Low)
-4 | * Pull time entries from Harvest (maybe Gusto as well?) to compare against what we've detected to find unlogged time. (Medium)
-5 | * Pull activity on Issues from Github to discern comments and interactions there. (High)
-6 | * Pull data from local Slack cache to find comments and interactions made by me. (Medium)
-7 | * Interact with ClickUp. (High)
+3 | _ Generate prettier reports -- html maybe? Easier to view tables that way anyways. (Low)
+4 | _ Pull time entries from Harvest (maybe Gusto as well?) to compare against what we've detected to find unlogged time. (Medium)
+5 | _ Pull activity on Issues from Github to discern comments and interactions there. (High)
+6 | _ Pull data from local Slack cache to find comments and interactions made by me. (Medium)
+7 | _ Interact with ClickUp. (High)
 8 |
-9 | * Add interaction with vLLM. (High)
+9 | _ Add interaction with vLLM. (High)
 10 |
 11 | ## Implementation Plan
 12 |
@@ -44,9 +44,9 @@
 44 |
 45 | ## Additional Ideas
 46 |
-47 | * Add PDF export option (Medium)
-48 | * Implement time anomaly detection (High)
-49 | * Create interactive timeline visualization (High)
-50 | * Add support for Jira time tracking (Medium)
-51 | * Implement automatic sync scheduling (Low)
-52 | * Add machine learning for pattern recognition (High)
+47 | _ Add PDF export option (Medium)
+48 | _ Implement time anomaly detection (High)
+49 | _ Create interactive timeline visualization (High)
+50 | _ Add support for Jira time tracking (Medium)
+51 | _ Implement automatic sync scheduling (Low)
+52 | _ Add machine learning for pattern recognition (High)

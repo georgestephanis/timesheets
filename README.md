@@ -1,10 +1,33 @@
 # activity-report
 
-A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp APIs into a project-attributed time report.
+A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp/GitHub APIs into a project-attributed time report.
+
+## Quick start
+
+```bash
+# Start the web UI
+php -S localhost:8000 www/index.php
+```
+
+Then open [http://localhost:8000](http://localhost:8000). The UI loads today's activity, lets you page through previous days, rebuild stale data, and cross-reference what you've logged in Harvest for each day.
+
+### Recommended cron job
+
+Run this once at 4 am each morning to pre-build and cache the prior day's report before you open it:
+
+```
+0 4 * * * cd /Users/yourname/code/timesheets && /usr/bin/php activity-report.php >> /tmp/timesheets-backfill.log 2>&1
+```
+
+Add it with `crontab -e`. Replace `/Users/yourname/code/timesheets` with your actual path. On macOS, use the full PHP path (`which php` to find it — Homebrew installs to `/opt/homebrew/bin/php`).
+
+With no arguments, `activity-report.php` backfills the prior seven completed calendar days, skipping any day whose report artifact is already current. The cron job keeps source caches warm so the web UI loads instantly.
+
+---
 
 ## How it works
 
-Every few seconds, ActivityWatch records which app and window title is in focus. With `aw-watcher-input` enabled, it also records keyboard/mouse/scroll activity slices. This script reads that data, correlates it with Chrome browsing history, Git commits, and optional Harvest/ClickUp time-entry feeds, then classifies each event into a named **project** based on rules you define in `config.json`. The result is a per-day, per-project breakdown of where your time went, including active-input and external-integration metrics.
+Every few seconds, ActivityWatch records which app and window title is in focus. With `aw-watcher-input` enabled, it also records keyboard/mouse/scroll activity slices. This script reads that data, correlates it with Chrome browsing history, Git commits, and optional Harvest/ClickUp time-entry feeds, then classifies each event into a named **project** based on rules you define in `config.json`. The result is a per-day, per-project breakdown of where your time went, including active-input ratios and external-integration metrics.
 
 ```
 ## 2026-04-28 (Mon) — 7h 22m active
@@ -13,11 +36,14 @@ Every few seconds, ActivityWatch records which app and window title is in focus.
 - vscode: acme-backend (2h 40m), acme-frontend (1h 10m)
 - browser: staging.acme.com (18m), docs.acme.com (7m)
 - input activity: 2h 58m (70%)
+- harvest: 2 entries, 1 activity
 - commits (3):
     - `09:14` `a1b2c3d4` Fix null pointer in auth middleware
     - `11:02` `e5f6a7b8` Add unit tests for token refresh
     - `14:38` `c9d0e1f2` Bump API version to 2.1
 ```
+
+---
 
 ## Requirements
 
@@ -25,6 +51,8 @@ Every few seconds, ActivityWatch records which app and window title is in focus.
 - [ActivityWatch](https://activitywatch.net/) running locally (macOS)
 - Google Chrome (optional — for browser signal matching)
 - Git (optional — for commit attribution)
+
+---
 
 ## Installation
 
@@ -43,30 +71,7 @@ composer install   # installs PHP_CodeSniffer
 npm install        # installs Prettier
 ```
 
-## Usage
-
-```
-php activity-report.php [options]
-
-    No args              Generate one full report per day for the prior 7 completed days
-    --days N             Look back N days
-  --from YYYY-MM-DD    Explicit start date (overrides --days)
-  --to   YYYY-MM-DD    Explicit end date (default = today)
-  --project NAME       Filter output to one project
-  --format md|json|tsv Output format (default md)
-  --show-unmatched     Append unclassified signals — useful for tuning config
-  --list-projects      Print configured projects and exit
-  -h, --help           Show this message
-```
-
-The script is executable, so you can also run it directly if `php` is on your PATH:
-
-```bash
-chmod +x activity-report.php
-./activity-report.php --days 14 --format json > report.json
-```
-
-With no flags, the CLI backfills daily artifacts for the previous seven completed calendar days. Each day is generated as its own single-day report. If a day's newest full report was created before midnight at the end of that day, it is regenerated; otherwise the existing artifact is kept.
+---
 
 ## Configuration
 
@@ -81,13 +86,14 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 | `paths.chrome`                      | string      | Path to Chrome user-data directory                                                                |
 | `paths.chrome_profiles`             | array\|null | Profile folders to scan; `null` = auto-discover all                                               |
 | `git_authors`                       | string[]    | Your commit author email address(es)                                                              |
+| `discover_repos`                    | string      | Set to `"github_desktop"` to auto-discover repos from the GitHub Desktop app (see below)          |
 | `chrome_correlation_window_seconds` | int         | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120) |
 | `min_event_seconds_to_show`         | int         | Hide activity segments shorter than this (default 30)                                             |
 | `projects`                          | object      | Named project definitions (see below)                                                             |
 | `personal_hosts`                    | string[]    | Browser hostnames to bucket as personal, not work                                                 |
 | `personal_apps`                     | string[]    | App names (as reported by ActivityWatch) to bucket as personal                                    |
 | `ignored_projects`                  | string[]    | Project names to exclude from classification and reporting                                        |
-| `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`)                                              |
+| `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`, `github[]`)                                  |
 
 ### Project signals
 
@@ -95,6 +101,8 @@ Each project in `projects` is an object whose keys are all optional — include 
 
 ```jsonc
 "Acme Corp": {
+    "grouping": "Acme",                         // groups this project under a named header in reports
+
     // Git repository paths — commits are pre-attributed at load time
     "repos": ["~/code/acme-backend", "~/code/acme-frontend"],
 
@@ -121,6 +129,21 @@ Each project in `projects` is an object whose keys are all optional — include 
 }
 ```
 
+### GitHub Desktop repo discovery
+
+Set `"discover_repos": "github_desktop"` in `config.json` to have the commit loader automatically include all repositories registered in the GitHub Desktop app, without needing to list them explicitly under each project.
+
+Discovered repos are matched to existing projects by directory basename (case-insensitive). Repos that don't match any project name are attributed to a synthetic project using the repo name.
+
+Use the listing tool to preview and apply new repos from GitHub Desktop into config.json:
+
+```bash
+php tools/list-github-desktop-repos.php           # preview
+php tools/list-github-desktop-repos.php --apply   # write changes + backup
+```
+
+The tool sorts repos by most recent commit date and marks ones that appear in GitHub Desktop's active write-ahead log as **RECENT**.
+
 ### External integrations (optional)
 
 Multiple personal-access-token connections are supported for each provider:
@@ -132,7 +155,7 @@ Multiple personal-access-token connections are supported for each provider:
             "name": "Harvest Main",
             "account_id": "123456",
             "token": "HARVEST_PERSONAL_ACCESS_TOKEN",
-            "user_id": "1234567"
+            "user_id": "1234567"         // auto-resolved and saved on first run if omitted
         }
     ],
     "clickup": [
@@ -140,19 +163,54 @@ Multiple personal-access-token connections are supported for each provider:
             "name": "ClickUp Main",
             "team_id": "1234567",
             "token": "CLICKUP_PERSONAL_ACCESS_TOKEN",
-            "assignee": "me"
+            "assignee": "me"             // auto-resolved and saved on first run if omitted
+        }
+    ],
+    "github": [
+        {
+            "name": "GitHub via gh",
+            "authors": ["you@example.com"]
         }
     ]
 }
 ```
 
+> **Note:** The GitHub integration (PRs, issues, comments, commit activity) only runs via the CLI. It is skipped during web requests to avoid blocking page loads. Run `php activity-report.php` from the command line, or rely on the daily cron job, to include GitHub data in cached reports.
+
 ### Tuning with `--show-unmatched`
 
-Run with `--show-unmatched` to see which VSCode dirs, browser hosts, and Slack channels weren't matched by any project rule. Use this output to fill in gaps in your config.
+Run with `--show-unmatched` to see which VSCode dirs, browser hosts, and Slack channels weren't matched by any project rule:
 
 ```bash
 php activity-report.php --show-unmatched
 ```
+
+---
+
+## CLI usage
+
+```
+php activity-report.php [options]
+
+    No args              Backfill prior 7 completed days (skips days already current)
+    --days N             Look back N days from today
+    --from YYYY-MM-DD    Explicit start date (overrides --days)
+    --to   YYYY-MM-DD    Explicit end date (default = today)
+    --project NAME       Filter output to one project
+    --format md|json|tsv Output format (default md)
+    --show-unmatched     Append unclassified signals — useful for tuning config
+    --list-projects      Print configured projects and exit
+    -h, --help           Show this message
+```
+
+The script is executable, so you can also run it directly:
+
+```bash
+chmod +x activity-report.php
+./activity-report.php --days 14 --format json > report.json
+```
+
+---
 
 ## Output formats
 
@@ -162,25 +220,45 @@ php activity-report.php --show-unmatched
 | JSON     | `--format json`         | Piping into `jq`, importing into a spreadsheet |
 | TSV      | `--format tsv`          | Opening in Excel / Numbers                     |
 
-## HTML Output
+---
 
-If you'd like to start a HTTP webserver locally, run the following:
+## Web UI
 
 ```bash
 php -S localhost:8000 www/index.php
 ```
 
-This will give you a UI to view the reports more aesthetically than markdown, if desired.
+The web UI is a single-page app that fetches JSON from `www/api.php` and renders it client-side. Features:
 
-The web UI always fetches and caches full-range JSON snapshots; project/group filtering in the UI is applied client-side to the already-loaded data.
+- **Navigation** — page through days or date ranges; jump to any date with the date picker
+- **Project filter** — filter to a single project or group; filtering is client-side (no re-fetch)
+- **Harvest sidebar** — sticky panel on the right showing total Harvest time logged per day, with a per-entry breakdown. Displays 0m for days with no entries so gaps are immediately visible. Hidden when Harvest is not configured.
+- **Rebuild** — the "Rebuild from source" button re-fetches all data sources (including re-calling integration APIs and overwriting per-day source caches), then shows a diff of what changed
+- **Connection warnings** — if any integration fails to connect (bad token, network error, etc.) an amber banner appears at the top of the report listing the specific errors
+- **Config panel** — toggle the Config panel to flag projects as personal, reassign unmatched signals to projects, and set project groupings, all without editing config.json directly
 
-## Report artifacts and filtering
+### Caching
 
-- Generated report artifacts are persisted as full-range snapshots for each date range.
-- Raw source caches are persisted only as single-day JSON buckets under `reports/YYYY-MM/DD/`.
-- Multi-day reports reuse those daily source caches for completed days instead of writing range-wide source caches.
-- CLI `--project` filtering still controls what is printed to STDOUT.
-- Non-HTML outputs can still be requested with `--format`, but saved artifacts remain full-range.
+Report data is cached at two levels:
+
+1. **Per-day source caches** (`reports/YYYY-MM/DD/activitywatch-*.json`, `chrome-*.json`, `commits-*.json`, `integrations-*.json`) — raw data per calendar day. Historical days are cached once and reused. Clicking "Rebuild from source" re-fetches and overwrites these.
+2. **Report JSON** (`reports/YYYY-MM/DD/report-*.json`) — the rendered JSON for a date range. Served directly for repeat loads of historical ranges. Rebuild regenerates this from the source caches.
+
+---
+
+## Maintenance tools
+
+All tools live in `tools/` and write a timestamped backup to `reports/config/` before modifying `config.json`.
+
+| Tool                               | What it does                                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `list-github-desktop-repos.php`    | Lists repos from GitHub Desktop; `--apply` adds unconfigured ones to config.json                |
+| `sync-integration-projects.php`    | Pulls Harvest/ClickUp project catalogs and creates `harvest_projects`/`clickup_tasks` mappings  |
+| `cleanup-integration-projects.php` | Merges high-confidence integration stubs back into existing projects (`--dry-run` or `--apply`) |
+| `sync-repo-remotes.php`            | Snapshots `git remote` URLs into `projects[*].repo_remotes`                                     |
+| `ensure-github-integration.php`    | Adds a default `integrations.github` entry (via `gh` auth) if missing                           |
+
+---
 
 ## Development
 
@@ -198,23 +276,42 @@ npm run format        # reformat JSON files with Prettier
 npm run format:check  # dry-run check (used in CI)
 ```
 
-## Adding a new signal type or output format
-
-The codebase is intentionally function-oriented with no classes. See [AGENTS.md](AGENTS.md) for a full map of functions and the data flow.
+---
 
 ## Project structure
 
 ```
-activity-report.php   — entry point + config/bootstrap
-src/                  — functional modules (cli/loaders/classifiers/renderers/cache/helpers)
-www/                  — local web UI + API router
-config.json           — your local config (gitignored)
-config.example.json   — safe-to-commit template
-config.schema.json    — JSON Schema for editor validation
-AGENTS.md             — architecture guide for contributors and AI agents
-phpcs.xml.dist        — PHP_CodeSniffer ruleset
-composer.json         — dev dep: PHP_CodeSniffer
-package.json          — dev dep: Prettier
+activity-report.php       — CLI entry point
+src/
+  cli.php                 — main(), parseArgs(), resolveDateRange(), loadSourcesForRange()
+  helpers.php             — expandPath(), fnmatchAny(), fmtDur()
+  cache.php               — per-day and report-level caching, serialization helpers
+  loader-activitywatch.php
+  loader-chrome.php
+  loader-git.php          — loadGitCommits() with optional GitHub Desktop discovery
+  loader-github-desktop.php — discoverGitHubDesktopRepos() via LevelDB scanning
+  loader-integrations.php — orchestrates Harvest/ClickUp/GitHub; collects warnings
+  integrations/
+    shared.php            — httpGetJson()
+    harvest.php
+    clickup.php
+    github.php            — CLI-only; skipped in web context
+  classifiers.php         — signal matching and aggregation
+  renderers.php           — Markdown, JSON (with optional warnings[]), TSV
+www/
+  index.php               — router for php -S
+  api.php                 — JSON data endpoint with rebuild + config-mutation actions
+  report_renderer.php     — HTML shell + client-side JS renderer
+tools/
+  list-github-desktop-repos.php
+  sync-integration-projects.php
+  cleanup-integration-projects.php
+  sync-repo-remotes.php
+  ensure-github-integration.php
+config.json               — your local config (gitignored)
+config.example.json       — safe-to-commit template
+config.schema.json        — JSON Schema for editor validation
+AGENTS.md                 — architecture guide for contributors and AI agents
 ```
 
 ## License

@@ -60,7 +60,8 @@ if ($format === 'html') {
   .harvest-entries { margin: 0.2rem 0 0; padding-left: 0; list-style: none; color: #555; }
   .harvest-entries li { margin: 0.15rem 0; }
   .harvest-day-zero { color: #999; font-style: italic; }
-  .warnings-banner { margin: 0.6rem 0; padding: 0.6rem 1rem; border-radius: 6px; font-size: 0.85rem; background: #fff7ed; border: 1px solid #fed7aa; color: #7c2d12; }
+  .warnings-banner { margin: 0.6rem 0; padding: 0.6rem 1rem; border-radius: 6px;
+                     font-size: 0.85rem; background: #fff7ed; border: 1px solid #fed7aa; color: #7c2d12; }
   .warnings-banner ul { margin: 0.3rem 0 0; padding-left: 1.5em; }
   h1 { margin-top: 0.5em; }
   h2, h3, h4 { margin-top: 1.5em; }

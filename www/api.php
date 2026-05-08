@@ -336,7 +336,7 @@ if ($hasProjectFilter) {
 }
 
 $warnings = getIntegrationWarnings();
-$out     = renderJson($bucket,     $unmatched,     $from, $to, $tz, $warnings);
+$out     = renderJson($bucket, $unmatched, $from, $to, $tz, $warnings);
 $fullOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
 
 saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $fullOut);

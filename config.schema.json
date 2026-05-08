@@ -239,10 +239,7 @@
                 "name": { "type": "string" },
                 "team_id": {
                     "description": "One team ID (string) or multiple team IDs (array of strings) to query.",
-                    "oneOf": [
-                        { "type": "string" },
-                        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
-                    ]
+                    "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" }, "minItems": 1 }]
                 },
                 "token": { "type": "string" },
                 "assignee": { "type": "string" }
