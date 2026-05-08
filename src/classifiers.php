@@ -259,8 +259,11 @@ function projectForExternal(array $row, array $config): ?string
  * @param  array        $config   Loaded config array.
  * @param  DateTimeZone $tz       Timezone used to bucket events into calendar dates.
  * @param  array        $opts     Parsed CLI options from parseArgs().
- * @return array{0: array<string, array<string, array<string, mixed>>>, 1: array<string, array<string, int>>}
- *         [$bucket, $unmatched]
+ * @return array{
+ *     0: array<string, array<string, array<string, mixed>>>,
+ *     1: array<string, array<string, int>>,
+ *     2: array<string, list<array{s: int, e: int, p: string, g: string|null}>>
+ * }  [$bucket, $unmatched, $timeline]
  */
 function classifyAndAggregate(array $events, array $commits, array $external, array $config, DateTimeZone $tz, array $opts): array
 {
@@ -271,13 +274,30 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
     $personalApps  = $config['personal_apps']  ?? [];
     $ignoredProjects = array_fill_keys($config['ignored_projects'] ?? [], true);
 
+    $correlatedApps = (array)($config['correlated_apps'] ?? []);
+    if (($config['discover_repos'] ?? '') === 'github_desktop' && !in_array('GitHub Desktop', $correlatedApps, true)) {
+        $correlatedApps[] = 'GitHub Desktop';
+    }
+    $correlationWindow = (int)($config['app_correlation_window_seconds'] ?? 900);
+    $gapWindow = (int)($config['project_gap_window_seconds'] ?? 300);
+    $lastKnownProject = null;
+    $lastKnownProjectTs = 0;
+
+    // Pending gap queue for sticky-project bridging: when the user leaves a known project
+    // for untracked/personal activity, we buffer those events. If the same project resumes
+    // within $gapWindow seconds, the buffered time is attributed to that project. If a
+    // different configured project appears, or the gap exceeds the window, we flush normally.
+    $gapQueue    = []; // list of [date, proj, kind, label, sec, activeSec, tlSeg]
+    $gapStartProj = null;
+    $gapTotalSec  = 0.0;
+
+    $timelineRaw = [];
+    $dayStarts   = [];
+
     $bumpDetail = function (string $date, string $proj, string $kind, string $label, float $sec) use (&$bucket) {
         $bucket[$date][$proj]['seconds'] = ($bucket[$date][$proj]['seconds'] ?? 0) + $sec;
         $bucket[$date][$proj]['detail'][$kind][$label] = ($bucket[$date][$proj]['detail'][$kind][$label] ?? 0) + $sec;
     };
-
-    $input = $events['input'] ?? [];
-    $inputCursor = 0;
 
     // Returns true if $proj should be included given the --project / group: filter.
     $matchesFilter = static function (string $proj) use ($opts, $config): bool {
@@ -290,6 +310,34 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
         }
         return $proj === $filter;
     };
+
+    // Flush buffered gap events into $targetProj (or their original project if null).
+    // $queue is passed by value so PHPStan can see the concrete type at each call site.
+    $flushGap = function (
+        array $queue,
+        ?string $targetProj
+    ) use (
+        &$bucket,
+        &$timelineRaw,
+        $bumpDetail,
+        $ignoredProjects,
+        $matchesFilter
+    ): void {
+        foreach ($queue as $entry) {
+            [$date, $origProj, $kind, $label, $sec, $activeSec, $tlSeg] = $entry;
+            $proj = $targetProj ?? $origProj;
+            if (isset($ignoredProjects[$proj]) || !$matchesFilter($proj)) {
+                continue;
+            }
+            $bumpDetail($date, $proj, $kind, $label, $sec);
+            $bucket[$date][$proj]['active_seconds'] = ($bucket[$date][$proj]['active_seconds'] ?? 0) + $activeSec;
+            $tlSeg['p'] = $proj;
+            $timelineRaw[$date][] = $tlSeg;
+        }
+    };
+
+    $input = $events['input'] ?? [];
+    $inputCursor = 0;
 
     foreach ($events['window'] as $ev) {
         // afk filter (use mid-point)
@@ -376,23 +424,94 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
                 $proj = projectForSignals($sig, $config);
                 if (!$proj && in_array($ev['app'], $personalApps, true)) {
                     $proj = 'Personal apps';
-                } elseif (!$proj) {
+                } elseif (!$proj && $correlatedApps !== [] && fnmatchAny($ev['app'], $correlatedApps)) {
+                    $gap = $ev['start']->getTimestamp() - $lastKnownProjectTs;
+                    if ($lastKnownProject !== null && $correlationWindow > 0 && $gap <= $correlationWindow) {
+                        $proj = $lastKnownProject;
+                    }
+                }
+                if (!$proj) {
                     $proj = $ev['app'] ? "App: {$ev['app']}" : 'Other';
                 }
-                if (!fnmatchAny($ev['app'], $personalApps) && str_starts_with($proj, 'App: ')) {
+                if (
+                    !fnmatchAny($ev['app'], $personalApps)
+                    && !fnmatchAny($ev['app'], $correlatedApps)
+                    && str_starts_with($proj, 'App: ')
+                ) {
                     $unmatched['apps'][$ev['app']] = ($unmatched['apps'][$ev['app']] ?? 0) + 1;
                 }
+        }
+
+        // Update correlation context before filter/gap checks so all activity is reflected.
+        $isConfiguredProject = array_key_exists($proj, $config['projects'] ?? []);
+        if ($isConfiguredProject) {
+            $lastKnownProject  = $proj;
+            $lastKnownProjectTs = $ev['end']->getTimestamp();
+        }
+
+        // Build the timeline segment now (proj may be reassigned by gap-bridging below).
+        $dayStarts[$date] ??= (new DateTimeImmutable($date, $tz))->getTimestamp();
+        $tlSeg = [
+            's' => max(0, $ev['start']->getTimestamp() - $dayStarts[$date]),
+            'e' => min(86400, $ev['end']->getTimestamp() - $dayStarts[$date]),
+            'p' => $proj,
+            'g' => $config['projects'][$proj]['grouping'] ?? null,
+        ];
+
+        // Gap-bridging: decide whether to queue, flush, or emit directly.
+        if ($gapWindow > 0 && $gapQueue !== []) {
+            if ($isConfiguredProject) {
+                if ($proj === $gapStartProj && $gapTotalSec <= $gapWindow) {
+                    // Returned to the same project within the window — bridge the gap.
+                    $flushGap($gapQueue, $proj);
+                } else {
+                    // Different configured project filled the gap — flush unattributed.
+                    $flushGap($gapQueue, null);
+                }
+                $gapQueue    = [];
+                $gapStartProj = null;
+                $gapTotalSec  = 0.0;
+            } elseif ($gapTotalSec + $sec > $gapWindow) {
+                // Gap has grown past the window — flush unattributed and stop queuing.
+                $flushGap($gapQueue, null);
+                $gapQueue    = [];
+                $gapStartProj = null;
+                $gapTotalSec  = 0.0;
+            }
         }
 
         if (isset($ignoredProjects[$proj])) {
             continue;
         }
-
         if (!$matchesFilter($proj)) {
             continue;
         }
+
+        // Determine if this event should be queued (potential bridge gap) or emitted.
+        $isUntracked = !$isConfiguredProject && !str_starts_with($proj, 'Personal');
+        $isPersonal  = $proj === 'Personal browsing' || $proj === 'Personal apps'
+            || str_starts_with($proj, 'Personal');
+
+        if (
+            $gapWindow > 0 && $lastKnownProject !== null && ($isUntracked || $isPersonal)
+            && $gapTotalSec + $sec <= $gapWindow
+        ) {
+            // Queue this event as a candidate gap.
+            $gapQueue[]   = [$date, $proj, $detailKind, $detailLabel, $sec, $activeSec, $tlSeg];
+            $gapStartProj ??= $lastKnownProject;
+            $gapTotalSec  += $sec;
+            continue;
+        }
+
+        // Emit immediately.
         $bumpDetail($date, $proj, $detailKind, $detailLabel, $sec);
         $bucket[$date][$proj]['active_seconds'] = ($bucket[$date][$proj]['active_seconds'] ?? 0) + $activeSec;
+        $timelineRaw[$date][] = $tlSeg;
+    }
+
+    // Flush any remaining gap queue at end of event stream (no project resumed).
+    if ($gapQueue !== []) {
+        $flushGap($gapQueue, null);
     }
 
     // Commits
@@ -453,5 +572,21 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
         }
     }
 
-    return [$bucket, $unmatched];
+    // Merge adjacent same-project timeline segments (gap ≤ 60 s) and drop sub-minute ones.
+    $timeline = [];
+    foreach ($timelineRaw as $date => $segs) {
+        usort($segs, fn($a, $b) => $a['s'] <=> $b['s']);
+        $merged = [];
+        foreach ($segs as $seg) {
+            $n = count($merged) - 1;
+            if ($n >= 0 && $merged[$n]['p'] === $seg['p'] && $seg['s'] - $merged[$n]['e'] <= 60) {
+                $merged[$n]['e'] = max($merged[$n]['e'], $seg['e']);
+            } else {
+                $merged[] = $seg;
+            }
+        }
+        $timeline[$date] = array_values(array_filter($merged, fn($s) => ($s['e'] - $s['s']) >= 60));
+    }
+
+    return [$bucket, $unmatched, $timeline];
 }

@@ -197,8 +197,15 @@ function renderMarkdown(
  * @param  DateTimeImmutable $to        Report end date.
  * @param  DateTimeZone      $tz        Display timezone.
  */
-function renderJson(array $bucket, array $unmatched, DateTimeImmutable $from, DateTimeImmutable $to, DateTimeZone $tz, array $warnings = []): string
-{
+function renderJson(
+    array $bucket,
+    array $unmatched,
+    DateTimeImmutable $from,
+    DateTimeImmutable $to,
+    DateTimeZone $tz,
+    array $warnings = [],
+    array $timeline = []
+): string {
     $clean = [];
     foreach ($bucket as $date => $projs) {
         foreach ($projs as $name => $rec) {
@@ -227,6 +234,9 @@ function renderJson(array $bucket, array $unmatched, DateTimeImmutable $from, Da
     ];
     if ($warnings) {
         $envelope['warnings'] = array_values($warnings);
+    }
+    if ($timeline) {
+        $envelope['timelines'] = $timeline;
     }
     return json_encode($envelope, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
 }

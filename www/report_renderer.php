@@ -67,6 +67,7 @@ if ($format === 'html') {
   h1 { margin-top: 0.5em; }
   h2, h3, h4 { margin-top: 1.5em; }
   h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
+  svg.day-timeline { display: block; width: 100%; height: 18px; margin: 0.35em 0 0.1em; border-radius: 2px; }
   .group-logo { height: 1.2em; width: auto; vertical-align: middle; margin-right: 0.4em; border-radius: 2px; }
   .client-group { margin-top: 1.5em; border-left: 4px solid var(--accent); padding-left: 1rem; }
   .client-group > h3 { margin-top: 0.25em; }
@@ -225,6 +226,38 @@ function hexToRgba(hex, alpha) {
     return `rgba(${r},${g},${b},${alpha})`;
 }
 
+// ── Timeline bar ──────────────────────────────────────────────────────────────
+function renderTimeline(date, timelines) {
+    const segs = timelines?.[date];
+    if (!segs?.length) return '';
+
+    const minS = Math.floor(segs[0].s / 3600) * 3600;
+    const maxE = Math.ceil(segs[segs.length - 1].e / 3600) * 3600;
+    const span = maxE - minS;
+    if (span <= 0) return '';
+
+    const W = 1000;
+    const rects = segs.map(s => {
+        const x = ((s.s - minS) / span * W).toFixed(1);
+        const w = Math.max(1, (s.e - s.s) / span * W).toFixed(1);
+        const resolved = resolveGrouping(s.g);
+        const color = resolved ? groupingColor(resolved) : '#94a3b8';
+        const fmt = t =>
+            `${String(Math.floor(t / 3600)).padStart(2, '0')}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}`;
+        const tip = `${esc(s.p)} ${fmt(s.s)}–${fmt(s.e)} (${fmtDur(s.e - s.s)})`;
+        return `<rect x="${x}" y="0" width="${w}" height="20" fill="${esc(color)}" opacity="0.85"><title>${tip}</title></rect>`;
+    }).join('');
+
+    const ticks = [];
+    for (let h = Math.ceil(minS / 3600); h < maxE / 3600; h++) {
+        const x = ((h * 3600 - minS) / span * W).toFixed(1);
+        ticks.push(`<line x1="${x}" y1="0" x2="${x}" y2="20" stroke="#fff" stroke-width="2" opacity="0.4"/>`);
+    }
+
+    return `<svg class="day-timeline" viewBox="0 0 ${W} 20" preserveAspectRatio="none" aria-hidden="true">`
+        + `<rect x="0" y="0" width="${W}" height="20" fill="#e5e7eb"/>${rects}${ticks.join('')}</svg>`;
+}
+
 // ── Renderers ─────────────────────────────────────────────────────────────────
 function renderCommits(commits) {
     if (!commits.length) return '';
@@ -272,7 +305,7 @@ function filterProjectsForView(projects, projectFilter) {
     return Object.entries(projects || {}).filter(([name]) => name === projectFilter);
 }
 
-function renderDay(date, projects, projectFilter) {
+function renderDay(date, projects, projectFilter, timelines = {}) {
     const entries  = filterProjectsForView(projects, projectFilter).sort(([, a], [, b]) => (b.seconds||0) - (a.seconds||0));
     if (!entries.length) return '';
     const dayTotal = entries.reduce((s, [, r]) => s + (r.seconds||0), 0);
@@ -285,7 +318,8 @@ function renderDay(date, projects, projectFilter) {
         g ? (grouped[g] ??= []).push([name, rec]) : ungrouped.push([name, rec]);
     }
 
-    let html = `<h2>${esc(date)} <span class="dow">(${dow})</span> <span class="dur">&mdash; ${fmtDur(dayTotal)} active</span></h2>`;
+    let html = `<h2>${esc(date)} <span class="dow">(${dow})</span> <span class="dur">&mdash; ${fmtDur(dayTotal)} active</span></h2>`
+        + renderTimeline(date, timelines);
 
     const groupTotals = Object.entries(grouped)
         .map(([g, ps]) => [g, ps.reduce((s, [, r]) => s + (r.seconds||0), 0)])
@@ -314,7 +348,7 @@ function renderReport(data, projectFilter = '') {
     if (!days.length) return '<p><em>No activity recorded for this period.</em></p>';
 
     const blocks = days
-        .map(date => renderDay(date, data.days[date], projectFilter))
+        .map(date => renderDay(date, data.days[date], projectFilter, data.timelines || {}))
         .filter(Boolean);
 
     if (!blocks.length) return '<p><em>No activity recorded for this filter in this period.</em></p>';

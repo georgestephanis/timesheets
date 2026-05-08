@@ -68,6 +68,24 @@
             "minimum": 0,
             "default": 120
         },
+        "correlated_apps": {
+            "description": "App names (or glob patterns) whose ActivityWatch events are attributed to the most recently active configured project within app_correlation_window_seconds, instead of creating their own unmatched bucket. GitHub Desktop is added automatically when discover_repos is \"github_desktop\".",
+            "type": "array",
+            "items": { "type": "string" },
+            "default": []
+        },
+        "app_correlation_window_seconds": {
+            "description": "How far back (in seconds) to look for a matching project when attributing a correlated app's time. Default 900 (15 minutes).",
+            "type": "integer",
+            "minimum": 0,
+            "default": 900
+        },
+        "project_gap_window_seconds": {
+            "description": "If the active window switches away from a project to something untracked or personal for less than this many seconds and then returns to the same project, the gap time is attributed to that project. Set to 0 to disable. Default 300 (5 minutes).",
+            "type": "integer",
+            "minimum": 0,
+            "default": 300
+        },
         "min_event_seconds_to_show": {
             "description": "Hide activity segments shorter than this many seconds from output.",
             "type": "integer",

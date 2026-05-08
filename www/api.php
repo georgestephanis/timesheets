@@ -261,17 +261,18 @@ if (!$rebuild && !$hasProjectFilter && rangeIsHistorical($to, $tz)) {
 
 $fullOpts = $opts;
 $fullOpts['project'] = null;
-[$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $fullOpts);
+[$fullBucket, $fullUnmatched, $fullTimeline] = classifyAndAggregate($events, $commits, $external, $config, $tz, $fullOpts);
 
 if ($hasProjectFilter) {
     [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $opts);
 } else {
     [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
 }
+$timeline = $hasProjectFilter ? [] : $fullTimeline;
 
 $warnings = getIntegrationWarnings();
-$out     = renderJson($bucket, $unmatched, $from, $to, $tz, $warnings);
-$fullOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
+$out     = renderJson($bucket, $unmatched, $from, $to, $tz, $warnings, $timeline);
+$fullOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, [], $fullTimeline);
 
 saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $fullOut);
 

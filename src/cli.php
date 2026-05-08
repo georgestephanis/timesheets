@@ -140,7 +140,7 @@ function generateReport(
 
     $fullOpts = $opts;
     $fullOpts['project'] = null;
-    [$fullBucket, $fullUnmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $fullOpts);
+    [$fullBucket, $fullUnmatched, $fullTimeline] = classifyAndAggregate($events, $commits, $external, $config, $tz, $fullOpts);
 
     $hasProjectFilter = !empty($opts['project']);
     if ($hasProjectFilter) {
@@ -148,16 +148,17 @@ function generateReport(
     } else {
         [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
     }
+    $timeline = $hasProjectFilter ? [] : $fullTimeline;
 
     $format = $opts['format'];
     $out = match ($format) {
-        'json' => renderJson($bucket, $unmatched, $from, $to, $tz),
+        'json' => renderJson($bucket, $unmatched, $from, $to, $tz, [], $timeline),
         'tsv'  => renderTsv($bucket, $from, $to, $tz),
         default => renderMarkdown($bucket ?? [], $unmatched, $from, $to, $tz, $opts, $config),
     };
 
     $fullOut = match ($format) {
-        'json' => renderJson($fullBucket, $fullUnmatched, $from, $to, $tz),
+        'json' => renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, [], $fullTimeline),
         'tsv'  => renderTsv($fullBucket, $from, $to, $tz),
         default => renderMarkdown($fullBucket ?? [], $fullUnmatched, $from, $to, $tz, $fullOpts, $config),
     };
@@ -165,7 +166,7 @@ function generateReport(
     saveGeneratedReport($dir, $key, $from, $to, $format, null, $fromCache, $fullOut);
 
     if ($format === 'md') {
-        $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
+        $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, [], $fullTimeline);
         saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $jsonOut);
     }
 
