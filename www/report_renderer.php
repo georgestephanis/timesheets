@@ -39,6 +39,7 @@ if ($format === 'html') {
         'today'             => (new DateTimeImmutable('now', $tz))->format('Y-m-d'),
         'yesterday'         => (new DateTimeImmutable('yesterday', $tz))->format('Y-m-d'),
         'harvestConfigured' => !empty($config['integrations']['harvest']),
+        'groupings'         => (object)($config['groupings'] ?? []),
     ], JSON_UNESCAPED_UNICODE);
 
     ?>
@@ -66,6 +67,7 @@ if ($format === 'html') {
   h1 { margin-top: 0.5em; }
   h2, h3, h4 { margin-top: 1.5em; }
   h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
+  .group-logo { height: 1.2em; width: auto; vertical-align: middle; margin-right: 0.4em; border-radius: 2px; }
   .client-group { margin-top: 1.5em; border-left: 4px solid var(--accent); padding-left: 1rem; }
   .client-group > h3 { margin-top: 0.25em; }
   .project-block { margin-top: 0.6em; border-left: 3px solid var(--accent-light); padding-left: 0.75rem; }
@@ -197,8 +199,19 @@ function fmtAge(sec) {
     return `${d}d ${String(h % 24).padStart(2, '0')}h`;
 }
 
-// ── Grouping colors ───────────────────────────────────────────────────────────
+// ── Grouping helpers ──────────────────────────────────────────────────────────
+function resolveGrouping(name) {
+    if (!name) return name;
+    if (SITE.groupings[name] !== undefined) return name;
+    for (const [canonical, def] of Object.entries(SITE.groupings)) {
+        if ((def.aliases || []).includes(name)) return canonical;
+    }
+    return name;
+}
+
 function groupingColor(name) {
+    const fromConfig = SITE.groupings[name]?.color;
+    if (fromConfig) return fromConfig;
     const palette = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316'];
     let h = 0;
     for (const c of name) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0;
@@ -254,7 +267,7 @@ function filterProjectsForView(projects, projectFilter) {
     if (!projectFilter) return Object.entries(projects || {});
     if (projectFilter.startsWith('group:')) {
         const grouping = projectFilter.slice(6);
-        return Object.entries(projects || {}).filter(([, rec]) => (rec?.grouping || null) === grouping);
+        return Object.entries(projects || {}).filter(([, rec]) => resolveGrouping(rec?.grouping || null) === grouping);
     }
     return Object.entries(projects || {}).filter(([name]) => name === projectFilter);
 }
@@ -268,7 +281,8 @@ function renderDay(date, projects, projectFilter) {
     const grouped   = {};
     const ungrouped = [];
     for (const [name, rec] of entries) {
-        rec.grouping ? (grouped[rec.grouping] ??= []).push([name, rec]) : ungrouped.push([name, rec]);
+        const g = resolveGrouping(rec.grouping);
+        g ? (grouped[g] ??= []).push([name, rec]) : ungrouped.push([name, rec]);
     }
 
     let html = `<h2>${esc(date)} <span class="dow">(${dow})</span> <span class="dur">&mdash; ${fmtDur(dayTotal)} active</span></h2>`;
@@ -285,7 +299,9 @@ function renderDay(date, projects, projectFilter) {
             .join('');
         if (blocks.trim()) {
             const gSecStr = gSec ? ` <span class="dur">&mdash; ${fmtDur(gSec)}</span>` : '';
-            html += `<div class="client-group" style="--accent:${color};--accent-light:${colorLight}"><h3>${esc(g)}${gSecStr}</h3>${blocks}</div>`;
+            const logo = SITE.groupings[g]?.logo;
+            const logoHtml = logo ? `<img src="${esc(logo)}" alt="" class="group-logo" aria-hidden="true">` : '';
+            html += `<div class="client-group" style="--accent:${color};--accent-light:${colorLight}"><h3>${logoHtml}${esc(g)}${gSecStr}</h3>${blocks}</div>`;
         }
     }
 
@@ -375,10 +391,17 @@ function renderAdminPanel(data) {
                 <h4>Project Grouping</h4>
                 <div class="admin-row">
                     <select data-group-project>${projectOptionsSimple(firstProject)}</select>
-                    <input type="text" data-group-name placeholder="Group name (blank to clear)">
+                    ${Object.keys(SITE.groupings).length
+                        ? `<select data-group-name>
+                            <option value="">(none)</option>
+                            ${Object.keys(SITE.groupings).map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('')}
+                           </select>`
+                        : `<input type="text" data-group-name placeholder="Group name (blank to clear)">`}
                     <button class="btn" data-save-group>Save grouping</button>
                 </div>
-                <p class="muted">Set any new group name to create it automatically.</p>
+                <p class="muted">${Object.keys(SITE.groupings).length
+                    ? 'Select a grouping, or blank to clear.'
+                    : 'Set any new group name to create it automatically.'}</p>
         <h4>Reassign Unmatched Signals</h4>
         ${unmatchedHtml}
       </section>
@@ -549,7 +572,8 @@ function renderNav(params, fromRaw, toRaw) {
     const groups    = {};
     const ungrouped = [];
     for (const p of SITE.projects) {
-        p.grouping ? (groups[p.grouping] ??= []).push(p.name) : ungrouped.push(p.name);
+        const g = resolveGrouping(p.grouping);
+        g ? (groups[g] ??= []).push(p.name) : ungrouped.push(p.name);
     }
 
     let projOpts = `<option value=""${sel('')}>All projects</option>`;
@@ -710,7 +734,7 @@ function bindAdminEvents() {
         const projectName = groupProjectSel?.value || '';
         const meta = getProjectMeta(projectName);
         if (groupNameInput) {
-            groupNameInput.value = meta?.grouping || '';
+            groupNameInput.value = resolveGrouping(meta?.grouping || '') || '';
         }
     };
 

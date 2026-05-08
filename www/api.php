@@ -177,6 +177,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $grouping = trim($grouping);
+            if ($grouping !== '' && isset($config['groupings']) && is_array($config['groupings'])) {
+                if (!array_key_exists($grouping, $config['groupings'])) {
+                    foreach ($config['groupings'] as $canonical => $def) {
+                        if (in_array($grouping, $def['aliases'] ?? [], true)) {
+                            $grouping = (string)$canonical;
+                            break;
+                        }
+                    }
+                }
+                if (!array_key_exists($grouping, $config['groupings'])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => "Unknown grouping: $grouping"]);
+                    exit(1);
+                }
+            }
             if ($grouping === '') {
                 unset($config['projects'][$project]['grouping']);
             } else {

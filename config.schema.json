@@ -4,12 +4,7 @@
     "title": "activity-report config",
     "description": "Configuration for activity-report.php",
     "type": "object",
-    "required": [
-        "timezone",
-        "paths",
-        "git_authors",
-        "projects"
-    ],
+    "required": ["timezone", "paths", "git_authors", "projects"],
     "additionalProperties": false,
     "properties": {
         "$schema": {
@@ -19,21 +14,12 @@
         "timezone": {
             "description": "IANA timezone name used for all date/time output.",
             "type": "string",
-            "examples": [
-                "America/New_York",
-                "America/Chicago",
-                "America/Los_Angeles",
-                "Europe/London",
-                "UTC"
-            ]
+            "examples": ["America/New_York", "America/Chicago", "America/Los_Angeles", "Europe/London", "UTC"]
         },
         "paths": {
             "description": "Filesystem paths to local data sources. ~ is expanded to $HOME.",
             "type": "object",
-            "required": [
-                "activitywatch",
-                "chrome"
-            ],
+            "required": ["activitywatch", "chrome"],
             "additionalProperties": false,
             "properties": {
                 "activitywatch": {
@@ -74,9 +60,7 @@
         "discover_repos": {
             "description": "Auto-discovery strategy for git repositories. Set to \"github_desktop\" to import all repos registered in the GitHub Desktop app.",
             "type": "string",
-            "enum": [
-                "github_desktop"
-            ]
+            "enum": ["github_desktop"]
         },
         "chrome_correlation_window_seconds": {
             "description": "Back-fill empty Chrome ActivityWatch events with a URL from Chrome history if a visit falls within this many seconds.",
@@ -122,6 +106,14 @@
             },
             "default": []
         },
+        "groupings": {
+            "description": "Canonical grouping definitions. Keys are the authoritative names used in projects[*].grouping. When present, the web UI uses these names for dropdowns instead of free-text input, and resolves any aliases stored in individual projects.",
+            "type": "object",
+            "additionalProperties": {
+                "$ref": "#/$defs/grouping_def"
+            }
+        },
+
         "groupings_map": {
             "description": "Rules for the set-integration-groupings tool: maps integration connection names to project grouping labels.",
             "type": "object",
@@ -276,9 +268,7 @@
         "slack_rule": {
             "description": "A Slack matching rule. Matches any channel in the workspace when channel_glob is omitted.",
             "type": "object",
-            "required": [
-                "workspace"
-            ],
+            "required": ["workspace"],
             "additionalProperties": false,
             "properties": {
                 "workspace": {
@@ -293,11 +283,7 @@
         },
         "harvest_connection": {
             "type": "object",
-            "required": [
-                "name",
-                "account_id",
-                "token"
-            ],
+            "required": ["name", "account_id", "token"],
             "additionalProperties": false,
             "properties": {
                 "name": {
@@ -323,11 +309,7 @@
         },
         "clickup_connection": {
             "type": "object",
-            "required": [
-                "name",
-                "team_id",
-                "token"
-            ],
+            "required": ["name", "team_id", "token"],
             "additionalProperties": false,
             "properties": {
                 "name": {
@@ -358,9 +340,7 @@
         },
         "github_connection": {
             "type": "object",
-            "required": [
-                "name"
-            ],
+            "required": ["name"],
             "additionalProperties": false,
             "properties": {
                 "name": {
@@ -387,13 +367,34 @@
                 }
             }
         },
+        "grouping_def": {
+            "description": "Display properties and aliases for a named project grouping.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "color": {
+                    "description": "CSS color value for accent bars in the web UI. If omitted, a color is derived automatically from the grouping name.",
+                    "type": "string"
+                },
+                "aliases": {
+                    "description": "Alternate spellings that resolve to this grouping's canonical name (e.g. old names, typos). Resolved at render time — no config migration needed.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "minItems": 1
+                },
+                "logo": {
+                    "description": "URL or data URI for a logo image shown next to the grouping header in the web UI.",
+                    "type": "string"
+                }
+            }
+        },
+
         "llm_connection": {
             "description": "An OpenAI-compatible LLM endpoint (Ollama, vLLM, LM Studio, OpenAI, etc.).",
             "type": "object",
-            "required": [
-                "name",
-                "base_url"
-            ],
+            "required": ["name", "base_url"],
             "additionalProperties": false,
             "properties": {
                 "name": {

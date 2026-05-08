@@ -72,6 +72,17 @@
 
     "ignored_projects": [],
 
+    "groupings": {
+        "Client A": {
+            "color": "#6366f1",
+            "aliases": ["ClientA", "client-a"],
+            "logo": "https://example.com/client-a-logo.png"
+        },
+        "Client B": {
+            "color": "#0ea5e9"
+        }
+    },
+
     "groupings_map": {
         "connections": {
             "*client-a*": "Client A",
