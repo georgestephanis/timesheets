@@ -465,6 +465,18 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 
 - Adds a default `integrations.github` entry using `gh` auth if none exists.
 
+**`prune-config-backups.php`** (`--keep N`, `--max-lines N`, `--apply`)
+
+- Groups `reports/config/config.<source>.<timestamp>.json` files by source tag; keeps the `--keep` most recent per tag (default 10) and deletes the rest.
+- Trims `reports/cache-data.jsonl` and `reports/generated-reports.jsonl` to the last `--max-lines` entries (default 1000).
+- Dry-run by default; pass `--apply` to perform deletions and trims.
+
+**`reset-cache.php`** (`--before YYYY-MM-DD`, `--month YYYY-MM`, `--apply`)
+
+- Removes per-day source cache directories (`reports/YYYY-MM/DD/`) so the next run re-fetches and re-classifies all data.
+- Preserves `config.json`, `reports/config/` backups, and JSONL index files.
+- Dry-run by default; pass `--apply` to delete. Optional `--before` / `--month` flags scope the deletion to a date range.
+
 ---
 
 ## Conventions

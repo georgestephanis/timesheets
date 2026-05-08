@@ -275,13 +275,16 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 
 ## Maintenance / housekeeping
 
-- [ ] **(P2, s)** `tools/prune-config-backups.php --keep N` to cap the
+- [x] **(P2, s)** `tools/prune-config-backups.php --keep N` to cap the
       `reports/config/` directory at N most-recent backups per source tag. The
       directory grows unbounded today.
-- [ ] **(P2, s)** Same idea for `reports/cache-data.jsonl` and
+- [x] **(P2, s)** Same idea for `reports/cache-data.jsonl` and
       `reports/generated-reports.jsonl` — monthly rotation or N-line cap.
-- [ ] **(P3, s)** "Reset" tool that removes report caches but preserves
+      Added `--max-lines N` (default 1000) to `prune-config-backups.php`.
+- [x] **(P3, s)** "Reset" tool that removes report caches but preserves
       `config.json` and `reports/config/` backups.
+      `tools/reset-cache.php` with `--before YYYY-MM-DD`, `--month YYYY-MM`,
+      and `--apply` flags.
 
 ## Frontend (extracted findings)
 
