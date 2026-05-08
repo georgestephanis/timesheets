@@ -66,6 +66,10 @@ if ($format === 'html') {
   h1 { margin-top: 0.5em; }
   h2, h3, h4 { margin-top: 1.5em; }
   h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
+  .client-group { margin-top: 1.5em; border-left: 4px solid var(--accent); padding-left: 1rem; }
+  .client-group > h3 { margin-top: 0.25em; }
+  .project-block { margin-top: 0.6em; border-left: 3px solid var(--accent-light); padding-left: 0.75rem; }
+  .project-block > h4 { margin-top: 0; }
   code { background: #f0f0f0; padding: 0.1em 0.3em; border-radius: 3px; font-size: 0.9em; }
   ul { padding-left: 1.5em; }
   .dur { color: #555; }
@@ -193,6 +197,21 @@ function fmtAge(sec) {
     return `${d}d ${String(h % 24).padStart(2, '0')}h`;
 }
 
+// ── Grouping colors ───────────────────────────────────────────────────────────
+function groupingColor(name) {
+    const palette = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316'];
+    let h = 0;
+    for (const c of name) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0;
+    return palette[Math.abs(h) % palette.length];
+}
+
+function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
 // ── Renderers ─────────────────────────────────────────────────────────────────
 function renderCommits(commits) {
     if (!commits.length) return '';
@@ -259,10 +278,14 @@ function renderDay(date, projects, projectFilter) {
         .sort(([, a], [, b]) => b - a);
 
     for (const [g, gSec] of groupTotals) {
-        const content = grouped[g].map(([n, r]) => renderProject('h4', n, r)).join('');
-        if (content.trim()) {
+        const color = groupingColor(g);
+        const colorLight = hexToRgba(color, 0.35);
+        const blocks = grouped[g]
+            .map(([n, r]) => { const p = renderProject('h4', n, r); return p ? `<div class="project-block">${p}</div>` : ''; })
+            .join('');
+        if (blocks.trim()) {
             const gSecStr = gSec ? ` <span class="dur">&mdash; ${fmtDur(gSec)}</span>` : '';
-            html += `<h3>${esc(g)}${gSecStr}</h3>${content}`;
+            html += `<div class="client-group" style="--accent:${color};--accent-light:${colorLight}"><h3>${esc(g)}${gSecStr}</h3>${blocks}</div>`;
         }
     }
 
