@@ -79,7 +79,7 @@ function classifySsh(string $title): ?string
  *
  * Signals is a sparse map; only the keys present are checked. Matching priority:
  *   1. vscode_dir — case-insensitive exact match against projects[*].vscode_dirs
- *   2. host       — glob match against projects[*].domains
+ *   2. host       — domain rule match against projects[*].domains (bare domains include subdomains)
  *   3. slack      — workspace match (case-insensitive), then optional channel_glob
  *   4. ssh_host   — glob match against projects[*].ssh_hosts
  *   5. app        — glob match against projects[*].apps
@@ -101,7 +101,7 @@ function projectForSignals(array $sig, array $config): ?string
         }
         // Domain
         if (!empty($sig['host']) && !empty($p['domains'])) {
-            if (fnmatchAny($sig['host'], $p['domains'])) {
+            if (hostMatchesAnyDomain((string)$sig['host'], $p['domains'])) {
                 return $name;
             }
         }
@@ -327,7 +327,7 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
                 $host = parse_url($ev['url'], PHP_URL_HOST) ?: '';
                 $sig['host'] = $host;
                 $proj = projectForSignals($sig, $config);
-                if (!$proj && $host && fnmatchAny($host, $personalHosts)) {
+                if (!$proj && $host && hostMatchesAnyDomain($host, $personalHosts)) {
                     $proj = 'Personal browsing';
                 }
                 $detailKind = 'browser';

@@ -99,7 +99,7 @@
             }
         },
         "personal_hosts": {
-            "description": "Browser hostnames to bucket as personal (not work) when no project matches. Glob-style * is supported.",
+            "description": "Browser hostnames to bucket as personal (not work) when no project matches. Bare domains (example.com) match both the apex and subdomains; glob-style * is also supported.",
             "type": "array",
             "items": {
                 "type": "string"
@@ -224,7 +224,7 @@
                     "minItems": 1
                 },
                 "domains": {
-                    "description": "Browser hostnames for this project. Glob-style * is supported (e.g. *.example.com).",
+                    "description": "Browser hostnames for this project. Bare domains (example.com) match both the apex and subdomains; glob-style * is also supported (e.g. *.example.com).",
                     "type": "array",
                     "items": {
                         "type": "string"

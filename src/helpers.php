@@ -35,6 +35,49 @@ function fnmatchAny(string $needle, array $patterns): bool
 }
 
 /**
+ * Returns true when a host matches a configured domain rule.
+ *
+ * Rules with glob characters (*, ?, []) use fnmatch semantics. A bare domain
+ * (e.g. example.com) matches both the apex and any subdomain
+ * (e.g. www.example.com, api.example.com).
+ */
+function hostMatchesDomain(string $host, string $pattern): bool
+{
+    $host = strtolower(rtrim(trim($host), '.'));
+    $pattern = strtolower(rtrim(trim($pattern), '.'));
+    if ($host === '' || $pattern === '') {
+        return false;
+    }
+
+    if (fnmatch($pattern, $host, FNM_CASEFOLD)) {
+        return true;
+    }
+
+    // Only apply apex+subdomain behavior to non-glob domains.
+    if (strpbrk($pattern, '*?[]') !== false) {
+        return false;
+    }
+
+    return $host === $pattern || str_ends_with($host, '.' . $pattern);
+}
+
+/**
+ * Returns true if $host matches any configured domain rule.
+ *
+ * @param string   $host     Hostname to test.
+ * @param string[] $patterns Domain rules from config.
+ */
+function hostMatchesAnyDomain(string $host, array $patterns): bool
+{
+    foreach ($patterns as $pattern) {
+        if (hostMatchesDomain($host, (string)$pattern)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * Formats a duration in seconds as a compact human-readable string.
  *
  * Examples: 3661 → "1h 01m", 90 → "1m", 18 → "18s".
