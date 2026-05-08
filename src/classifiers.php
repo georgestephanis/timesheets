@@ -582,18 +582,23 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
     }
 
     // Merge adjacent same-project timeline segments and drop very short ones.
+    // $lastByProject tracks the index of the most recent merged entry per project so that
+    // a segment from a different project sorting between two same-project entries doesn't
+    // prevent them from being merged.
     $tlMergeGap = (int)($config['timeline_merge_gap_seconds'] ?? 300);
     $tlMinSec   = (int)($config['timeline_min_seconds'] ?? 60);
     $timeline = [];
     foreach ($timelineRaw as $date => $segs) {
         usort($segs, fn($a, $b) => $a['s'] <=> $b['s']);
         $merged = [];
+        $lastByProject = [];
         foreach ($segs as $seg) {
-            $n = count($merged) - 1;
-            if ($n >= 0 && $merged[$n]['p'] === $seg['p'] && $seg['s'] - $merged[$n]['e'] <= $tlMergeGap) {
-                $merged[$n]['e'] = max($merged[$n]['e'], $seg['e']);
+            $lastIdx = $lastByProject[$seg['p']] ?? -1;
+            if ($lastIdx >= 0 && $seg['s'] - $merged[$lastIdx]['e'] <= $tlMergeGap) {
+                $merged[$lastIdx]['e'] = max($merged[$lastIdx]['e'], $seg['e']);
             } else {
                 $merged[] = $seg;
+                $lastByProject[$seg['p']] = count($merged) - 1;
             }
         }
         $timeline[$date] = array_values(array_filter($merged, fn($s) => ($s['e'] - $s['s']) >= $tlMinSec));
