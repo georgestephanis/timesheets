@@ -54,6 +54,12 @@
             "minItems": 1
         },
 
+        "discover_repos": {
+            "description": "Auto-discovery strategy for git repositories. Set to \"github_desktop\" to import all repos registered in the GitHub Desktop app.",
+            "type": "string",
+            "enum": ["github_desktop"]
+        },
+
         "chrome_correlation_window_seconds": {
             "description": "Back-fill empty Chrome ActivityWatch events with a URL from Chrome history if a visit falls within this many seconds.",
             "type": "integer",
@@ -264,6 +270,38 @@
                     "type": "array",
                     "items": { "type": "string" },
                     "minItems": 1
+                }
+            }
+        },
+
+        "llm_connection": {
+            "description": "An OpenAI-compatible LLM endpoint (Ollama, vLLM, LM Studio, OpenAI, etc.).",
+            "type": "object",
+            "required": ["name", "base_url"],
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "description": "Human-readable label for this endpoint.",
+                    "type": "string"
+                },
+                "base_url": {
+                    "description": "Base URL of the OpenAI-compatible API, including the /v1 path (e.g. http://localhost:11434/v1).",
+                    "type": "string",
+                    "format": "uri"
+                },
+                "api_key": {
+                    "description": "API key sent as Bearer token. Many local endpoints accept any non-empty string.",
+                    "type": "string"
+                },
+                "model": {
+                    "description": "Default model name to use when no model is specified at call time.",
+                    "type": "string"
+                },
+                "timeout": {
+                    "description": "Request timeout in seconds. Defaults to 30.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "default": 30
                 }
             }
         }
