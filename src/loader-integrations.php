@@ -92,21 +92,44 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
     if ($configDirty) {
         $configFile = PROJECT_ROOT . '/config.json';
         $existing = is_file($configFile) ? (json_decode((string)file_get_contents($configFile), true) ?? []) : [];
-        foreach (($config['integrations']['harvest'] ?? []) as $idx => $conn) {
-            if (isset($conn['user_id']) && is_array($existing['integrations']['harvest'][$idx] ?? null)) {
-                $existing['integrations']['harvest'][$idx]['user_id'] = $conn['user_id'];
+
+        // Match by connection name rather than array index to survive reordering.
+        foreach (($config['integrations']['harvest'] ?? []) as $conn) {
+            if (!isset($conn['user_id'], $conn['name'])) {
+                continue;
             }
+            foreach (($existing['integrations']['harvest'] ?? []) as &$existingConn) {
+                if (is_array($existingConn) && ($existingConn['name'] ?? null) === $conn['name']) {
+                    $existingConn['user_id'] = $conn['user_id'];
+                    break;
+                }
+            }
+            unset($existingConn);
         }
-        foreach (($config['integrations']['clickup'] ?? []) as $idx => $conn) {
-            if (isset($conn['assignee']) && is_array($existing['integrations']['clickup'][$idx] ?? null)) {
-                $existing['integrations']['clickup'][$idx]['assignee'] = (string)$conn['assignee'];
+        foreach (($config['integrations']['clickup'] ?? []) as $conn) {
+            if (!isset($conn['assignee'], $conn['name'])) {
+                continue;
             }
+            foreach (($existing['integrations']['clickup'] ?? []) as &$existingConn) {
+                if (is_array($existingConn) && ($existingConn['name'] ?? null) === $conn['name']) {
+                    $existingConn['assignee'] = (string)$conn['assignee'];
+                    break;
+                }
+            }
+            unset($existingConn);
         }
 
         if (is_file($configFile) && backupConfigSnapshot($configFile, 'integrations') === null) {
             integrationWarning('failed to create config backup in reports/config before auto-save');
         }
-        file_put_contents($configFile, json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+        $json = json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+        $tmpFile = $configFile . '.tmp.' . getmypid();
+        if (file_put_contents($tmpFile, $json, LOCK_EX) !== false) {
+            rename($tmpFile, $configFile);
+        } else {
+            @unlink($tmpFile);
+            integrationWarning('failed to write config.json during auto-save of resolved IDs');
+        }
     }
 
     usort($rows, fn($a, $b) => $a['start'] <=> $b['start']);

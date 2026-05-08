@@ -259,14 +259,20 @@ function loadAwSqliteRust(PDO $db, DateTimeImmutable $from, DateTimeImmutable $t
         }
     }
 
-    $fetch = function (array $bucketIds) use ($db): array {
+    $fetch = function (array $bucketIds) use ($db, $from, $to): array {
         if ($bucketIds === []) {
             return [];
         }
         $in = implode(',', array_fill(0, count($bucketIds), '?'));
-        $sql = "SELECT starttime, endtime, data FROM events WHERE bucketrow IN ($in) ORDER BY starttime";
+        // aw-server-rust stores starttime/endtime as nanoseconds since Unix epoch (19-digit integers).
+        // Use < / > (not <=) so overlapping events at the boundary are included.
+        $fromNs = $from->getTimestamp() * 1_000_000_000;
+        $toNs   = $to->getTimestamp()   * 1_000_000_000;
+        $sql = "SELECT starttime, endtime, data FROM events
+                WHERE bucketrow IN ($in) AND starttime < ? AND endtime > ?
+                ORDER BY starttime";
         $st = $db->prepare($sql);
-        $st->execute($bucketIds);
+        $st->execute([...$bucketIds, $toNs, $fromNs]);
         return $st->fetchAll(PDO::FETCH_ASSOC);
     };
 

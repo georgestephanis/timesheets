@@ -26,7 +26,7 @@ function resolveHarvestUserId(array $conn): ?int
         ]);
         $id = $json['id'] ?? null;
         return is_int($id) ? $id : (is_numeric($id) ? (int)$id : null);
-    } catch (RuntimeException $e) {
+    } catch (RuntimeException) {
         return null;
     }
 }
@@ -118,7 +118,7 @@ function loadHarvestTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
             $page++;
         }
         $pageCount = (int)($json['total_pages'] ?? 1);
-    } while ($page <= max(1, $pageCount));
+    } while ($page <= max(1, $pageCount) && $page <= 100);
 
     return $rows;
 }

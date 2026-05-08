@@ -42,8 +42,14 @@ function loadChromeHistory(array $config, DateTimeImmutable $from, DateTimeImmut
             continue;
         }
         $db = pdo($copy);
-        $st = $db->query('SELECT v.visit_time, v.visit_duration, u.url, u.title
-                          FROM visits v JOIN urls u ON v.url = u.id');
+        // Chrome stores visit_time as microseconds since 1601-01-01 (Windows FILETIME epoch).
+        // 11,644,473,600 is the offset in seconds between that epoch and Unix epoch.
+        $fromCt = (int)(($from->getTimestamp() + 11_644_473_600) * 1_000_000);
+        $toCt   = (int)(($to->getTimestamp()   + 11_644_473_600) * 1_000_000);
+        $st = $db->prepare('SELECT v.visit_time, v.visit_duration, u.url, u.title
+                             FROM visits v JOIN urls u ON v.url = u.id
+                             WHERE v.visit_time >= ? AND v.visit_time <= ?');
+        $st->execute([$fromCt, $toCt]);
         foreach ($st as $r) {
             $dt = chromeTime((int)$r['visit_time'], $tz);
             if ($dt < $from || $dt > $to) {

@@ -92,25 +92,28 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 
 ## Cleanup (do first)
 
-- [ ] **(P0, s)** Delete the stray `config.json.bak.*` files at the repo root —
+- [x] **(P0, s)** Delete the stray `config.json.bak.*` files at the repo root —
       they violate the "backups go in `reports/config/`" convention. Three files
       from May 3 are still present.
-- [ ] **(P1, s)** Add `tools/` to `phpcs.xml.dist`. Currently excluded; tool
+- [x] **(P1, s)** Add `tools/` to `phpcs.xml.dist`. Currently excluded; tool
       files have drifted in style.
-- [ ] **(P1, s)** Update README and AGENTS.md to remove references to "vLLM"
+- [x] **(P1, s)** Update README and AGENTS.md to remove references to "vLLM"
       where it really means "any OpenAI-compatible endpoint." The current LLM
       module is provider-agnostic.
 
 ## Security
 
-- [ ] **(P1, m)** Add `Origin` / `Referer` check to `www/api.php` POST handlers.
+- [x] **(P1, m)** Add `Origin` / `Referer` check to `www/api.php` POST handlers.
       Local-only is not a defense if a malicious page does a DNS rebinding or
       simply targets `localhost:8000` on a developer machine. Reject POSTs whose
       `Origin` is not `http://localhost:*`.
-- [ ] **(P1, s)** Atomic config writes everywhere. Replace `file_put_contents`
+- [x] **(P1, s)** Atomic config writes everywhere. Replace `file_put_contents`
       on `config.json` with: write to `config.json.tmp`, `LOCK_EX`, `rename()`.
       Currently 7+ call sites do unlocked overwrites and races are possible.
-- [ ] **(P1, s)** Path traversal in `www/index.php`: `__DIR__ . $path`
+      Done in `api.php` (`saveConfigJson`) and `loader-integrations.php`. Tools
+      each have their own `saveConfigJson` copies — remaining when `src/config.php`
+      is extracted (Modularity P1).
+- [x] **(P1, s)** Path traversal in `www/index.php`: `__DIR__ . $path`
       concatenates the URL path without normalization. Reject paths that
       contain `..` or that resolve outside `__DIR__`.
 - [ ] **(P2, s)** LLM prompt injection hardening: signals (browser hosts, vscode
@@ -130,21 +133,21 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 
 ## Correctness / behavior
 
-- [ ] **(P1, m)** Chrome history loader runs `SELECT visit_time, ... FROM visits`
+- [x] **(P1, m)** Chrome history loader runs `SELECT visit_time, ... FROM visits`
       with **no WHERE clause** then filters in PHP (`loader-chrome.php:45-58`).
       For multi-month history this is slow and uses unbounded memory. Add
       `WHERE visit_time BETWEEN ? AND ?` using Chrome's microsecond-since-1601
       epoch.
-- [ ] **(P1, s)** AW Rust loader (`loader-activitywatch.php:262-271`) likewise
+- [x] **(P1, s)** AW Rust loader (`loader-activitywatch.php:262-271`) likewise
       has no time filter in SQL — fetches all events per bucket, filters in PHP.
       Add `WHERE starttime >= ? AND endtime <= ?` to the query.
-- [ ] **(P1, s)** ClickUp `loadClickUpTimeEntries` does not paginate. Anyone
+- [x] **(P1, s)** ClickUp `loadClickUpTimeEntries` does not paginate. Anyone
       with >100 entries in the queried range loses data silently. Add page loop
       similar to Harvest.
-- [ ] **(P1, s)** Harvest `loadHarvestTimeEntries` has no max-page guard. Add a
+- [x] **(P1, s)** Harvest `loadHarvestTimeEntries` has no max-page guard. Add a
       sanity cap (e.g. 100 pages = 10k entries) to prevent infinite loops on
       malformed responses.
-- [ ] **(P1, s)** Race condition in `loadIntegrationActivity` config persistence
+- [x] **(P1, s)** Race condition in `loadIntegrationActivity` config persistence
       (`loader-integrations.php:92-110`): re-reads `$existing` from disk, then
       indexes by integer `$idx` from the in-memory array. If a user reorders
       the array between reads, the wrong slot is updated. Match by connection

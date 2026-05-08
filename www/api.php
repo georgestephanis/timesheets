@@ -60,8 +60,13 @@ function saveConfigJson(string $configFile, array $config): void
     if ($json === false) {
         throw new RuntimeException('Failed to encode config.json');
     }
-    if (file_put_contents($configFile, $json, LOCK_EX) === false) {
+    $tmpFile = $configFile . '.tmp.' . getmypid();
+    if (file_put_contents($tmpFile, $json, LOCK_EX) === false) {
         throw new RuntimeException('Failed to write config.json');
+    }
+    if (!rename($tmpFile, $configFile)) {
+        @unlink($tmpFile);
+        throw new RuntimeException('Failed to atomically update config.json');
     }
 }
 
@@ -96,6 +101,15 @@ function parseSlackSignal(string $value): ?array
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Reject cross-origin POST requests. Browsers always send Origin for cross-site fetches;
+    // when it is present, it must be localhost or 127.0.0.1 (any port).
+    $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+    if ($origin !== '' && !preg_match('#^https?://(localhost|127\.0\.0\.1)(:\d+)?$#', $origin)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Forbidden: cross-origin request']);
+        exit(1);
+    }
+
     $raw = file_get_contents('php://input');
     $payload = json_decode($raw ?: '{}', true);
     if (!is_array($payload)) {

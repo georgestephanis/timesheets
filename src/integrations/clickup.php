@@ -23,7 +23,7 @@ function resolveClickUpUserId(array $conn): ?string
         ]);
         $id = $json['user']['id'] ?? null;
         return idLooksStandard($id) ? (string)$id : null;
-    } catch (RuntimeException $e) {
+    } catch (RuntimeException) {
         return null;
     }
 }
@@ -59,48 +59,54 @@ function loadClickUpTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
     }
 
     foreach ($teamIds as $teamId) {
-        $url = 'https://api.clickup.com/api/v2/team/' . rawurlencode($teamId) . '/time_entries?' . http_build_query($params);
-        $json = httpGetJson($url, [
-            'Authorization: ' . $token,
-            'Accept: application/json',
-        ]);
+        $page = 0;
+        do {
+            $pageParams = $params + ($page > 0 ? ['page' => $page] : []);
+            $url = 'https://api.clickup.com/api/v2/team/' . rawurlencode($teamId) . '/time_entries?' . http_build_query($pageParams);
+            $json = httpGetJson($url, [
+                'Authorization: ' . $token,
+                'Accept: application/json',
+            ]);
 
-        foreach (($json['data'] ?? []) as $e) {
-            if (!is_array($e)) {
-                continue;
+            $entries = $json['data'] ?? [];
+            foreach ($entries as $e) {
+                if (!is_array($e)) {
+                    continue;
+                }
+
+                $startMs = (int)($e['start'] ?? 0);
+                $endMs = (int)($e['end'] ?? 0);
+                $durationMs = (int)($e['duration'] ?? 0);
+                if ($durationMs <= 0 && $endMs > $startMs) {
+                    $durationMs = $endMs - $startMs;
+                }
+                $seconds = (int)round(max(0, $durationMs) / 1000);
+                if ($seconds <= 0) {
+                    continue;
+                }
+
+                $start = (new DateTimeImmutable('@' . (int)floor($startMs / 1000)))->setTimezone(new DateTimeZone('UTC'));
+                $end = $start->modify('+' . $seconds . ' seconds');
+
+                $taskName = (string)($e['task']['name'] ?? '');
+                $description = trim((string)($e['description'] ?? ''));
+                $label = $taskName !== '' ? $taskName : ($description !== '' ? $description : 'ClickUp time entry');
+
+                $rows[] = [
+                    'source' => 'clickup',
+                    'connection' => $name,
+                    'start' => $start,
+                    'end' => $end,
+                    'seconds' => $seconds,
+                    'project_hint' => $label,
+                    'label' => $label,
+                    'entry_count' => 1,
+                    'activity_count' => 1,
+                    'discussion_count' => $description !== '' ? 1 : 0,
+                ];
             }
-
-            $startMs = (int)($e['start'] ?? 0);
-            $endMs = (int)($e['end'] ?? 0);
-            $durationMs = (int)($e['duration'] ?? 0);
-            if ($durationMs <= 0 && $endMs > $startMs) {
-                $durationMs = $endMs - $startMs;
-            }
-            $seconds = (int)round(max(0, $durationMs) / 1000);
-            if ($seconds <= 0) {
-                continue;
-            }
-
-            $start = (new DateTimeImmutable('@' . (int)floor($startMs / 1000)))->setTimezone(new DateTimeZone('UTC'));
-            $end = $start->modify('+' . $seconds . ' seconds');
-
-            $taskName = (string)($e['task']['name'] ?? '');
-            $description = trim((string)($e['description'] ?? ''));
-            $label = $taskName !== '' ? $taskName : ($description !== '' ? $description : 'ClickUp time entry');
-
-            $rows[] = [
-                'source' => 'clickup',
-                'connection' => $name,
-                'start' => $start,
-                'end' => $end,
-                'seconds' => $seconds,
-                'project_hint' => $label,
-                'label' => $label,
-                'entry_count' => 1,
-                'activity_count' => 1,
-                'discussion_count' => $description !== '' ? 1 : 0,
-            ];
-        }
+            $page++;
+        } while (count($entries) >= 100 && $page < 100);
     }
 
     return $rows;

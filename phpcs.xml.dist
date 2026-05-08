@@ -5,6 +5,7 @@
     <file>activity-report.php</file>
     <file>www/</file>
     <file>src/</file>
+    <file>tools/</file>
     <arg name="extensions" value="php"/>
     <arg name="colors"/>
     <arg value="sp"/>
