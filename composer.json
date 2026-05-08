@@ -14,10 +14,12 @@
     },
     "scripts": {
         "lint": "phpcs",
+        "lint:json": "npm run format:check",
         "lint:fix": "phpcbf",
         "analyze": "phpstan analyse --memory-limit 512M",
         "check": [
             "@lint",
+            "@lint:json",
             "@analyze"
         ]
     },
