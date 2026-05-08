@@ -72,11 +72,11 @@ function loadChromeHistory(array $config, DateTimeImmutable $from, DateTimeImmut
  *
  * ActivityWatch's Chrome watcher sometimes records window events without a URL.
  * For each such event, this function finds the most recent Chrome history visit
- * within $windowSec seconds of the event's midpoint and copies its URL across.
+ * at or before the event's start time within $windowSec seconds and copies its URL across.
  *
  * @param array $events    ActivityWatch event arrays, passed by reference; window entries may be mutated.
  * @param array $chrome    Sorted Chrome history rows from loadChromeHistory().
- * @param int   $windowSec Maximum seconds between event midpoint and history visit to allow a back-fill.
+ * @param int   $windowSec Maximum seconds between event start and history visit to allow a back-fill.
  */
 function backfillChromeUrls(array &$events, array $chrome, int $windowSec): void
 {
@@ -89,10 +89,10 @@ function backfillChromeUrls(array &$events, array $chrome, int $windowSec): void
         if ($ev['app'] !== 'Google Chrome' || $ev['url'] !== '') {
             continue;
         }
-        // Use midpoint of window event.
-        $mid = ($ev['start']->getTimestamp() + $ev['end']->getTimestamp()) / 2;
-        $i = bsearchRight($times, $mid) - 1;
-        if ($i >= 0 && ($mid - $times[$i]) <= $windowSec) {
+        // Find the latest Chrome visit at or before the event's start time.
+        $start = $ev['start']->getTimestamp() + (int)$ev['start']->format('u') / 1_000_000;
+        $i = bsearchRight($times, $start) - 1;
+        if ($i >= 0 && ($start - $times[$i]) <= $windowSec) {
             $ev['url'] = $chrome[$i]['url'];
         }
     }

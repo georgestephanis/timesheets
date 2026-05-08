@@ -222,12 +222,12 @@ function mergeSourceBundles(array $bundles): array
     ];
 
     foreach ($bundles as $bundle) {
-        $merged['events']['window'] = array_merge($merged['events']['window'], $bundle['events']['window']);
-        $merged['events']['afk'] = array_merge($merged['events']['afk'], $bundle['events']['afk']);
-        $merged['events']['input'] = array_merge($merged['events']['input'], $bundle['events']['input'] ?? []);
-        $merged['chrome'] = array_merge($merged['chrome'], $bundle['chrome']);
-        $merged['commits'] = array_merge($merged['commits'], $bundle['commits']);
-        $merged['external'] = array_merge($merged['external'], $bundle['external']);
+        array_push($merged['events']['window'], ...(array)($bundle['events']['window'] ?? []));
+        array_push($merged['events']['afk'], ...(array)($bundle['events']['afk'] ?? []));
+        array_push($merged['events']['input'], ...(array)($bundle['events']['input'] ?? []));
+        array_push($merged['chrome'], ...(array)($bundle['chrome'] ?? []));
+        array_push($merged['commits'], ...(array)($bundle['commits'] ?? []));
+        array_push($merged['external'], ...(array)($bundle['external'] ?? []));
     }
 
     return $merged;

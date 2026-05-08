@@ -85,4 +85,63 @@ class LoaderTest extends TestCase
         $dt = awEpochToDateTime('1700000000');
         $this->assertInstanceOf(DateTimeImmutable::class, $dt);
     }
+
+    // backfillChromeUrls — uses event start, not midpoint
+
+    public function testBackfillPicksVisitBeforeStart(): void
+    {
+        // Visit at t=100, event start=110, end=300 — visit is within the default 120s window.
+        $base  = new DateTimeImmutable('@0', new DateTimeZone('UTC'));
+        $visit = $base->modify('+100 seconds');
+        $eStart = $base->modify('+110 seconds');
+        $eEnd   = $base->modify('+300 seconds');
+
+        $chrome = [['time' => $visit, 'host' => 'example.com', 'url' => 'https://example.com/', 'title' => 'Ex']];
+        $events = [
+            'window' => [['app' => 'Google Chrome', 'title' => '', 'url' => '', 'start' => $eStart, 'end' => $eEnd]],
+            'afk'    => [],
+            'input'  => [],
+        ];
+
+        backfillChromeUrls($events, $chrome, 120);
+        $this->assertSame('https://example.com/', $events['window'][0]['url']);
+    }
+
+    public function testBackfillIgnoresVisitAfterStart(): void
+    {
+        // Visit at t=200, event start=110 — visit is AFTER start, should NOT be matched.
+        $base  = new DateTimeImmutable('@0', new DateTimeZone('UTC'));
+        $visit  = $base->modify('+200 seconds');
+        $eStart = $base->modify('+110 seconds');
+        $eEnd   = $base->modify('+190 seconds');
+
+        $chrome = [['time' => $visit, 'host' => 'example.com', 'url' => 'https://example.com/', 'title' => 'Ex']];
+        $events = [
+            'window' => [['app' => 'Google Chrome', 'title' => '', 'url' => '', 'start' => $eStart, 'end' => $eEnd]],
+            'afk'    => [],
+            'input'  => [],
+        ];
+
+        backfillChromeUrls($events, $chrome, 120);
+        $this->assertSame('', $events['window'][0]['url']);
+    }
+
+    public function testBackfillRespectsWindowSeconds(): void
+    {
+        // Visit at t=0, event start=200 — gap is 200s, beyond the 120s window.
+        $base  = new DateTimeImmutable('@0', new DateTimeZone('UTC'));
+        $visit  = $base;
+        $eStart = $base->modify('+200 seconds');
+        $eEnd   = $base->modify('+300 seconds');
+
+        $chrome = [['time' => $visit, 'host' => 'example.com', 'url' => 'https://example.com/', 'title' => 'Ex']];
+        $events = [
+            'window' => [['app' => 'Google Chrome', 'title' => '', 'url' => '', 'start' => $eStart, 'end' => $eEnd]],
+            'afk'    => [],
+            'input'  => [],
+        ];
+
+        backfillChromeUrls($events, $chrome, 120);
+        $this->assertSame('', $events['window'][0]['url']);
+    }
 }

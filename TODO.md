@@ -116,14 +116,11 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 - [x] **(P1, s)** Path traversal in `www/index.php`: `__DIR__ . $path`
       concatenates the URL path without normalization. Reject paths that
       contain `..` or that resolve outside `__DIR__`.
-- [ ] **(P2, s)** LLM prompt injection hardening: signals (browser hosts, vscode
-      dirs, slack channels) are interpolated into the prompt. The validation
-      layer in `llmSuggestAssignments` already gates by exact-match, so the
-      attack surface is small, but adding `\n` stripping and length caps on the
-      prompt-side values would reduce confusion vectors.
-- [ ] **(P2, s)** `applySignalToConfig` browser case rejects `(no url)` after
-      the LLM has already suggested it; reject earlier in
-      `llmSuggestAssignments` so the model sees fewer dead-end suggestions.
+- [x] **(P2, s)** LLM prompt injection hardening: signal values now pass through
+      `str_replace(["\n","\r","\t"], ' ', ...)` + `mb_substr(..., 200)` before
+      entering the prompt and `$signalSet`. Applied in `llmSuggestAssignments`.
+- [x] **(P2, s)** `(no url)` placeholder now skipped in `llmSuggestAssignments`
+      signal loop before it reaches the prompt, not just after the LLM suggests it.
 - [ ] **(P2, m)** Document the threat model in `SECURITY.md`: this is a local
       tool that holds OAuth tokens for Harvest, ClickUp, GitHub, and an LLM key.
       Note the plaintext config and recommend filesystem permissions
@@ -152,12 +149,13 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
       indexes by integer `$idx` from the in-memory array. If a user reorders
       the array between reads, the wrong slot is updated. Match by connection
       `name` instead of array index.
-- [ ] **(P2, s)** `backfillChromeUrls` matches by event midpoint; for long
-      window events the midpoint may be far from the actual visit. Match by
-      event start time instead, finding the latest history visit ≤ start.
-- [ ] **(P2, s)** `renderTsv` does not escape tabs or newlines in project names
-      / commit subjects. A project named "Foo\tBar" silently breaks columns.
-      Replace tab/newline with space (or use proper TSV escaping).
+- [x] **(P2, s)** `backfillChromeUrls` matched by event midpoint. Changed to use
+      the event start time — finds the latest Chrome visit at or before start
+      within `$windowSec`. Three new PHPUnit tests cover the match, post-start
+      miss, and window-exceeded cases.
+- [x] **(P2, s)** `renderTsv` did not escape tabs or newlines in project names.
+      Added a `$tsv` closure that replaces `\t`, `\r\n`, `\r`, `\n` with space;
+      applied to `$grouping` and `$proj` fields.
 - [x] **(P2, s)** Frontend re-fetches on every Prev/Next even when the date is
       the same as before. Added `responseCache` (Map keyed by `from|to|days`);
       non-rebuild navigations are served from cache instantly.
@@ -185,9 +183,8 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 
 - [ ] **(P2, m)** Chrome and AW SQL queries: see Correctness P1 items. Adding
       `WHERE` clauses is the single biggest cold-start improvement.
-- [ ] **(P2, m)** `mergeSourceBundles` calls `array_merge` per bundle, which is
-      O(N²) under PHP's array semantics. Use `array_push($acc, ...$bundle)` or
-      a flat accumulator.
+- [x] **(P2, m)** `mergeSourceBundles` called `array_merge` per bundle (O(N²)).
+      Replaced with `array_push($arr, ...(array)$slice)` — extends in place, O(N) total.
 - [ ] **(P2, m)** GitHub fetch is 5 endpoints × N repos × M authors. With
       GitHub-Desktop discovery enabled (which can be 50+ repos), this exhausts
       the 8s web budget every time. Options: GraphQL aggregation, parallel

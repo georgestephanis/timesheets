@@ -152,12 +152,18 @@ function llmSuggestAssignments(array $unmatched, array $config): array
     }
 
     // Flatten unmatched signals into prompt lines, tracking valid values per kind.
+    // Sanitize values before they reach the prompt: strip control characters and cap length
+    // to prevent prompt injection via crafted window titles or hostnames. Also skip the
+    // '(no url)' placeholder here so the LLM never sees it as a candidate.
     $kinds       = ['vscode', 'browser', 'slack', 'apps'];
     $signalLines = [];
     $signalSet   = [];
     foreach ($kinds as $kind) {
         foreach ((array)($unmatched[$kind] ?? []) as $value => $count) {
-            $value         = (string)$value;
+            $value = mb_substr(str_replace(["\n", "\r", "\t"], ' ', (string)$value), 0, 200);
+            if ($value === '' || $value === '(no url)') {
+                continue;
+            }
             $signalLines[] = sprintf('- %s: "%s" (%d events)', $kind, $value, (int)$count);
             $signalSet[$kind][] = $value;
         }

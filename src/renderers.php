@@ -260,6 +260,7 @@ function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to
         "date\tgrouping\tproject\tseconds\tactive_seconds\tactivity_ratio\tcommits\t"
         . "harvest_entries\tharvest_discussion\tclickup_entries\tclickup_discussion\tgithub_entries\tgithub_activity\tgithub_discussion",
     ];
+    $tsv = static fn(string $s): string => str_replace(["\t", "\r\n", "\r", "\n"], [' ', ' ', ' ', ' '], $s);
     $dates = array_keys($bucket);
     sort($dates);
     foreach ($dates as $date) {
@@ -268,7 +269,7 @@ function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to
             $harvest = $rec['external']['harvest'] ?? [];
             $clickup = $rec['external']['clickup'] ?? [];
             $github = $rec['external']['github'] ?? [];
-            $rows[] = "$date\t$grouping\t$proj\t"
+            $rows[] = "$date\t" . $tsv($grouping) . "\t" . $tsv((string)$proj) . "\t"
                 . (int)($rec['seconds'] ?? 0)
                 . "\t" . (int)($rec['active_seconds'] ?? 0)
                 . "\t" . sprintf('%.3f', (float)($rec['activity_ratio'] ?? 0))
