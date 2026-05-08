@@ -10,15 +10,15 @@
 
 1. Check that the ActivityWatch app is running (`aw-server` process should be visible in Activity Monitor).
 2. Verify the database path in `config.json`:
-   ```json
-   "paths": {
-       "activitywatch": "~/Library/Application Support/activitywatch/"
-   }
-   ```
-   The tool looks for `aw-server.sqlite` under that directory. Run:
-   ```bash
-   ls ~/Library/Application\ Support/activitywatch/
-   ```
+    ```json
+    "paths": {
+        "activitywatch": "~/Library/Application Support/activitywatch/"
+    }
+    ```
+    The tool looks for `aw-server.sqlite` under that directory. Run:
+    ```bash
+    ls ~/Library/Application\ Support/activitywatch/
+    ```
 3. If the path differs (e.g. you use `aw-server-rust`), update `config.json` to point at the correct directory.
 4. Add `--show-unmatched` to a CLI run to verify events are being loaded but not matching any project rule.
 
@@ -34,16 +34,16 @@
 
 1. Make sure Chrome is not in the middle of a crash recovery (force-quit and relaunch).
 2. Verify that `config.json` points to the correct Chrome profile directory:
-   ```json
-   "paths": {
-       "chrome": "~/Library/Application Support/Google/Chrome/"
-   }
-   ```
+    ```json
+    "paths": {
+        "chrome": "~/Library/Application Support/Google/Chrome/"
+    }
+    ```
 3. If you use multiple Chrome profiles, set `chrome_profiles` to the list you want scanned:
-   ```json
-   "chrome_profiles": ["Default", "Profile 1"]
-   ```
-   Setting it to `null` (the default) scans all profiles.
+    ```json
+    "chrome_profiles": ["Default", "Profile 1"]
+    ```
+    Setting it to `null` (the default) scans all profiles.
 
 ---
 
@@ -59,9 +59,9 @@
 2. Authenticate: `gh auth login`
 3. Verify: `gh auth status`
 4. If you haven't added a GitHub integration to `config.json` yet, run:
-   ```bash
-   php tools/ensure-github-integration.php
-   ```
+    ```bash
+    php tools/ensure-github-integration.php
+    ```
 5. The GitHub integration is **CLI-only** — it is skipped when requests come from the web UI to avoid blocking page loads. Run the CLI directly to populate GitHub data into the per-day source cache; the web UI will then serve it from cache.
 
 ---
@@ -75,21 +75,21 @@
 **Fix:**
 
 1. Check your `config.json` LLM connection:
-   ```json
-   "integrations": {
-       "llm": [{ "base_url": "http://localhost:11434/v1", "api_key": "ollama" }]
-   }
-   ```
+    ```json
+    "integrations": {
+        "llm": [{ "base_url": "http://localhost:11434/v1", "api_key": "ollama" }]
+    }
+    ```
 2. Test the endpoint manually:
-   ```bash
-   curl http://localhost:11434/v1/models
-   ```
+    ```bash
+    curl http://localhost:11434/v1/models
+    ```
 3. If using Ollama, make sure it is running: `ollama serve`
 4. If the endpoint requires a real API key (e.g. OpenAI), verify `api_key` is set correctly.
 5. Increase the timeout if the model is slow to respond:
-   ```json
-   { "base_url": "...", "timeout": 120 }
-   ```
+    ```json
+    { "base_url": "...", "timeout": 120 }
+    ```
 
 ---
 
@@ -103,13 +103,13 @@
 
 - Use the **Rebuild from source** button in the web UI to regenerate the current view with fresh data (this bypasses and overwrites the per-day caches for the visible range).
 - Or delete specific day caches directly:
-  ```bash
-  rm -rf reports/2026-05/08/
-  ```
+    ```bash
+    rm -rf reports/2026-05/08/
+    ```
 - Or delete all caches to force a full rebuild next run:
-  ```bash
-  rm -rf reports/
-  ```
+    ```bash
+    rm -rf reports/
+    ```
 
 ---
 
@@ -137,9 +137,9 @@ chmod 600 config.json   # owner read/write only
 **Fix:**
 
 1. Start the server if it isn't running:
-   ```bash
-   php -S localhost:8000 www/index.php
-   ```
+    ```bash
+    php -S localhost:8000 www/index.php
+    ```
 2. Open the browser console (F12) to see the underlying error.
 3. Check the terminal where `php -S` is running for PHP error output.
 4. If the report area shows a red banner, it includes the error message from `api.php`.

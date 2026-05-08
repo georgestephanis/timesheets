@@ -8,7 +8,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/integrations/shared.php';
 require_once __DIR__ . '/integrations/harvest.php';
+require_once __DIR__ . '/integrations/harvest-catalog.php';
 require_once __DIR__ . '/integrations/clickup.php';
+require_once __DIR__ . '/integrations/clickup-catalog.php';
 require_once __DIR__ . '/integrations/github.php';
 
 /**
@@ -44,7 +46,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
                 $rows[] = $row;
             }
         } catch (RuntimeException $e) {
-            integrationWarning("[$label] " . $e->getMessage());
+            warning('integrations', "[$label] " . $e->getMessage());
         }
     }
 
@@ -67,7 +69,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
                 $rows[] = $row;
             }
         } catch (RuntimeException $e) {
-            integrationWarning("[$label] " . $e->getMessage());
+            warning('integrations', "[$label] " . $e->getMessage());
         }
     }
 
@@ -77,7 +79,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
         }
         $label = (string)($conn['name'] ?? "github[$idx]");
         if (PHP_SAPI !== 'cli') {
-            integrationWarning("[$label] skipped in web requests; prebuild daily caches via CLI to include GitHub activity");
+            warning('integrations', "[$label] skipped in web requests; prebuild daily caches via CLI to include GitHub activity");
             continue;
         }
         try {
@@ -85,7 +87,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
                 $rows[] = $row;
             }
         } catch (RuntimeException $e) {
-            integrationWarning("[$label] " . $e->getMessage());
+            warning('integrations', "[$label] " . $e->getMessage());
         }
     }
 
@@ -120,7 +122,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
         }
 
         if (is_file($configFile) && backupConfigSnapshot($configFile, 'integrations') === null) {
-            integrationWarning('failed to create config backup in reports/config before auto-save');
+            warning('integrations', 'failed to create config backup in reports/config before auto-save');
         }
         $json = json_encode($existing, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
         $tmpFile = $configFile . '.tmp.' . getmypid();
@@ -128,7 +130,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
             rename($tmpFile, $configFile);
         } else {
             @unlink($tmpFile);
-            integrationWarning('failed to write config.json during auto-save of resolved IDs');
+            warning('integrations', 'failed to write config.json during auto-save of resolved IDs');
         }
     }
 
@@ -137,31 +139,15 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
 }
 
 /**
- * Emits a warning in both CLI and web contexts, and collects it for the current request.
- */
-function integrationWarning(string $message): void
-{
-    global $_integrationWarnings;
-    $_integrationWarnings[] = $message;
-
-    $line = 'warning: ' . $message;
-    if (defined('STDERR')) {
-        fwrite(STDERR, $line . "\n");
-        return;
-    }
-
-    error_log($line);
-}
-
-/**
- * Returns all warnings collected by integrationWarning() during this request.
+ * Returns all warnings collected during this request.
+ *
+ * Alias for getWarnings() — kept for backwards compatibility.
  *
  * @return list<string>
  */
 function getIntegrationWarnings(): array
 {
-    global $_integrationWarnings;
-    return $_integrationWarnings ?? [];
+    return getWarnings();
 }
 
 /**

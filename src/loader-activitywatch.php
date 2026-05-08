@@ -28,14 +28,14 @@ function loadActivityWatch(array $config, DateTimeImmutable $from, DateTimeImmut
         if (file_exists($path)) {
             $copy = copyForRead($path);
             if (!$copy) {
-                awWarning("could not copy $path");
+                warning('aw', "could not copy $path");
                 continue;
             }
 
             try {
                 $loaded = loadAwSqlite($copy, $from, $to);
             } catch (Throwable $e) {
-                awWarning("could not parse $path ({$e->getMessage()})");
+                warning('aw', "could not parse $path ({$e->getMessage()})");
                 continue;
             }
 
@@ -51,22 +51,8 @@ function loadActivityWatch(array $config, DateTimeImmutable $from, DateTimeImmut
         return $fallback;
     }
 
-    awWarning("no ActivityWatch sqlite found under $base");
+    warning('aw', "no ActivityWatch sqlite found under $base");
     return ['window' => [], 'afk' => [], 'input' => []];
-}
-
-/**
- * Emits a warning in both CLI and web contexts.
- */
-function awWarning(string $message): void
-{
-    $line = 'warning: ' . $message;
-    if (defined('STDERR')) {
-        fwrite(STDERR, $line . "\n");
-        return;
-    }
-
-    error_log($line);
 }
 
 /**

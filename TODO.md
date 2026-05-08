@@ -218,16 +218,19 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
       `githubFetchPullRequests`, `githubFetchIssues`, `githubFetchIssueComments`,
       `githubFetchReviewComments`. `loadGitHubActivity` is now a short coordination
       loop (~40 lines).
-- [ ] **(P2, m)** Hoist Harvest project-list + ClickUp tree-walk into
+- [x] **(P2, m)** Hoist Harvest project-list + ClickUp tree-walk into
       `src/integrations/harvest-catalog.php` and `clickup-catalog.php`. Both
-      `sync-integration-projects.php` and `set-integration-groupings.php` will
-      then import a single source of truth (~200 lines deduplicated).
-- [ ] **(P2, m)** Consolidate warning helpers: `awWarning` and
-      `integrationWarning` differ only in source tag. Replace with
-      `warning(string $source, string $message)` writing to a single global
-      collector.
+      `sync-integration-projects.php` and `set-integration-groupings.php` now
+      import a single source of truth (~200 lines deduplicated).
+- [x] **(P2, m)** Consolidate warning helpers: `awWarning` and
+      `integrationWarning` replaced with `warning(string $source, string $message)`
+      in `src/helpers.php`. `getIntegrationWarnings()` kept as an alias for
+      `getWarnings()` for backwards compatibility. AW warnings now collected into
+      the same global pool and visible in the web UI warnings banner.
 - [ ] **(P2, m)** Reorganize `src/` into `src/loaders/`, `src/integrations/`,
       `src/web/`, `src/cli/`. Keep `helpers.php` and `cache.php` at root.
+      Deferred: purely structural, touches 20+ require_once paths across 15 files,
+      best as a standalone refactor with no functional change.
 - [ ] **(P3, m)** Introduce a `Config` value object (read-only) for the typed
       access paths. Even a typed array shape (PHPStan generic) at boundaries
       would be a big improvement.

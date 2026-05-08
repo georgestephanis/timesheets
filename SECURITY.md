@@ -15,12 +15,12 @@ This is a **local-only tool**. The web UI is served by `php -S localhost:8000` a
 
 `config.json` holds plaintext credentials:
 
-| Field                                     | What it grants                        |
-| ----------------------------------------- | ------------------------------------- |
-| `integrations.harvest[*].token`           | Read/write access to Harvest account  |
+| Field                                     | What it grants                         |
+| ----------------------------------------- | -------------------------------------- |
+| `integrations.harvest[*].token`           | Read/write access to Harvest account   |
 | `integrations.clickup[*].token`           | Read/write access to ClickUp workspace |
-| `integrations.github[*]` (uses `gh` auth) | Read access to GitHub repos/activity  |
-| `integrations.llm[*].api_key`             | Access to configured LLM endpoint     |
+| `integrations.github[*]` (uses `gh` auth) | Read access to GitHub repos/activity   |
+| `integrations.llm[*].api_key`             | Access to configured LLM endpoint      |
 
 **Recommended:** restrict read access to `config.json`:
 

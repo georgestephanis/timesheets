@@ -48,7 +48,7 @@ function groupingForConnection(string $connectionName, string $source, array $gr
 }
 
 /**
- * Returns discovered Harvest project names grouped by grouping label.
+ * Returns Harvest project names grouped by grouping label, using the catalog loader.
  *
  * @param array<string, mixed> $groupingsMap
  * @return array<string, array<string, bool>>
@@ -61,92 +61,12 @@ function discoverHarvestProjectsByGrouping(array $harvestConnections, array $gro
         if (!is_array($conn)) {
             continue;
         }
-
-        $token = (string)($conn['token'] ?? '');
-        $accountId = (string)($conn['account_id'] ?? '');
-        $name = (string)($conn['name'] ?? "harvest[$idx]");
+        $name     = (string)($conn['name'] ?? "harvest[$idx]");
         $grouping = groupingForConnection($name, 'harvest', $groupingsMap);
-        if ($token === '' || $accountId === '' || $grouping === null) {
+        if ($grouping === null) {
             continue;
         }
-
-        $projects = [];
-        $page = 1;
-        $pages = 1;
-        $listed = false;
-        do {
-            try {
-                $json = httpGetJson(
-                    'https://api.harvestapp.com/v2/projects?' . http_build_query([
-                        'is_active' => 'true',
-                        'page' => (string)$page,
-                    ]),
-                    [
-                        'Authorization: Bearer ' . $token,
-                        'Harvest-Account-ID: ' . $accountId,
-                        'User-Agent: activity-report',
-                        'Accept: application/json',
-                    ]
-                );
-            } catch (RuntimeException $e) {
-                $json = [];
-                $pages = 0;
-            }
-
-            foreach (($json['projects'] ?? []) as $p) {
-                if (!is_array($p)) {
-                    continue;
-                }
-                $pn = trim((string)($p['name'] ?? ''));
-                if ($pn !== '') {
-                    $projects[$pn] = true;
-                    $listed = true;
-                }
-            }
-
-            $pages = max(0, (int)($json['total_pages'] ?? 0));
-            $page++;
-        } while ($page <= $pages);
-
-        // Fallback when /projects is not authorized.
-        if (!$listed) {
-            $page = 1;
-            $pages = 1;
-            do {
-                try {
-                    $json = httpGetJson(
-                        'https://api.harvestapp.com/v2/time_entries?' . http_build_query([
-                            'from' => (new DateTimeImmutable('now -365 days', new DateTimeZone('UTC')))->format('Y-m-d'),
-                            'to' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d'),
-                            'page' => (string)$page,
-                        ]),
-                        [
-                            'Authorization: Bearer ' . $token,
-                            'Harvest-Account-ID: ' . $accountId,
-                            'User-Agent: activity-report',
-                            'Accept: application/json',
-                        ]
-                    );
-                } catch (RuntimeException $e) {
-                    break;
-                }
-
-                foreach (($json['time_entries'] ?? []) as $te) {
-                    if (!is_array($te)) {
-                        continue;
-                    }
-                    $pn = trim((string)($te['project']['name'] ?? ''));
-                    if ($pn !== '') {
-                        $projects[$pn] = true;
-                    }
-                }
-
-                $pages = max(1, (int)($json['total_pages'] ?? 1));
-                $page++;
-            } while ($page <= $pages);
-        }
-
-        foreach (array_keys($projects) as $pn) {
+        foreach (array_keys(harvestFetchProjectNames($conn)) as $pn) {
             $byGrouping[$grouping][$pn] = true;
         }
     }
@@ -155,7 +75,7 @@ function discoverHarvestProjectsByGrouping(array $harvestConnections, array $gro
 }
 
 /**
- * Returns discovered ClickUp names grouped by grouping label.
+ * Returns ClickUp names grouped by grouping label, using the catalog loader.
  *
  * @param array<string, mixed> $groupingsMap
  * @return array<string, array<string, bool>>
@@ -168,118 +88,12 @@ function discoverClickUpNamesByGrouping(array $clickupConnections, array $groupi
         if (!is_array($conn)) {
             continue;
         }
-
-        $token = (string)($conn['token'] ?? '');
-        $name = (string)($conn['name'] ?? "clickup[$idx]");
+        $name     = (string)($conn['name'] ?? "clickup[$idx]");
         $grouping = groupingForConnection($name, 'clickup', $groupingsMap);
-        $rawTeamId = $conn['team_id'] ?? [];
-        $teamIds = is_array($rawTeamId) ? $rawTeamId : [$rawTeamId];
-        $teamIds = array_values(array_filter(array_map('strval', $teamIds), static fn($v) => $v !== ''));
-        if ($token === '' || $teamIds === [] || $grouping === null) {
+        if ($grouping === null) {
             continue;
         }
-
-        $names = [];
-        foreach ($teamIds as $teamId) {
-            try {
-                $spaces = httpGetJson(
-                    'https://api.clickup.com/api/v2/team/' . rawurlencode($teamId) . '/space?archived=false',
-                    [
-                        'Authorization: ' . $token,
-                        'Accept: application/json',
-                    ]
-                );
-            } catch (RuntimeException $e) {
-                continue;
-            }
-
-            foreach (($spaces['spaces'] ?? []) as $space) {
-                if (!is_array($space)) {
-                    continue;
-                }
-
-                $spaceId = (string)($space['id'] ?? '');
-                $spaceName = trim((string)($space['name'] ?? ''));
-                if ($spaceName !== '') {
-                    $names[$spaceName] = true;
-                }
-                if ($spaceId === '') {
-                    continue;
-                }
-
-                try {
-                    $folders = httpGetJson(
-                        'https://api.clickup.com/api/v2/space/' . rawurlencode($spaceId) . '/folder?archived=false',
-                        [
-                            'Authorization: ' . $token,
-                            'Accept: application/json',
-                        ]
-                    );
-                } catch (RuntimeException $e) {
-                    $folders = ['folders' => []];
-                }
-
-                foreach (($folders['folders'] ?? []) as $folder) {
-                    if (!is_array($folder)) {
-                        continue;
-                    }
-                    $folderId = (string)($folder['id'] ?? '');
-                    $folderName = trim((string)($folder['name'] ?? ''));
-                    if ($folderName !== '') {
-                        $names[$folderName] = true;
-                    }
-                    if ($folderId === '') {
-                        continue;
-                    }
-
-                    try {
-                        $lists = httpGetJson(
-                            'https://api.clickup.com/api/v2/folder/' . rawurlencode($folderId) . '/list?archived=false',
-                            [
-                                'Authorization: ' . $token,
-                                'Accept: application/json',
-                            ]
-                        );
-                    } catch (RuntimeException $e) {
-                        $lists = ['lists' => []];
-                    }
-
-                    foreach (($lists['lists'] ?? []) as $list) {
-                        if (!is_array($list)) {
-                            continue;
-                        }
-                        $listName = trim((string)($list['name'] ?? ''));
-                        if ($listName !== '') {
-                            $names[$listName] = true;
-                        }
-                    }
-                }
-
-                try {
-                    $spaceLists = httpGetJson(
-                        'https://api.clickup.com/api/v2/space/' . rawurlencode($spaceId) . '/list?archived=false',
-                        [
-                            'Authorization: ' . $token,
-                            'Accept: application/json',
-                        ]
-                    );
-                } catch (RuntimeException $e) {
-                    $spaceLists = ['lists' => []];
-                }
-
-                foreach (($spaceLists['lists'] ?? []) as $list) {
-                    if (!is_array($list)) {
-                        continue;
-                    }
-                    $listName = trim((string)($list['name'] ?? ''));
-                    if ($listName !== '') {
-                        $names[$listName] = true;
-                    }
-                }
-            }
-        }
-
-        foreach (array_keys($names) as $n) {
+        foreach (array_keys(clickupFetchAllNames($conn)) as $n) {
             $byGrouping[$grouping][$n] = true;
         }
     }

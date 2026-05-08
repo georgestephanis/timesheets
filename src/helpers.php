@@ -140,3 +140,36 @@ function chromeTime(int $ct, DateTimeZone $tz): DateTimeImmutable
     $unix = $ct / 1_000_000 - 11_644_473_600;
     return (new DateTimeImmutable('@' . (int)floor($unix)))->setTimezone($tz);
 }
+
+/**
+ * Emits a warning to STDERR (CLI) or error_log (web) and collects it for later retrieval.
+ *
+ * All warnings are pooled in a single global collector regardless of source, so
+ * getWarnings() returns AW warnings, integration warnings, and any other source together.
+ *
+ * @param string $source  Short tag identifying the emitting subsystem (e.g. 'aw', 'integrations').
+ * @param string $message Warning text.
+ */
+function warning(string $source, string $message): void
+{
+    global $_warnings;
+    $_warnings[] = $message;
+
+    $line = "warning[$source]: $message";
+    if (defined('STDERR')) {
+        fwrite(STDERR, $line . "\n");
+        return;
+    }
+    error_log($line);
+}
+
+/**
+ * Returns all warnings collected by warning() during this request.
+ *
+ * @return list<string>
+ */
+function getWarnings(): array
+{
+    global $_warnings;
+    return $_warnings ?? [];
+}
