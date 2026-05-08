@@ -117,10 +117,49 @@ Logic is split across `src/` includes with no classes. All code is plain functio
 ### Data flow
 
 ```
-loadActivityWatch ──────────────┐
-loadChromeHistory ──┬── backfill┤
-loadGitCommits ─────┤           ├──► classifyAndAggregate ──► render*
-loadIntegrationActivity ────────┘
+                        ┌─ CLI path ──────────────────────────────────────────────┐
+                        │  activity-report.php → main() → generateReport()        │
+                        └─────────────────────────────┬───────────────────────────┘
+                                                       │
+                        ┌─ Web path ──────────────────┐│
+                        │  www/index.php → api.php     ││
+                        └─────────────────────────────┬┘
+                                                       │
+                              loadSourcesForRange()    │
+                                    │                  │
+                    ┌───────────────▼──────────────────▼──────────────────┐
+                    │           Per-day source cache                       │
+                    │       reports/YYYY-MM/DD/*.json                      │
+                    │  (skipped when rebuild=true or cache miss)           │
+                    └──────┬───────────────────────────────────────────────┘
+                           │ cache miss / rebuild
+                           ▼
+          ┌────────────────────────────────────────────┐
+          │           loadFreshSourceSlice()            │
+          │                                            │
+          │  loadActivityWatch() ──────────────────┐  │
+          │  loadChromeHistory()  ─► backfill ──────┤  │
+          │  loadGitCommits() ─────────────────────►├──┼──► saveDailyCachedSources()
+          │  loadIntegrationActivity() ────────────►│  │
+          └────────────────────────────────────────┘  │
+                           │                           │
+                           ▼                           │
+              mergeSourceBundles() (across days)       │
+                           │                           │
+                           ▼                           │
+              classifyAndAggregate()                   │
+              → [$bucket, $unmatched, $timeline]       │
+                           │                           │
+              ┌────────────┼─────────────┐             │
+              ▼            ▼             ▼             │
+        renderMarkdown  renderJson   renderTsv         │
+                            │                          │
+                            ▼                          │
+                  ┌──────────────────────┐             │
+                  │   Report file cache  │             │
+                  │  reports/YYYY-MM/    │◄────────────┘
+                  │  (saveGeneratedReport)│
+                  └──────────────────────┘
 ```
 
 **`loadSourcesForRange(config, tz, from, to, rebuild=false)`** coordinates multi-day fetching. For each calendar day in the range:

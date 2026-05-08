@@ -188,14 +188,46 @@ function renderMarkdown(
  * Renders the activity bucket as a pretty-printed JSON string.
  *
  * Commits are serialized to {time, sha, subj, repo} objects with RFC 3339 timestamps.
- * The top-level envelope includes from, to (RFC 3339), tz (IANA name), days (the bucket),
- * and unmatched signal counts.
+ *
+ * Output envelope shape:
+ * ```json
+ * {
+ *   "from": "<RFC 3339>",
+ *   "to":   "<RFC 3339>",
+ *   "tz":   "<IANA timezone name>",
+ *   "days": {
+ *     "YYYY-MM-DD": {
+ *       "<project name>": {
+ *         "grouping":       "<string|null>",
+ *         "seconds":        "<int>",
+ *         "active_seconds": "<int>",
+ *         "activity_ratio": "<float 0–1>",
+ *         "detail": { "<kind>": { "<label>": "<seconds int>" } },
+ *         "external": {
+ *           "<source>": { "entries": "<int>", "activity": "<int>", "discussion": "<int>" }
+ *         },
+ *         "commits": [{ "time": "<RFC 3339>", "sha": "<string>", "subj": "<string>", "repo": "<string>" }]
+ *       }
+ *     }
+ *   },
+ *   "unmatched": { "<kind>": { "<value>": "<event count int>" } },
+ *   "warnings":  ["<string>"],
+ *   "timelines": {
+ *     "YYYY-MM-DD": [{ "s": "<int>", "e": "<int>", "p": "<project>", "g": "<grouping|null>" }]
+ *   }
+ * }
+ * ```
+ * `warnings` is omitted when empty. `timelines` is omitted when empty.
+ * `s`/`e` in timeline segments are seconds from local midnight.
  *
  * @param  array             $bucket    Aggregated data from classifyAndAggregate().
  * @param  array             $unmatched Unmatched signal counts from classifyAndAggregate().
  * @param  DateTimeImmutable $from      Report start date.
  * @param  DateTimeImmutable $to        Report end date.
  * @param  DateTimeZone      $tz        Display timezone.
+ * @param  array             $warnings  Integration warnings from getIntegrationWarnings().
+ * @param  array             $timeline  Timeline segments from classifyAndAggregate()[2].
+ * @return string Pretty-printed JSON followed by a newline.
  */
 function renderJson(
     array $bucket,
