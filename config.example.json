@@ -72,6 +72,15 @@
 
     "ignored_projects": [],
 
+    "groupings_map": {
+        "connections": {
+            "*client-a*": "Client A",
+            "*client-b*": "Client B"
+        },
+        "clickup_default": "Client A",
+        "priority": ["Client A", "Client B"]
+    },
+
     "integrations": {
         "harvest": [
             {

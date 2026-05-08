@@ -243,8 +243,7 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
       Fixed two real bugs in the process: json_encode error check in `config.php`,
       and `@phpstan-impure` on `githubBudgetExceeded`. Added `composer analyze` script.
 - [ ] **(P1, m)** Add **PHPUnit**:
-      `     composer require --dev phpunit/phpunit
-    `
+      `    composer require --dev phpunit/phpunit`
       Initial test targets — pure functions only: - `classifyVscode`, `classifySlack`, `classifySsh` - `fmtDur`, `bsearchRight`, `chromeTime`, `awEpochToDateTime` - `applySignalToProject`, `parseSlackSignal` - `githubRepoFromRemoteUrl` - `serialize/deserialize` round-trip pairs in `cache.php`
 - [x] **(P1, s)** Add **GitHub Actions CI** that runs on push/PR:
       `composer lint && composer analyze && npm run format:check`.

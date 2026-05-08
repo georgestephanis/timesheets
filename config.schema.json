@@ -104,6 +104,29 @@
             "default": []
         },
 
+        "groupings_map": {
+            "description": "Rules for the set-integration-groupings tool: maps integration connection names to project grouping labels.",
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "connections": {
+                    "description": "Case-insensitive glob patterns matched against integration connection names. Keys are patterns (e.g. \"*bethink*\"), values are the grouping label to assign. Evaluated in order; first match wins.",
+                    "type": "object",
+                    "additionalProperties": { "type": "string" }
+                },
+                "clickup_default": {
+                    "description": "Fallback grouping applied to ClickUp-sourced projects when no connection pattern matches.",
+                    "type": "string"
+                },
+                "priority": {
+                    "description": "Ordered list of grouping labels. When a project matches multiple groupings (e.g. it has both Harvest and ClickUp entries from different clients), the first label in this list wins.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                }
+            }
+        },
+
         "integrations": {
             "description": "Optional external integrations for imported time/activity rows.",
             "type": "object",

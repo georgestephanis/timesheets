@@ -16,7 +16,10 @@
         "lint": "phpcs",
         "lint:fix": "phpcbf",
         "analyze": "phpstan analyse --memory-limit 512M",
-        "check": ["@lint", "@analyze"]
+        "check": [
+            "@lint",
+            "@analyze"
+        ]
     },
     "config": {
         "optimize-autoloader": true

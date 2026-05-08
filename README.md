@@ -83,21 +83,22 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 
 ### Top-level fields
 
-| Field                               | Type        | Description                                                                                       |
-| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
-| `timezone`                          | string      | IANA timezone name for all output (e.g. `America/New_York`)                                       |
-| `paths.activitywatch`               | string      | Path to ActivityWatch data directory                                                              |
-| `paths.chrome`                      | string      | Path to Chrome user-data directory                                                                |
-| `paths.chrome_profiles`             | array\|null | Profile folders to scan; `null` = auto-discover all                                               |
-| `git_authors`                       | string[]    | Your commit author email address(es)                                                              |
-| `discover_repos`                    | string      | Set to `"github_desktop"` to auto-discover repos from the GitHub Desktop app (see below)          |
-| `chrome_correlation_window_seconds` | int         | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120) |
-| `min_event_seconds_to_show`         | int         | Hide activity segments shorter than this (default 30)                                             |
-| `projects`                          | object      | Named project definitions (see below)                                                             |
-| `personal_hosts`                    | string[]    | Browser hostnames to bucket as personal, not work                                                 |
-| `personal_apps`                     | string[]    | App names (as reported by ActivityWatch) to bucket as personal                                    |
-| `ignored_projects`                  | string[]    | Project names to exclude from classification and reporting                                        |
-| `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`, `github[]`)                                  |
+| Field                               | Type        | Description                                                                                                   |
+| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------- |
+| `timezone`                          | string      | IANA timezone name for all output (e.g. `America/New_York`)                                                   |
+| `paths.activitywatch`               | string      | Path to ActivityWatch data directory                                                                          |
+| `paths.chrome`                      | string      | Path to Chrome user-data directory                                                                            |
+| `paths.chrome_profiles`             | array\|null | Profile folders to scan; `null` = auto-discover all                                                           |
+| `git_authors`                       | string[]    | Your commit author email address(es)                                                                          |
+| `discover_repos`                    | string      | Set to `"github_desktop"` to auto-discover repos from the GitHub Desktop app (see below)                      |
+| `chrome_correlation_window_seconds` | int         | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120)             |
+| `min_event_seconds_to_show`         | int         | Hide activity segments shorter than this (default 30)                                                         |
+| `projects`                          | object      | Named project definitions (see below)                                                                         |
+| `personal_hosts`                    | string[]    | Browser hostnames to bucket as personal, not work                                                             |
+| `personal_apps`                     | string[]    | App names (as reported by ActivityWatch) to bucket as personal                                                |
+| `ignored_projects`                  | string[]    | Project names to exclude from classification and reporting                                                    |
+| `groupings_map`                     | object      | Rules for `set-integration-groupings` tool: connection glob → grouping label, ClickUp default, priority order |
+| `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`, `github[]`, `llm[]`)                                     |
 
 ### Project signals
 
@@ -279,6 +280,7 @@ All tools live in `tools/` and write a timestamped backup to `reports/config/` b
 | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `list-github-desktop-repos.php`    | Lists repos from GitHub Desktop; `--apply` adds unconfigured ones to config.json                |
 | `sync-integration-projects.php`    | Pulls Harvest/ClickUp project catalogs and creates `harvest_projects`/`clickup_tasks` mappings  |
+| `set-integration-groupings.php`    | Assigns `grouping` to projects based on `groupings_map` rules in config.json                    |
 | `cleanup-integration-projects.php` | Merges high-confidence integration stubs back into existing projects (`--dry-run` or `--apply`) |
 | `sync-repo-remotes.php`            | Snapshots `git remote` URLs into `projects[*].repo_remotes`                                     |
 | `ensure-github-integration.php`    | Adds a default `integrations.github` entry (via `gh` auth) if missing                           |

@@ -2,9 +2,16 @@
 
 declare(strict_types=1);
 
-// Sets project grouping based on integration provenance:
-// - Harvest/ClickUp connections with "Big Orange"/"BOL" => "Big Orange Lab"
-// - Harvest/ClickUp connections with "Bethink" => "BethinkStudio"
+// Sets project grouping based on integration provenance.
+//
+// Reads grouping rules from the "groupings_map" key in config.json:
+//   connections    — glob patterns matched against connection names → grouping label
+//   clickup_default — fallback grouping for any ClickUp connection with no match
+//   priority       — ordered list of groupings; first match wins when a project
+//                    satisfies multiple groupings
+//
+// Run after sync-integration-projects.php to auto-assign groupings to the
+// Harvest/ClickUp-synced project stubs.
 
 const TOOL_ROOT = __DIR__ . '/..';
 
@@ -23,32 +30,30 @@ if (!isset($config['projects']) || !is_array($config['projects'])) {
 }
 
 /**
- * Maps integration connection label to a grouping name.
+ * Maps integration connection label to a grouping name via groupings_map config.
+ *
+ * @param array<string, mixed> $groupingsMap
  */
-function groupingForConnection(string $connectionName, string $source): ?string
+function groupingForConnection(string $connectionName, string $source, array $groupingsMap): ?string
 {
-    $n = strtolower($connectionName);
-    if (str_contains($n, 'bethink')) {
-        return 'BethinkStudio';
+    foreach (($groupingsMap['connections'] ?? []) as $glob => $grouping) {
+        if (fnmatch((string)$glob, $connectionName, FNM_CASEFOLD)) {
+            return (string)$grouping;
+        }
     }
-    if (str_contains($n, 'big orange') || str_contains($n, 'bigorangelab') || str_contains($n, 'bol')) {
-        return 'Big Orange Lab';
+    if ($source === 'clickup' && isset($groupingsMap['clickup_default'])) {
+        return (string)$groupingsMap['clickup_default'];
     }
-
-    // By request, ClickUp-synced projects should default to Big Orange Lab unless a Bethink connection name says otherwise.
-    if ($source === 'clickup') {
-        return 'Big Orange Lab';
-    }
-
     return null;
 }
 
 /**
  * Returns discovered Harvest project names grouped by grouping label.
  *
+ * @param array<string, mixed> $groupingsMap
  * @return array<string, array<string, bool>>
  */
-function discoverHarvestProjectsByGrouping(array $harvestConnections): array
+function discoverHarvestProjectsByGrouping(array $harvestConnections, array $groupingsMap): array
 {
     $byGrouping = [];
 
@@ -60,7 +65,7 @@ function discoverHarvestProjectsByGrouping(array $harvestConnections): array
         $token = (string)($conn['token'] ?? '');
         $accountId = (string)($conn['account_id'] ?? '');
         $name = (string)($conn['name'] ?? "harvest[$idx]");
-        $grouping = groupingForConnection($name, 'harvest');
+        $grouping = groupingForConnection($name, 'harvest', $groupingsMap);
         if ($token === '' || $accountId === '' || $grouping === null) {
             continue;
         }
@@ -152,9 +157,10 @@ function discoverHarvestProjectsByGrouping(array $harvestConnections): array
 /**
  * Returns discovered ClickUp names grouped by grouping label.
  *
+ * @param array<string, mixed> $groupingsMap
  * @return array<string, array<string, bool>>
  */
-function discoverClickUpNamesByGrouping(array $clickupConnections): array
+function discoverClickUpNamesByGrouping(array $clickupConnections, array $groupingsMap): array
 {
     $byGrouping = [];
 
@@ -165,7 +171,7 @@ function discoverClickUpNamesByGrouping(array $clickupConnections): array
 
         $token = (string)($conn['token'] ?? '');
         $name = (string)($conn['name'] ?? "clickup[$idx]");
-        $grouping = groupingForConnection($name, 'clickup');
+        $grouping = groupingForConnection($name, 'clickup', $groupingsMap);
         $rawTeamId = $conn['team_id'] ?? [];
         $teamIds = is_array($rawTeamId) ? $rawTeamId : [$rawTeamId];
         $teamIds = array_values(array_filter(array_map('strval', $teamIds), static fn($v) => $v !== ''));
@@ -281,8 +287,14 @@ function discoverClickUpNamesByGrouping(array $clickupConnections): array
     return $byGrouping;
 }
 
-$harvestByGroup = discoverHarvestProjectsByGrouping($config['integrations']['harvest'] ?? []);
-$clickupByGroup = discoverClickUpNamesByGrouping($config['integrations']['clickup'] ?? []);
+$groupingsMap = $config['groupings_map'] ?? null;
+if (!is_array($groupingsMap) || empty($groupingsMap['priority'])) {
+    fwrite(STDERR, "error: config.json has no groupings_map.priority — add a groupings_map section to config.json\n");
+    exit(1);
+}
+
+$harvestByGroup = discoverHarvestProjectsByGrouping($config['integrations']['harvest'] ?? [], $groupingsMap);
+$clickupByGroup = discoverClickUpNamesByGrouping($config['integrations']['clickup'] ?? [], $groupingsMap);
 
 $updated = 0;
 foreach ($config['projects'] as $projectName => &$projectConfig) {
@@ -292,8 +304,7 @@ foreach ($config['projects'] as $projectName => &$projectConfig) {
 
     $targetGroup = null;
 
-    // Bethink takes precedence over Big Orange Lab if both signals exist.
-    foreach (['BethinkStudio', 'Big Orange Lab'] as $group) {
+    foreach ($groupingsMap['priority'] as $group) {
         $hasMatch = false;
 
         foreach (($projectConfig['harvest_projects'] ?? []) as $pattern) {

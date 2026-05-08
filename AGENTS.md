@@ -71,6 +71,7 @@ tools/
   list-github-desktop-repos.php  — lists GitHub Desktop repos sorted by last commit;
                                    --apply adds unconfigured ones to config.json with backup
   sync-integration-projects.php  — pulls Harvest/ClickUp catalogs → harvest_projects/clickup_tasks mappings
+  set-integration-groupings.php  — assigns grouping field to projects via groupings_map config rules
   cleanup-integration-projects.php — merges high-confidence integration stubs into existing projects
   sync-repo-remotes.php          — snapshots git remote URLs into projects[*].repo_remotes
   ensure-github-integration.php  — adds default integrations.github entry (gh-auth) if absent
@@ -168,7 +169,7 @@ Flow:
 2. `llmSuggestAssignments` builds two prompt sections: a concise project list (name, grouping, repo basenames, vscode dirs, domains) and the unmatched signals (kind, value, event count).
 3. It calls `/chat/completions` via `llmPostJson`. The model is resolved from `conn['model']` or, if absent, by calling `GET /models` and taking the first entry.
 4. The response is parsed as a JSON array of `{kind, value, project, reason}` objects. Each suggestion is validated: kind must be one of `vscode/browser/slack/apps`, value must be in the actual unmatched set, project must be a known non-ignored project name.
-5. `runLlmSuggest` prints each suggestion with its reason and reads `y/N` from STDIN. Accepted suggestions are applied via `applySignalToConfig()` (same logic as `api.php`'s `reassign_signal` handler) and written to `config.json` with a timestamped backup in `reports/config/`.
+5. `runLlmSuggest` prints each suggestion with its reason and reads `y/N` from STDIN. Accepted suggestions are applied via `applySignalToProject()` from `src/config.php` (same logic as `api.php`'s `reassign_signal` handler) and written to `config.json` with a timestamped backup in `reports/config/`.
 
 `llmPostJson` uses `stream_context_create` (no curl), consistent with `httpGetJson`. The model auto-discovery path (`GET /models`) is used when `model` is not set in the connection config — useful for Ollama and vLLM endpoints where model names vary per installation.
 
@@ -210,6 +211,12 @@ Defined and validated by `config.schema.json`. Key fields:
     "personal_hosts": ["youtube.com"],
     "personal_apps": ["Discord"],
     "ignored_projects": ["Project Name"],
+    "groupings_map": {
+        // used by set-integration-groupings.php to auto-assign grouping fields
+        "connections": { "*pattern*": "Grouping Label" }, // fnmatch globs against connection names
+        "clickup_default": "Grouping Label", // fallback for ClickUp connections
+        "priority": ["Grouping Label"], // first match wins when multiple groupings apply
+    },
     "integrations": {
         "harvest": [{ "name": "Main", "account_id": "...", "token": "...", "user_id": "..." }],
         "clickup": [{ "name": "Main", "team_id": "...", "token": "...", "assignee": "123456" }],
@@ -363,6 +370,13 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 - Queries ClickUp names via team → spaces → folders → lists.
 - Case-insensitive matches reuse existing projects; new names create stubs.
 - Adds `harvest_projects` (exact names) and `clickup_tasks` (`*Name*` globs).
+
+**`set-integration-groupings.php`**
+
+- Reads `groupings_map` from `config.json` (exits with an error if absent).
+- Queries Harvest and ClickUp APIs to build a map of known project/task names per grouping.
+- For each project in `config.json`, matches `harvest_projects` and `clickup_tasks` globs against the discovered names; assigns `grouping` based on `groupings_map.priority` (first match wins).
+- Run after `sync-integration-projects.php` to auto-assign groupings to newly synced stubs.
 
 **`cleanup-integration-projects.php`** (`--baseline <backup> --dry-run|--apply`)
 
