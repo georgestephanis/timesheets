@@ -175,14 +175,15 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
       one. Stale AbortErrors are silently discarded.
 - [x] **(P3, s)** `addDays` uses local-time `Date` arithmetic which can shift
       across DST transitions. Switched to `Date.UTC` + `getUTC*` getters.
-- [ ] **(P3, s)** Slack signal parsing duplicated between `api.php`
+- [x] **(P3, s)** Slack signal parsing duplicated between `api.php`
       (`parseSlackSignal`) and `cli.php` (`applySignalToConfig`). Move to a
-      shared helper.
+      shared helper. Both now live in `src/config.php`.
 
 ## Performance
 
-- [ ] **(P2, m)** Chrome and AW SQL queries: see Correctness P1 items. Adding
-      `WHERE` clauses is the single biggest cold-start improvement.
+- [x] **(P2, m)** Chrome and AW SQL queries: see Correctness P1 items. Adding
+      `WHERE` clauses is the single biggest cold-start improvement. Done (both
+      loaders now filter by date range in SQL).
 - [x] **(P2, m)** `mergeSourceBundles` called `array_merge` per bundle (O(N²)).
       Replaced with `array_push($arr, ...(array)$slice)` — extends in place, O(N) total.
 - [ ] **(P2, m)** GitHub fetch is 5 endpoints × N repos × M authors. With
@@ -266,15 +267,15 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 
 ## Documentation
 
-- [ ] **(P2, s)** `SECURITY.md` documenting the local threat model, token
+- [x] **(P2, s)** `SECURITY.md` documenting the local threat model, token
       handling, file permissions recommendation.
-- [ ] **(P2, s)** `TROUBLESHOOTING.md` for the common failures: AW not running,
+- [x] **(P2, s)** `TROUBLESHOOTING.md` for the common failures: AW not running,
       Chrome SQLite locked, gh CLI unauthenticated, LLM endpoint unreachable.
-- [ ] **(P3, s)** Architecture diagram in `AGENTS.md` showing data flow
-      (loaders → classifier → renderer → cache).
-- [ ] **(P3, s)** Inline contract for the JSON shape produced by `renderJson`
-      and consumed by the frontend — the implicit contract is brittle (frontend
-      review finding #56).
+- [x] **(P3, s)** Architecture diagram in `AGENTS.md` showing data flow
+      (loaders → classifier → renderer → cache). ASCII art diagram at line 117.
+- [x] **(P3, s)** Inline contract for the JSON shape produced by `renderJson`
+      and consumed by the frontend — documented in `AGENTS.md` under
+      "JSON output shape".
 
 ## Maintenance / housekeeping
 
