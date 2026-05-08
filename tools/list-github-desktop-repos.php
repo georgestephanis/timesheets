@@ -19,6 +19,7 @@ declare(strict_types=1);
 define('PROJECT_ROOT', dirname(__DIR__));
 
 require_once PROJECT_ROOT . '/src/loader-github-desktop.php';
+require_once PROJECT_ROOT . '/src/config.php';
 
 $apply = in_array('--apply', $argv ?? [], true);
 
@@ -147,18 +148,6 @@ if (!$apply) {
 
 // ── Apply additions ───────────────────────────────────────────────────────────
 
-// Backup first.
-$backupDir = PROJECT_ROOT . '/reports/config';
-if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true)) {
-    fwrite(STDERR, "error: could not create reports/config backup directory\n");
-    exit(1);
-}
-$backupPath = $backupDir . '/config.github-desktop.' . date('Ymd\\THis_u') . '.json';
-if (!copy($configFile, $backupPath)) {
-    fwrite(STDERR, "error: failed to create config backup\n");
-    exit(1);
-}
-
 foreach ($additions as $add) {
     $configPath = toConfigPath($add['path'], $home);
     if ($add['is_new']) {
@@ -169,10 +158,12 @@ foreach ($additions as $add) {
     }
 }
 
-file_put_contents(
-    $configFile,
-    json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n"
-);
+try {
+    $backupPath = saveConfigWithBackup($config, $configFile, 'github-desktop');
+} catch (RuntimeException $e) {
+    fwrite(STDERR, "error: " . $e->getMessage() . "\n");
+    exit(1);
+}
 
 $newCount      = count(array_filter($additions, fn($a) => $a['is_new']));
 $existingCount = count($additions) - $newCount;

@@ -30,6 +30,8 @@ src/
                                    loadFreshSourceSlice(), backfillRecentDailyReports(),
                                    dailyReportNeedsRefresh(), invokedWithoutOptions()
   helpers.php                    — expandPath(), fnmatchAny(), fmtDur(), copyForRead(), pdo(), chromeTime()
+  config.php                     — saveConfigWithBackup(), addUniqueValue(), parseSlackSignal(),
+                                   applySignalToProject()  [canonical config I/O; used by api.php, cli.php, all tools]
   cache.php                      — reportsDir(), reportsCacheKey(), rangeIsHistorical(),
                                    rangeDays(), mergeSourceBundles(), filterSourcesToRange(),
                                    loadCachedSources(), saveCachedSources(),
@@ -92,6 +94,7 @@ Logic is split across `src/` includes with no classes. All code is plain functio
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/cli.php`                   | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange`, `generateReport`, `loadSourcesForRange`, `loadFreshSourceSlice`, `backfillRecentDailyReports`                                                                                                                                                                      |
 | `src/helpers.php`               | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime`                                                                                                                                                                                                                                                                  |
+| `src/config.php`                | `saveConfigWithBackup`, `addUniqueValue`, `parseSlackSignal`, `applySignalToProject`                                                                                                                                                                                                                                                      |
 | `src/cache.php`                 | `reportsDir`, `reportsCacheKey`, `rangeIsHistorical`, `rangeDays`, `mergeSourceBundles`, `filterSourcesToRange`, `loadCachedSources`, `saveCachedSources`, `loadDailyCachedSources`, `saveDailyCachedSources`, `findLatestReport`, `findLatestFullReportGeneratedAt`, `saveGeneratedReport`, `appendToIndex`, serialize/deserialize pairs |
 | `src/loader-activitywatch.php`  | `loadActivityWatch`, `loadAwSqlite`                                                                                                                                                                                                                                                                                                       |
 | `src/loader-chrome.php`         | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight`                                                                                                                                                                                                                                                                                 |
@@ -321,14 +324,18 @@ const SITE = {
 
 ## Tooling
 
-### PHP linting (phpcs / phpcbf)
+### PHP linting + analysis
 
 ```bash
-composer lint        # check — exits non-zero if violations found
-composer lint:fix    # auto-fix what phpcs can fix
+composer lint        # phpcs — PSR-12 across src/, www/, tools/
+composer lint:fix    # phpcbf auto-fix
+composer analyze     # phpstan level 5 (phpstan.neon + phpstan-baseline.neon)
+composer check       # lint + analyze together
 ```
 
-Ruleset: PSR-12 via `phpcs.xml.dist`. Two sniffs excluded: `PSR1.Files.SideEffects` (shebang CLI script) and `PSR12.Files.FileHeader` (shebang before `<?php`). Line limit raised to 160.
+Ruleset: PSR-12 via `phpcs.xml.dist`. Sniffs excluded: `PSR1.Files.SideEffects` and `PSR12.Files.FileHeader` (shebang). Line limit raised to 160.
+
+PHPStan is configured in `phpstan.neon` with `treatPhpDocTypesAsCertain: false`. Known false positives from defensive guards are captured in `phpstan-baseline.neon`. Do not add `@phpstan-ignore` annotations to suppress new errors — fix the root cause or discuss updating the baseline.
 
 ### JSON formatting (prettier)
 
@@ -380,7 +387,7 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 - **Schema stays in sync.** Whenever a config key is added or its shape changes, update `config.schema.json` and `config.example.json` in the same commit.
 - **Run linters before committing.** `composer lint` must exit 0. `npm run format:check` must exit 0.
 - **`config.json` is never committed.** It contains real email addresses, tokens, repo paths, and workspace names. It is in `.gitignore`.
-- **Config backups live in `reports/config/`.** Any code path that mutates `config.json` must write a timestamped backup there first. Never create root-level `config.json.bak*` files.
+- **Config backups live in `reports/config/`.** Any code path that mutates `config.json` must call `saveConfigWithBackup()` from `src/config.php` — it handles the atomic write and timestamped backup in one step. Never create root-level `config.json.bak*` files.
 - **Warnings are collected, not just logged.** `integrationWarning()` writes to STDERR/error_log AND appends to `$_integrationWarnings`. Always call `getIntegrationWarnings()` after the loading phase and include the result in JSON responses. Do not include warnings in files written to the report cache — they reflect transient state.
 - **Rebuild clears source caches.** Pass `rebuild=true` to `loadSourcesForRange` whenever the caller intends a full refresh. This ensures per-day source caches can't silently persist stale or empty data indefinitely.
 - **Cache stays flat JSON, not SQLite.** Raw source caches are per-day JSON files under `reports/YYYY-MM/DD/`. Wider date ranges compose daily buckets rather than writing range-wide source caches. Files are transparent, trivially inspectable, and selectively invalidated with `rm -rf reports/YYYY-MM/DD/`. If cross-range aggregate queries become a priority, build a thin read layer over existing report files rather than introducing SQLite for raw event storage.

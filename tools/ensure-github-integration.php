@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 const TOOL_ROOT = __DIR__ . '/..';
 
+require_once TOOL_ROOT . '/src/config.php';
+
 $configPath = TOOL_ROOT . '/config.json';
 $config = json_decode((string)file_get_contents($configPath), true);
 if (!is_array($config)) {
@@ -36,17 +38,11 @@ $config['integrations']['github'][] = [
     'authors' => $authors,
 ];
 
-$backupDir = TOOL_ROOT . '/reports/config';
-if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true)) {
-    fwrite(STDERR, "error: failed to create reports/config backup directory\n");
+try {
+    $backupPath = saveConfigWithBackup($config, $configPath, 'github');
+} catch (RuntimeException $e) {
+    fwrite(STDERR, "error: " . $e->getMessage() . "\n");
     exit(1);
 }
-$backupPath = $backupDir . '/config.github.' . date('Ymd\\THis_u') . '.json';
-if (!copy($configPath, $backupPath)) {
-    fwrite(STDERR, "error: failed to create backup\n");
-    exit(1);
-}
-
-file_put_contents($configPath, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 echo "Added GitHub integration.\n";
 echo "Backup: $backupPath\n";

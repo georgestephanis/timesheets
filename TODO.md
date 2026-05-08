@@ -208,17 +208,17 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
       `www/static/app.js` and `www/static/app.css`. Keep `report_renderer.php`
       to ~100 lines: HTML shell + `<?= $jsConfig ?>` + `<script src="...">`.
       Once extracted, add ESLint and `'use strict'` (or move to ES modules).
-- [ ] **(P1, m)** Create `src/config.php` with the canonical helpers used by
-      `api.php`, `cli.php`, and every tool: - `loadConfig(): array` - `saveConfigWithBackup(string $source): void` (atomic temp+rename+LOCK_EX) - `applySignalToProject(array &$config, string $kind, string $value, string $project): void` - `addUniqueValue(array &$arr, string $key, string $value): void` - `parseSlackSignal(string $value): ?array`
+- [x] **(P1, m)** Create `src/config.php` with the canonical helpers used by
+      `api.php`, `cli.php`, and every tool: `saveConfigWithBackup`, `addUniqueValue`,
+      `parseSlackSignal`, `applySignalToProject`. Duplicate copies removed from
+      `api.php` (`saveConfigJson`, `addUniqueValue`, `parseSlackSignal`) and
+      `cli.php` (`applySignalToConfig`). All 6 tools now use `saveConfigWithBackup`.
 
-        Then delete the duplicated copies from `api.php`, `cli.php`, and all
-        tools.
-
-- [ ] **(P1, m)** Split `src/integrations/github.php` (557 lines, one
-      ~270-line function) into per-resource helpers: `fetchCommits`,
-      `fetchPullRequests`, `fetchIssues`, `fetchIssueComments`,
-      `fetchReviewComments`, each returning rows. Keeps `loadGitHubActivity`
-      to a coordination role.
+- [x] **(P1, m)** Split `src/integrations/github.php` (557 lines, one
+      ~270-line function) into per-resource helpers: `githubFetchCommits`,
+      `githubFetchPullRequests`, `githubFetchIssues`, `githubFetchIssueComments`,
+      `githubFetchReviewComments`. `loadGitHubActivity` is now a short coordination
+      loop (~40 lines).
 - [ ] **(P2, m)** Hoist Harvest project-list + ClickUp tree-walk into
       `src/integrations/harvest-catalog.php` and `clickup-catalog.php`. Both
       `sync-integration-projects.php` and `set-integration-groupings.php` will
@@ -238,18 +238,17 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 
 ## Tooling / infrastructure
 
-- [ ] **(P1, s)** Add **PHPStan** at level 5 with a baseline:
-      `     composer require --dev phpstan/phpstan
-    `
-      Generate `phpstan.neon`, snapshot existing issues into a baseline, then
-      enforce no new violations. Add `composer analyze` script.
+- [x] **(P1, s)** Add **PHPStan** at level 5 with a baseline: `phpstan.neon` +
+      `phpstan-baseline.neon` (7 known false positives from defensive guards).
+      Fixed two real bugs in the process: json_encode error check in `config.php`,
+      and `@phpstan-impure` on `githubBudgetExceeded`. Added `composer analyze` script.
 - [ ] **(P1, m)** Add **PHPUnit**:
       `     composer require --dev phpunit/phpunit
     `
-      Initial test targets — pure functions only: - `classifyVscode`, `classifySlack`, `classifySsh` - `fmtDur`, `bsearchRight`, `chromeTime`, `awEpochToDateTime` - `applySignalToConfig`, `parseSlackSignal` - `githubRepoFromRemoteUrl` - `serialize/deserialize` round-trip pairs in `cache.php`
-- [ ] **(P1, s)** Add **GitHub Actions CI** that runs on push/PR:
-      `composer lint && composer analyze && composer test && npm run format:check`.
-      Single workflow file, ~30 lines.
+      Initial test targets — pure functions only: - `classifyVscode`, `classifySlack`, `classifySsh` - `fmtDur`, `bsearchRight`, `chromeTime`, `awEpochToDateTime` - `applySignalToProject`, `parseSlackSignal` - `githubRepoFromRemoteUrl` - `serialize/deserialize` round-trip pairs in `cache.php`
+- [x] **(P1, s)** Add **GitHub Actions CI** that runs on push/PR:
+      `composer lint && composer analyze && npm run format:check`.
+      Workflow at `.github/workflows/ci.yml`.
 - [ ] **(P2, s)** Add **`.editorconfig`** for indentation and line-ending
       consistency.
 - [ ] **(P2, s)** Add a `composer check` script chaining lint + analyze + test.

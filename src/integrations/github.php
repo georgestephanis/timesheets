@@ -5,6 +5,9 @@ declare(strict_types=1);
 /**
  * Loads GitHub activity (commits, PRs, issues, comments) for project repos.
  *
+ * Coordinates five per-resource fetchers. Returns early if a web-request budget
+ * deadline is reached (CLI has no deadline).
+ *
  * @param  array             $conn   GitHub integration config.
  * @param  array             $config Full app config.
  * @param  DateTimeImmutable $from
@@ -13,7 +16,6 @@ declare(strict_types=1);
  */
 function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from, DateTimeImmutable $to): array
 {
-    $maxPages = 1;
     $deadline = PHP_SAPI === 'cli' ? null : microtime(true) + 8.0;
     $rows = [];
     $seen = [];
@@ -34,244 +36,32 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
 
     $actorLogins = githubActorLogins($conn, $authors);
     $actorLookup = array_fill_keys($actorLogins, true);
-
     $connection = (string)($conn['name'] ?? 'github');
     $fromIso = $from->setTimezone(new DateTimeZone('UTC'))->format('c');
-    $toIso = $to->setTimezone(new DateTimeZone('UTC'))->format('c');
+    $toIso   = $to->setTimezone(new DateTimeZone('UTC'))->format('c');
 
     foreach ($reposByProject as $project => $repos) {
         foreach (array_keys($repos) as $repoFullName) {
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-
-            // Commits
-            foreach ($authors as $author) {
-                if (githubBudgetExceeded($deadline)) {
-                    return $rows;
-                }
-
-                $commitPath = '/repos/' . $repoFullName . '/commits?' . http_build_query([
-                    'since' => $fromIso,
-                    'until' => $toIso,
-                    'author' => $author,
-                ]);
-                $commits = githubPaginatedGet($commitPath, $conn, $maxPages);
-                foreach ($commits as $commit) {
-                    if (!is_array($commit)) {
-                        continue;
-                    }
-                    $sha = (string)($commit['sha'] ?? '');
-                    if ($sha === '' || isset($seen['commit:' . $repoFullName . '#' . $sha])) {
-                        continue;
-                    }
-
-                    $start = githubDateInRange((string)($commit['commit']['author']['date'] ?? ''), $from, $to);
-                    if ($start === null) {
-                        continue;
-                    }
-                    $seen['commit:' . $repoFullName . '#' . $sha] = true;
-                    $message = trim((string)($commit['commit']['message'] ?? 'GitHub commit'));
-
-                    $rows[] = [
-                        'source' => 'github',
-                        'connection' => $connection,
-                        'project' => $project,
-                        'start' => $start,
-                        'end' => $start,
-                        'seconds' => 0,
-                        'project_hint' => $repoFullName,
-                        'label' => $repoFullName . ': ' . strtok($message, "\n"),
-                        'entry_count' => 1,
-                        'activity_count' => 1,
-                        'discussion_count' => 0,
-                    ];
-                }
-            }
-
-            // Pull requests
+            githubFetchCommits($repoFullName, $authors, $conn, $from, $to, $fromIso, $toIso, $connection, $project, $seen, $rows, $deadline);
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-            $pulls = githubPaginatedGet(
-                '/repos/' . $repoFullName . '/pulls?' . http_build_query([
-                    'state' => 'all',
-                    'sort' => 'updated',
-                    'direction' => 'desc',
-                ]),
-                $conn,
-                $maxPages
-            );
-            foreach ($pulls as $pr) {
-                if (!is_array($pr)) {
-                    continue;
-                }
-                $login = strtolower((string)($pr['user']['login'] ?? ''));
-                if ($login === '' || !isset($actorLookup[$login])) {
-                    continue;
-                }
-                $start = githubDateInRange((string)($pr['created_at'] ?? ''), $from, $to);
-                if ($start === null) {
-                    continue;
-                }
-
-                $num = (string)($pr['number'] ?? '');
-                if ($num === '' || isset($seen['pr:' . $repoFullName . '#' . $num])) {
-                    continue;
-                }
-                $seen['pr:' . $repoFullName . '#' . $num] = true;
-
-                $title = trim((string)($pr['title'] ?? 'Pull request'));
-                $discussion = (int)($pr['comments'] ?? 0) + (int)($pr['review_comments'] ?? 0);
-                $rows[] = [
-                    'source' => 'github',
-                    'connection' => $connection,
-                    'project' => $project,
-                    'start' => $start,
-                    'end' => $start,
-                    'seconds' => 0,
-                    'project_hint' => $repoFullName,
-                    'label' => $repoFullName . ' PR #' . $num . ': ' . $title,
-                    'entry_count' => 1,
-                    'activity_count' => 1,
-                    'discussion_count' => max(0, $discussion),
-                ];
-            }
-
-            // Issues (excluding pull requests)
+            githubFetchPullRequests($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows);
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-            $issues = githubPaginatedGet(
-                '/repos/' . $repoFullName . '/issues?' . http_build_query([
-                    'state' => 'all',
-                    'since' => $fromIso,
-                    'sort' => 'updated',
-                    'direction' => 'desc',
-                ]),
-                $conn,
-                $maxPages
-            );
-            foreach ($issues as $issue) {
-                if (!is_array($issue) || isset($issue['pull_request'])) {
-                    continue;
-                }
-                $login = strtolower((string)($issue['user']['login'] ?? ''));
-                if ($login === '' || !isset($actorLookup[$login])) {
-                    continue;
-                }
-                $start = githubDateInRange((string)($issue['created_at'] ?? ''), $from, $to);
-                if ($start === null) {
-                    continue;
-                }
-
-                $num = (string)($issue['number'] ?? '');
-                if ($num === '' || isset($seen['issue:' . $repoFullName . '#' . $num])) {
-                    continue;
-                }
-                $seen['issue:' . $repoFullName . '#' . $num] = true;
-
-                $title = trim((string)($issue['title'] ?? 'Issue'));
-                $rows[] = [
-                    'source' => 'github',
-                    'connection' => $connection,
-                    'project' => $project,
-                    'start' => $start,
-                    'end' => $start,
-                    'seconds' => 0,
-                    'project_hint' => $repoFullName,
-                    'label' => $repoFullName . ' Issue #' . $num . ': ' . $title,
-                    'entry_count' => 1,
-                    'activity_count' => 1,
-                    'discussion_count' => (int)($issue['comments'] ?? 0),
-                ];
-            }
-
-            // Issue comments authored by the actor(s)
+            githubFetchIssues($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows);
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-            $issueComments = githubPaginatedGet(
-                '/repos/' . $repoFullName . '/issues/comments?' . http_build_query(['since' => $fromIso]),
-                $conn,
-                $maxPages
-            );
-            foreach ($issueComments as $comment) {
-                if (!is_array($comment)) {
-                    continue;
-                }
-                $login = strtolower((string)($comment['user']['login'] ?? ''));
-                if ($login === '' || !isset($actorLookup[$login])) {
-                    continue;
-                }
-                $start = githubDateInRange((string)($comment['created_at'] ?? ''), $from, $to);
-                if ($start === null) {
-                    continue;
-                }
-
-                $id = (string)($comment['id'] ?? '');
-                if ($id === '' || isset($seen['issue_comment:' . $repoFullName . '#' . $id])) {
-                    continue;
-                }
-                $seen['issue_comment:' . $repoFullName . '#' . $id] = true;
-
-                $rows[] = [
-                    'source' => 'github',
-                    'connection' => $connection,
-                    'project' => $project,
-                    'start' => $start,
-                    'end' => $start,
-                    'seconds' => 0,
-                    'project_hint' => $repoFullName,
-                    'label' => $repoFullName . ' issue comment',
-                    'entry_count' => 1,
-                    'activity_count' => 1,
-                    'discussion_count' => 1,
-                ];
-            }
-
-            // PR review comments authored by the actor(s)
+            githubFetchIssueComments($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows);
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-            $reviewComments = githubPaginatedGet(
-                '/repos/' . $repoFullName . '/pulls/comments?' . http_build_query(['since' => $fromIso]),
-                $conn,
-                $maxPages
-            );
-            foreach ($reviewComments as $comment) {
-                if (!is_array($comment)) {
-                    continue;
-                }
-                $login = strtolower((string)($comment['user']['login'] ?? ''));
-                if ($login === '' || !isset($actorLookup[$login])) {
-                    continue;
-                }
-                $start = githubDateInRange((string)($comment['created_at'] ?? ''), $from, $to);
-                if ($start === null) {
-                    continue;
-                }
-
-                $id = (string)($comment['id'] ?? '');
-                if ($id === '' || isset($seen['review_comment:' . $repoFullName . '#' . $id])) {
-                    continue;
-                }
-                $seen['review_comment:' . $repoFullName . '#' . $id] = true;
-
-                $rows[] = [
-                    'source' => 'github',
-                    'connection' => $connection,
-                    'project' => $project,
-                    'start' => $start,
-                    'end' => $start,
-                    'seconds' => 0,
-                    'project_hint' => $repoFullName,
-                    'label' => $repoFullName . ' PR review comment',
-                    'entry_count' => 1,
-                    'activity_count' => 1,
-                    'discussion_count' => 1,
-                ];
-            }
+            githubFetchReviewComments($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows);
         }
     }
 
@@ -279,7 +69,264 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
 }
 
 /**
+ * Fetches commits for a single repo authored by any of the given email addresses.
+ *
+ * @param list<string>         $authors
+ * @param array<string, bool>  $seen    Dedup set, modified in place.
+ * @param list<array>          $rows    Result accumulator, modified in place.
+ */
+function githubFetchCommits(
+    string $repoFullName,
+    array $authors,
+    array $conn,
+    DateTimeImmutable $from,
+    DateTimeImmutable $to,
+    string $fromIso,
+    string $toIso,
+    string $connection,
+    string $project,
+    array &$seen,
+    array &$rows,
+    ?float $deadline
+): void {
+    foreach ($authors as $author) {
+        if (githubBudgetExceeded($deadline)) {
+            return;
+        }
+        $path = '/repos/' . $repoFullName . '/commits?' . http_build_query([
+            'since'  => $fromIso,
+            'until'  => $toIso,
+            'author' => $author,
+        ]);
+        foreach (githubPaginatedGet($path, $conn, 1) as $commit) {
+            if (!is_array($commit)) {
+                continue;
+            }
+            $sha = (string)($commit['sha'] ?? '');
+            $key = 'commit:' . $repoFullName . '#' . $sha;
+            if ($sha === '' || isset($seen[$key])) {
+                continue;
+            }
+            $start = githubDateInRange((string)($commit['commit']['author']['date'] ?? ''), $from, $to);
+            if ($start === null) {
+                continue;
+            }
+            $seen[$key] = true;
+            $message = trim((string)($commit['commit']['message'] ?? 'GitHub commit'));
+            $rows[] = [
+                'source' => 'github', 'connection' => $connection, 'project' => $project,
+                'start' => $start, 'end' => $start, 'seconds' => 0,
+                'project_hint' => $repoFullName,
+                'label' => $repoFullName . ': ' . strtok($message, "\n"),
+                'entry_count' => 1, 'activity_count' => 1, 'discussion_count' => 0,
+            ];
+        }
+    }
+}
+
+/**
+ * Fetches pull requests opened by the actor(s) in the given date range.
+ *
+ * @param array<string, bool>  $actorLookup Login set for attribution filtering.
+ * @param array<string, bool>  $seen        Dedup set, modified in place.
+ * @param list<array>          $rows        Result accumulator, modified in place.
+ */
+function githubFetchPullRequests(
+    string $repoFullName,
+    array $conn,
+    DateTimeImmutable $from,
+    DateTimeImmutable $to,
+    string $fromIso,
+    string $connection,
+    string $project,
+    array $actorLookup,
+    array &$seen,
+    array &$rows
+): void {
+    $path = '/repos/' . $repoFullName . '/pulls?' . http_build_query([
+        'state' => 'all', 'sort' => 'updated', 'direction' => 'desc',
+    ]);
+    foreach (githubPaginatedGet($path, $conn, 1) as $pr) {
+        if (!is_array($pr)) {
+            continue;
+        }
+        $login = strtolower((string)($pr['user']['login'] ?? ''));
+        if ($login === '' || !isset($actorLookup[$login])) {
+            continue;
+        }
+        $start = githubDateInRange((string)($pr['created_at'] ?? ''), $from, $to);
+        if ($start === null) {
+            continue;
+        }
+        $num = (string)($pr['number'] ?? '');
+        $key = 'pr:' . $repoFullName . '#' . $num;
+        if ($num === '' || isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $title = trim((string)($pr['title'] ?? 'Pull request'));
+        $discussion = (int)($pr['comments'] ?? 0) + (int)($pr['review_comments'] ?? 0);
+        $rows[] = [
+            'source' => 'github', 'connection' => $connection, 'project' => $project,
+            'start' => $start, 'end' => $start, 'seconds' => 0,
+            'project_hint' => $repoFullName,
+            'label' => $repoFullName . ' PR #' . $num . ': ' . $title,
+            'entry_count' => 1, 'activity_count' => 1, 'discussion_count' => max(0, $discussion),
+        ];
+    }
+}
+
+/**
+ * Fetches issues (excluding PRs) opened by the actor(s) in the given date range.
+ *
+ * @param array<string, bool>  $actorLookup Login set for attribution filtering.
+ * @param array<string, bool>  $seen        Dedup set, modified in place.
+ * @param list<array>          $rows        Result accumulator, modified in place.
+ */
+function githubFetchIssues(
+    string $repoFullName,
+    array $conn,
+    DateTimeImmutable $from,
+    DateTimeImmutable $to,
+    string $fromIso,
+    string $connection,
+    string $project,
+    array $actorLookup,
+    array &$seen,
+    array &$rows
+): void {
+    $path = '/repos/' . $repoFullName . '/issues?' . http_build_query([
+        'state' => 'all', 'since' => $fromIso, 'sort' => 'updated', 'direction' => 'desc',
+    ]);
+    foreach (githubPaginatedGet($path, $conn, 1) as $issue) {
+        if (!is_array($issue) || isset($issue['pull_request'])) {
+            continue;
+        }
+        $login = strtolower((string)($issue['user']['login'] ?? ''));
+        if ($login === '' || !isset($actorLookup[$login])) {
+            continue;
+        }
+        $start = githubDateInRange((string)($issue['created_at'] ?? ''), $from, $to);
+        if ($start === null) {
+            continue;
+        }
+        $num = (string)($issue['number'] ?? '');
+        $key = 'issue:' . $repoFullName . '#' . $num;
+        if ($num === '' || isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $title = trim((string)($issue['title'] ?? 'Issue'));
+        $rows[] = [
+            'source' => 'github', 'connection' => $connection, 'project' => $project,
+            'start' => $start, 'end' => $start, 'seconds' => 0,
+            'project_hint' => $repoFullName,
+            'label' => $repoFullName . ' Issue #' . $num . ': ' . $title,
+            'entry_count' => 1, 'activity_count' => 1, 'discussion_count' => (int)($issue['comments'] ?? 0),
+        ];
+    }
+}
+
+/**
+ * Fetches issue comments left by the actor(s) since $fromIso.
+ *
+ * @param array<string, bool>  $actorLookup Login set for attribution filtering.
+ * @param array<string, bool>  $seen        Dedup set, modified in place.
+ * @param list<array>          $rows        Result accumulator, modified in place.
+ */
+function githubFetchIssueComments(
+    string $repoFullName,
+    array $conn,
+    DateTimeImmutable $from,
+    DateTimeImmutable $to,
+    string $fromIso,
+    string $connection,
+    string $project,
+    array $actorLookup,
+    array &$seen,
+    array &$rows
+): void {
+    $path = '/repos/' . $repoFullName . '/issues/comments?' . http_build_query(['since' => $fromIso]);
+    foreach (githubPaginatedGet($path, $conn, 1) as $comment) {
+        if (!is_array($comment)) {
+            continue;
+        }
+        $login = strtolower((string)($comment['user']['login'] ?? ''));
+        if ($login === '' || !isset($actorLookup[$login])) {
+            continue;
+        }
+        $start = githubDateInRange((string)($comment['created_at'] ?? ''), $from, $to);
+        if ($start === null) {
+            continue;
+        }
+        $id = (string)($comment['id'] ?? '');
+        $key = 'issue_comment:' . $repoFullName . '#' . $id;
+        if ($id === '' || isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $rows[] = [
+            'source' => 'github', 'connection' => $connection, 'project' => $project,
+            'start' => $start, 'end' => $start, 'seconds' => 0,
+            'project_hint' => $repoFullName,
+            'label' => $repoFullName . ' issue comment',
+            'entry_count' => 1, 'activity_count' => 1, 'discussion_count' => 1,
+        ];
+    }
+}
+
+/**
+ * Fetches PR review comments left by the actor(s) since $fromIso.
+ *
+ * @param array<string, bool>  $actorLookup Login set for attribution filtering.
+ * @param array<string, bool>  $seen        Dedup set, modified in place.
+ * @param list<array>          $rows        Result accumulator, modified in place.
+ */
+function githubFetchReviewComments(
+    string $repoFullName,
+    array $conn,
+    DateTimeImmutable $from,
+    DateTimeImmutable $to,
+    string $fromIso,
+    string $connection,
+    string $project,
+    array $actorLookup,
+    array &$seen,
+    array &$rows
+): void {
+    $path = '/repos/' . $repoFullName . '/pulls/comments?' . http_build_query(['since' => $fromIso]);
+    foreach (githubPaginatedGet($path, $conn, 1) as $comment) {
+        if (!is_array($comment)) {
+            continue;
+        }
+        $login = strtolower((string)($comment['user']['login'] ?? ''));
+        if ($login === '' || !isset($actorLookup[$login])) {
+            continue;
+        }
+        $start = githubDateInRange((string)($comment['created_at'] ?? ''), $from, $to);
+        if ($start === null) {
+            continue;
+        }
+        $id = (string)($comment['id'] ?? '');
+        $key = 'review_comment:' . $repoFullName . '#' . $id;
+        if ($id === '' || isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $rows[] = [
+            'source' => 'github', 'connection' => $connection, 'project' => $project,
+            'start' => $start, 'end' => $start, 'seconds' => 0,
+            'project_hint' => $repoFullName,
+            'label' => $repoFullName . ' PR review comment',
+            'entry_count' => 1, 'activity_count' => 1, 'discussion_count' => 1,
+        ];
+    }
+}
+
+/**
  * Returns true when the optional GitHub fetch deadline has been reached.
+ *
+ * @phpstan-impure
  */
 function githubBudgetExceeded(?float $deadline): bool
 {
@@ -317,7 +364,7 @@ function githubActorLogins(array $conn, array $authors): array
         if ($login !== '') {
             $logins[] = $login;
         }
-    } catch (RuntimeException $e) {
+    } catch (RuntimeException) {
         // No-op: keep best-effort behavior.
     }
 

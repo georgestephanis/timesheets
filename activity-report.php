@@ -47,6 +47,7 @@ if (!is_array($CONFIG)) {
 }
 
 require_once PROJECT_ROOT . '/src/helpers.php';
+require_once PROJECT_ROOT . '/src/config.php';
 require_once PROJECT_ROOT . '/src/cache.php';
 require_once PROJECT_ROOT . '/src/loader-activitywatch.php';
 require_once PROJECT_ROOT . '/src/loader-chrome.php';

@@ -1,0 +1,13 @@
+parameters:
+    level: 5
+    paths:
+        - activity-report.php
+        - src/
+        - www/
+    # PHPDoc return types (e.g. list<array<string,mixed>>) cause false positives
+    # in defensive guards like `?? []` and `instanceof`. Treat them as hints only.
+    treatPhpDocTypesAsCertain: false
+    # tools/ not included — they are standalone scripts that declare globals at top-level
+    # which confuse PHPStan's scope model. Lint coverage via phpcs is sufficient there.
+includes:
+    - phpstan-baseline.neon

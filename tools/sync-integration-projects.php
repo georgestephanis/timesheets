@@ -7,6 +7,7 @@ declare(strict_types=1);
 const TOOL_ROOT = __DIR__ . '/..';
 
 require_once TOOL_ROOT . '/src/loader-integrations.php';
+require_once TOOL_ROOT . '/src/config.php';
 
 $configPath = TOOL_ROOT . '/config.json';
 $configRaw = file_get_contents($configPath);
@@ -281,19 +282,12 @@ foreach (array_keys($clickupNames) as $name) {
     $ensureMapping($local, 'clickup_tasks', '*' . $name . '*');
 }
 
-$backupDir = TOOL_ROOT . '/reports/config';
-if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true)) {
-    fwrite(STDERR, "error: failed to create reports/config backup directory\n");
+try {
+    $backup = saveConfigWithBackup($config, $configPath, 'sync');
+} catch (RuntimeException $e) {
+    fwrite(STDERR, "error: " . $e->getMessage() . "\n");
     exit(1);
 }
-
-$backup = $backupDir . '/config.sync.' . date('Ymd\\THis_u') . '.json';
-if (!copy($configPath, $backup)) {
-    fwrite(STDERR, "error: failed to create backup\n");
-    exit(1);
-}
-
-file_put_contents($configPath, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 
 echo "Backup: $backup\n";
 echo 'Added projects: ' . count(array_unique($addedProjects)) . "\n";

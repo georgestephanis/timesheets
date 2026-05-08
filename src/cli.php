@@ -448,18 +448,6 @@ function runLlmSuggest(array $config, array $opts, DateTimeZone $tz, DateTimeImm
     }
 
     $configFile = PROJECT_ROOT . '/config.json';
-    $backupDir  = PROJECT_ROOT . '/reports/config';
-    if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true)) {
-        fwrite(STDERR, "error: could not create config backup directory\n");
-        return;
-    }
-    $stamp      = (new DateTimeImmutable('now'))->format('Ymd\THis_u');
-    $backupPath = $backupDir . '/config.llm-suggest.' . $stamp . '.json';
-    if (!copy($configFile, $backupPath)) {
-        fwrite(STDERR, "error: could not back up config.json\n");
-        return;
-    }
-
     $current = json_decode((string)file_get_contents($configFile), true);
     if (!is_array($current)) {
         fwrite(STDERR, "error: config.json is invalid JSON\n");
@@ -467,95 +455,18 @@ function runLlmSuggest(array $config, array $opts, DateTimeZone $tz, DateTimeImm
     }
 
     foreach ($accepted as $s) {
-        applySignalToConfig($current, $s['kind'], $s['value'], $s['project']);
+        applySignalToProject($current, $s['kind'], $s['value'], $s['project']);
     }
 
-    if (file_put_contents($configFile, json_encode($current, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n", LOCK_EX) === false) {
-        fwrite(STDERR, "error: could not write config.json\n");
+    try {
+        $backupPath = saveConfigWithBackup($current, $configFile, 'llm-suggest');
+    } catch (RuntimeException $e) {
+        fwrite(STDERR, "error: " . $e->getMessage() . "\n");
         return;
     }
 
     fwrite(STDOUT, count($accepted) . " assignment(s) saved to config.json.\n");
     fwrite(STDOUT, "Backup: $backupPath\n");
-}
-
-/**
- * Applies one signal-to-project assignment to the config array in place.
- *
- * Mirrors the reassign_signal logic from api.php. No-ops silently when the project is
- * unknown or the value is already present.
- *
- * @param array<string, mixed> $config  Config array modified in place.
- * @param string               $kind    One of: vscode, browser, slack, apps.
- * @param string               $value   Signal value (e.g. folder name, hostname, "ssh:host").
- * @param string               $project Exact project name.
- */
-function applySignalToConfig(array &$config, string $kind, string $value, string $project): void
-{
-    if (!isset($config['projects'][$project])) {
-        return;
-    }
-    $p =& $config['projects'][$project];
-
-    switch ($kind) {
-        case 'vscode':
-            $p['vscode_dirs'] = $p['vscode_dirs'] ?? [];
-            if (!in_array($value, $p['vscode_dirs'], true)) {
-                $p['vscode_dirs'][] = $value;
-            }
-            break;
-
-        case 'browser':
-            if ($value === '' || $value === '(no url)') {
-                break;
-            }
-            $p['domains'] = $p['domains'] ?? [];
-            if (!in_array($value, $p['domains'], true)) {
-                $p['domains'][] = $value;
-            }
-            break;
-
-        case 'slack':
-            if (!str_contains($value, ' / ')) {
-                break;
-            }
-            [$workspace, $channel] = explode(' / ', $value, 2);
-            $workspace = trim($workspace);
-            $channel   = trim($channel);
-            if ($workspace === '' || $channel === '') {
-                break;
-            }
-            $p['slack'] = $p['slack'] ?? [];
-            $rule       = ['workspace' => $workspace];
-            if (!in_array($channel, ['__threads__', '__activity__', '__huddle__'], true)) {
-                $rule['channel_glob'] = $channel;
-            }
-            foreach ($p['slack'] as $existing) {
-                if (
-                    ($existing['workspace'] ?? null) === $rule['workspace']
-                    && ($existing['channel_glob'] ?? null) === ($rule['channel_glob'] ?? null)
-                ) {
-                    return;
-                }
-            }
-            $p['slack'][] = $rule;
-            break;
-
-        case 'apps':
-            if (str_starts_with($value, 'ssh:')) {
-                $host           = substr($value, 4);
-                $p['ssh_hosts'] = $p['ssh_hosts'] ?? [];
-                if (!in_array($host, $p['ssh_hosts'], true)) {
-                    $p['ssh_hosts'][] = $host;
-                }
-            } else {
-                $p['apps'] = $p['apps'] ?? [];
-                if (!in_array($value, $p['apps'], true)) {
-                    $p['apps'][] = $value;
-                }
-            }
-            break;
-    }
 }
 
 /**

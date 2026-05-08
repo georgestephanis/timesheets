@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 const TOOL_ROOT = __DIR__ . '/..';
 
+require_once TOOL_ROOT . '/src/config.php';
+
 $options = getopt('', ['baseline:', 'dry-run', 'apply']);
 $baselineArg = (string)($options['baseline'] ?? '');
 $doApply = array_key_exists('apply', $options);
@@ -165,18 +167,11 @@ if ($dryRun) {
 }
 
 $current['projects'] = $curProjects;
-$backupDir = TOOL_ROOT . '/reports/config';
-if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true)) {
-    fwrite(STDERR, "error: failed to create reports/config backup directory\n");
+try {
+    $backup = saveConfigWithBackup($current, $currentPath, 'cleanup');
+} catch (RuntimeException $e) {
+    fwrite(STDERR, "error: " . $e->getMessage() . "\n");
     exit(1);
 }
-
-$backup = $backupDir . '/config.cleanup.' . date('Ymd\\THis_u') . '.json';
-if (!copy($currentPath, $backup)) {
-    fwrite(STDERR, "error: failed to create cleanup backup\n");
-    exit(1);
-}
-
-file_put_contents($currentPath, json_encode($current, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 echo 'Cleanup backup: ' . $backup . "\n";
 echo 'Applied merges: ' . $applied . "\n";

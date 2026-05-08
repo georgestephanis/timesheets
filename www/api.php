@@ -25,6 +25,8 @@ set_error_handler(function (int $errno, string $errstr): never {
 
 define('PROJECT_ROOT', dirname(__DIR__));
 
+require_once PROJECT_ROOT . '/src/config.php';
+
 $configFile = PROJECT_ROOT . '/config.json';
 if (!file_exists($configFile)) {
     http_response_code(500);
@@ -36,68 +38,6 @@ if (!is_array($config)) {
     http_response_code(500);
     echo json_encode(['error' => 'config.json is not valid JSON']);
     exit(1);
-}
-
-/**
- * Writes config.json using pretty-printed JSON and a trailing newline.
- */
-function saveConfigJson(string $configFile, array $config): void
-{
-    if (file_exists($configFile)) {
-        $backupDir = PROJECT_ROOT . '/reports/config';
-        if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true)) {
-            throw new RuntimeException('Failed to create config backup directory');
-        }
-
-        $stamp = (new DateTimeImmutable('now'))->format('Ymd\THis_u');
-        $backupPath = $backupDir . '/config.' . $stamp . '.json';
-        if (!copy($configFile, $backupPath)) {
-            throw new RuntimeException('Failed to backup config.json');
-        }
-    }
-
-    $json = json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
-    if ($json === false) {
-        throw new RuntimeException('Failed to encode config.json');
-    }
-    $tmpFile = $configFile . '.tmp.' . getmypid();
-    if (file_put_contents($tmpFile, $json, LOCK_EX) === false) {
-        throw new RuntimeException('Failed to write config.json');
-    }
-    if (!rename($tmpFile, $configFile)) {
-        @unlink($tmpFile);
-        throw new RuntimeException('Failed to atomically update config.json');
-    }
-}
-
-/**
- * Appends a value to an array key if not already present.
- */
-function addUniqueValue(array &$arr, string $key, string $value): void
-{
-    $arr[$key] = $arr[$key] ?? [];
-    if (!in_array($value, $arr[$key], true)) {
-        $arr[$key][] = $value;
-    }
-}
-
-/**
- * Parses a "Workspace / channel" signal label into parts.
- *
- * @return array{workspace: string, channel: string}|null
- */
-function parseSlackSignal(string $value): ?array
-{
-    if (!str_contains($value, ' / ')) {
-        return null;
-    }
-    [$workspace, $channel] = explode(' / ', $value, 2);
-    $workspace = trim($workspace);
-    $channel = trim($channel);
-    if ($workspace === '' || $channel === '') {
-        return null;
-    }
-    return ['workspace' => $workspace, 'channel' => $channel];
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -145,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $config['ignored_projects'][] = $name;
                 }
             }
-            saveConfigJson($configFile, $config);
+            saveConfigWithBackup($config, $configFile, 'api');
             echo json_encode(['ok' => true, 'ignored_projects' => $config['ignored_projects']]);
             exit;
 
@@ -189,8 +129,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         echo json_encode(['error' => 'Personal reassignment is supported for browser and apps signals']);
                         exit(1);
                 }
-
-                saveConfigJson($configFile, $config);
+                saveConfigWithBackup($config, $configFile, 'api');
                 echo json_encode(['ok' => true]);
                 exit;
             }
@@ -201,59 +140,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit(1);
             }
 
-            $p =& $config['projects'][$project];
-            switch ($kind) {
-                case 'vscode':
-                    addUniqueValue($p, 'vscode_dirs', $value);
-                    break;
-                case 'browser':
-                    if ($value === '(no url)') {
-                        http_response_code(400);
-                        echo json_encode(['error' => 'Cannot reassign browser signal without host']);
-                        exit(1);
-                    }
-                    addUniqueValue($p, 'domains', $value);
-                    break;
-                case 'slack':
-                    $parsed = parseSlackSignal($value);
-                    if ($parsed === null) {
-                        http_response_code(400);
-                        echo json_encode(['error' => 'Invalid slack signal format']);
-                        exit(1);
-                    }
-                    $p['slack'] = $p['slack'] ?? [];
-                    $rule = ['workspace' => $parsed['workspace']];
-                    if ($parsed['channel'] !== '__threads__' && $parsed['channel'] !== '__activity__' && $parsed['channel'] !== '__huddle__') {
-                        $rule['channel_glob'] = $parsed['channel'];
-                    }
-                    $exists = false;
-                    foreach ($p['slack'] as $existing) {
-                        if (
-                            ($existing['workspace'] ?? null) === $rule['workspace']
-                            && ($existing['channel_glob'] ?? null) === ($rule['channel_glob'] ?? null)
-                        ) {
-                            $exists = true;
-                            break;
-                        }
-                    }
-                    if (!$exists) {
-                        $p['slack'][] = $rule;
-                    }
-                    break;
-                case 'apps':
-                    if (str_starts_with($value, 'ssh:')) {
-                        addUniqueValue($p, 'ssh_hosts', substr($value, 4));
-                    } else {
-                        addUniqueValue($p, 'apps', $value);
-                    }
-                    break;
-                default:
-                    http_response_code(400);
-                    echo json_encode(['error' => 'Unsupported kind']);
-                    exit(1);
+            // Validate inputs that applySignalToProject would silently ignore.
+            if ($kind === 'browser' && $value === '(no url)') {
+                http_response_code(400);
+                echo json_encode(['error' => 'Cannot reassign browser signal without host']);
+                exit(1);
+            }
+            if ($kind === 'slack' && parseSlackSignal($value) === null) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Invalid slack signal format']);
+                exit(1);
+            }
+            if (!in_array($kind, ['vscode', 'browser', 'slack', 'apps'], true)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'Unsupported kind']);
+                exit(1);
             }
 
-            saveConfigJson($configFile, $config);
+            applySignalToProject($config, $kind, $value, $project);
+            saveConfigWithBackup($config, $configFile, 'api');
             echo json_encode(['ok' => true]);
             exit;
 
@@ -278,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $config['projects'][$project]['grouping'] = $grouping;
             }
 
-            saveConfigJson($configFile, $config);
+            saveConfigWithBackup($config, $configFile, 'api');
             echo json_encode(['ok' => true]);
             exit;
 
