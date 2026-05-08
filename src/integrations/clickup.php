@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @param  array $conn ClickUp connection config (needs token).
  * @return string|null
  */
-function resolveClickUpUserId(array $conn): ?string
+function resolveClickUpUserId(array $conn, int $timeout = 20): ?string
 {
     $token = (string)($conn['token'] ?? '');
     if ($token === '') {
@@ -20,7 +20,7 @@ function resolveClickUpUserId(array $conn): ?string
         $json = httpGetJson('https://api.clickup.com/api/v2/user', [
             'Authorization: ' . $token,
             'Accept: application/json',
-        ]);
+        ], $timeout);
         $id = $json['user']['id'] ?? null;
         return idLooksStandard($id) ? (string)$id : null;
     } catch (RuntimeException) {
@@ -36,7 +36,7 @@ function resolveClickUpUserId(array $conn): ?string
  * @param  DateTimeImmutable $to
  * @return list<array<string, mixed>>
  */
-function loadClickUpTimeEntries(array $conn, DateTimeImmutable $from, DateTimeImmutable $to): array
+function loadClickUpTimeEntries(array $conn, DateTimeImmutable $from, DateTimeImmutable $to, int $timeout = 20): array
 {
     $token = (string)($conn['token'] ?? '');
     $rawTeamId = $conn['team_id'] ?? '';
@@ -66,7 +66,7 @@ function loadClickUpTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
             $json = httpGetJson($url, [
                 'Authorization: ' . $token,
                 'Accept: application/json',
-            ]);
+            ], $timeout);
 
             $entries = $json['data'] ?? [];
             foreach ($entries as $e) {

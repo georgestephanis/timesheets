@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @param  array $conn Harvest connection config (needs token + account_id).
  * @return int|null
  */
-function resolveHarvestUserId(array $conn): ?int
+function resolveHarvestUserId(array $conn, int $timeout = 20): ?int
 {
     $token = (string)($conn['token'] ?? '');
     $accountId = (string)($conn['account_id'] ?? '');
@@ -23,7 +23,7 @@ function resolveHarvestUserId(array $conn): ?int
             'Harvest-Account-ID: ' . $accountId,
             'User-Agent: activity-report',
             'Accept: application/json',
-        ]);
+        ], $timeout);
         $id = $json['id'] ?? null;
         return is_int($id) ? $id : (is_numeric($id) ? (int)$id : null);
     } catch (RuntimeException) {
@@ -39,7 +39,7 @@ function resolveHarvestUserId(array $conn): ?int
  * @param  DateTimeImmutable $to
  * @return list<array<string, mixed>>
  */
-function loadHarvestTimeEntries(array $conn, DateTimeImmutable $from, DateTimeImmutable $to): array
+function loadHarvestTimeEntries(array $conn, DateTimeImmutable $from, DateTimeImmutable $to, int $timeout = 20): array
 {
     $token = (string)($conn['token'] ?? '');
     $accountId = (string)($conn['account_id'] ?? '');
@@ -68,7 +68,7 @@ function loadHarvestTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
             'Harvest-Account-ID: ' . $accountId,
             'User-Agent: activity-report',
             'Accept: application/json',
-        ]);
+        ], $timeout);
 
         foreach (($json['time_entries'] ?? []) as $e) {
             if (!is_array($e)) {

@@ -25,14 +25,14 @@ function idLooksStandard(mixed $value): bool
  * @param  array<int, string>  $headers
  * @return array<string, mixed>
  */
-function httpGetJson(string $url, array $headers): array
+function httpGetJson(string $url, array $headers, int $timeout = 20): array
 {
     $ctx = stream_context_create([
         'http' => [
             'method' => 'GET',
             'header' => implode("\r\n", $headers),
             'ignore_errors' => true,
-            'timeout' => 20,
+            'timeout' => $timeout,
         ],
     ]);
 

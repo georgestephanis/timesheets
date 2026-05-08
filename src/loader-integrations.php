@@ -26,6 +26,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
     $rows = [];
     $integrations = $config['integrations'] ?? [];
     $configDirty = false;
+    $httpTimeout = (int)($config['integration_http_timeout_seconds'] ?? 20);
 
     foreach (($integrations['harvest'] ?? []) as $idx => $conn) {
         if (!is_array($conn)) {
@@ -34,7 +35,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
         $label = (string)($conn['name'] ?? "harvest[$idx]");
         // Auto-resolve user_id from /v2/users/me when absent/non-standard, then persist it.
         if (!idLooksStandard($conn['user_id'] ?? null)) {
-            $resolved = resolveHarvestUserId($conn);
+            $resolved = resolveHarvestUserId($conn, $httpTimeout);
             if ($resolved !== null) {
                 $conn['user_id'] = $resolved;
                 $config['integrations']['harvest'][$idx]['user_id'] = $resolved;
@@ -42,7 +43,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
             }
         }
         try {
-            foreach (loadHarvestTimeEntries($conn, $from, $to) as $row) {
+            foreach (loadHarvestTimeEntries($conn, $from, $to, $httpTimeout) as $row) {
                 $rows[] = $row;
             }
         } catch (RuntimeException $e) {
@@ -57,7 +58,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
         $label = (string)($conn['name'] ?? "clickup[$idx]");
         // Auto-resolve assignee from /api/v2/user when absent/non-standard, then persist it.
         if (!idLooksStandard($conn['assignee'] ?? null)) {
-            $resolved = resolveClickUpUserId($conn);
+            $resolved = resolveClickUpUserId($conn, $httpTimeout);
             if ($resolved !== null) {
                 $conn['assignee'] = $resolved;
                 $config['integrations']['clickup'][$idx]['assignee'] = $resolved;
@@ -65,7 +66,7 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
             }
         }
         try {
-            foreach (loadClickUpTimeEntries($conn, $from, $to) as $row) {
+            foreach (loadClickUpTimeEntries($conn, $from, $to, $httpTimeout) as $row) {
                 $rows[] = $row;
             }
         } catch (RuntimeException $e) {

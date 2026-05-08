@@ -15,6 +15,11 @@
 
     "chrome_correlation_window_seconds": 120,
     "min_event_seconds_to_show": 30,
+    "timeline_merge_gap_seconds": 300,
+    "timeline_min_seconds": 60,
+    "integration_http_timeout_seconds": 20,
+    "github_command_timeout_seconds": 8,
+    "github_cache_ttl": "1h",
 
     "projects": {
         "Acme Corp": {

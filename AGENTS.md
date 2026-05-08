@@ -171,7 +171,7 @@ Passing `rebuild=true` bypasses **and overwrites** the per-day source caches. Th
 
 **`backfillChromeUrls`** fills in missing URLs on Chrome ActivityWatch events by correlating window-focus times with the Chrome history SQLite within `chrome_correlation_window_seconds`.
 
-**`classifyAndAggregate`** returns `[$bucket, $unmatched, $timeline]`. `$bucket` is indexed `[date][project]` with `seconds`, `active_seconds`, `activity_ratio`, `detail` (broken down by kind: vscode/browser/slack/ssh/app/harvest/clickup/github), `external` (per-source entry/activity/discussion counts), and `commits`. `$unmatched` records signals that didn't match any project rule. `$timeline` is a per-date list of `{s, e, p, g}` segments (seconds from local midnight) for the day-timeline SVG bar in the web UI; sub-minute segments and gaps ≤ 60 s between same-project events are merged/dropped before return.
+**`classifyAndAggregate`** returns `[$bucket, $unmatched, $timeline]`. `$bucket` is indexed `[date][project]` with `seconds`, `active_seconds`, `activity_ratio`, `detail` (broken down by kind: vscode/browser/slack/ssh/app/harvest/clickup/github), `external` (per-source entry/activity/discussion counts), and `commits`. `$unmatched` records signals that didn't match any project rule. `$timeline` is a per-date list of `{s, e, p, g}` segments (seconds from local midnight) for the day-timeline SVG bar in the web UI; segments shorter than `timeline_min_seconds` (default 60 s) are dropped, and same-project segments separated by less than `timeline_merge_gap_seconds` (default 300 s) are merged before return.
 
 ### Signal matching priority (inside `projectForSignals`)
 
@@ -270,6 +270,16 @@ Defined and validated by `config.schema.json`. Key fields:
     "project_gap_window_seconds": 300,
     // ^ If the user switches to untracked/personal activity for < this many seconds
     //   and then returns to the same project, the gap is bridged into that project (default 300).
+    "timeline_merge_gap_seconds": 300,
+    // ^ Same-project timeline segments separated by less than this are merged in the web UI (default 300).
+    "timeline_min_seconds": 60,
+    // ^ Timeline segments shorter than this are dropped from the web UI timeline bar (default 60).
+    "integration_http_timeout_seconds": 20,
+    // ^ HTTP request timeout in seconds for Harvest and ClickUp API calls (default 20).
+    "github_command_timeout_seconds": 8,
+    // ^ Timeout in seconds per gh CLI command when fetching GitHub activity (default 8).
+    "github_cache_ttl": "1h",
+    // ^ Cache TTL string passed to gh api --cache (e.g. "1h", "30m"; default "1h").
     "groupings_map": {
         // used by set-integration-groupings.php to auto-assign grouping fields
         "connections": { "*pattern*": "Grouping Label" }, // fnmatch globs against connection names

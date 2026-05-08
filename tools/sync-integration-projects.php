@@ -61,7 +61,7 @@ foreach (($config['integrations']['harvest'] ?? []) as $idx => $conn) {
         continue;
     }
 
-    foreach (array_keys(harvestFetchProjectNames($conn)) as $name) {
+    foreach (array_keys(harvestFetchProjectNames($conn, (int)($config['integration_http_timeout_seconds'] ?? 20))) as $name) {
         $local = $upsertProject($name);
         $ensureMapping($local, 'harvest_projects', $name);
     }
@@ -74,7 +74,7 @@ foreach (($config['integrations']['clickup'] ?? []) as $idx => $conn) {
         continue;
     }
 
-    foreach (array_keys(clickupFetchAllNames($conn)) as $name) {
+    foreach (array_keys(clickupFetchAllNames($conn, (int)($config['integration_http_timeout_seconds'] ?? 20))) as $name) {
         $clickupNames[$name] = true;
     }
 }

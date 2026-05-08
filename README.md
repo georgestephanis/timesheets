@@ -101,6 +101,11 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 | `correlated_apps`                   | string[]    | App names whose time is attributed to the most-recently-active project within `app_correlation_window_seconds`     |
 | `app_correlation_window_seconds`    | int         | Lookback window (seconds) for correlated-app attribution (default 900)                                             |
 | `project_gap_window_seconds`        | int         | Bridge untracked/personal gaps shorter than this back to the surrounding project (default 300)                     |
+| `timeline_merge_gap_seconds`        | int         | Merge same-project timeline segments separated by less than this many seconds in the web UI (default 300)          |
+| `timeline_min_seconds`              | int         | Drop timeline segments shorter than this from the web UI timeline bar (default 60)                                 |
+| `integration_http_timeout_seconds`  | int         | HTTP timeout for Harvest and ClickUp API calls (default 20)                                                        |
+| `github_command_timeout_seconds`    | int         | Timeout per `gh` CLI command when fetching GitHub activity (default 8)                                             |
+| `github_cache_ttl`                  | string      | Cache TTL passed to `gh api --cache` (e.g. `"1h"`, `"30m"`; default `"1h"`)                                       |
 | `groupings_map`                     | object      | Rules for `set-integration-groupings` tool: connection glob → grouping label, ClickUp default, priority order      |
 | `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`, `github[]`, `llm[]`)                                          |
 

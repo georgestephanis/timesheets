@@ -20,7 +20,7 @@ declare(strict_types=1);
  * @param  array<string, mixed> $conn  One entry from config.integrations.harvest.
  * @return array<string, true>         Map of project name => true.
  */
-function harvestFetchProjectNames(array $conn): array
+function harvestFetchProjectNames(array $conn, int $timeout = 20): array
 {
     $token     = (string)($conn['token']      ?? '');
     $accountId = (string)($conn['account_id'] ?? '');
@@ -47,7 +47,8 @@ function harvestFetchProjectNames(array $conn): array
                     'is_active' => 'true',
                     'page'      => (string)$page,
                 ]),
-                $headers
+                $headers,
+                $timeout
             );
         } catch (RuntimeException $e) {
             break;
@@ -83,7 +84,8 @@ function harvestFetchProjectNames(array $conn): array
                     'to'   => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d'),
                     'page' => (string)$page,
                 ]),
-                $headers
+                $headers,
+                $timeout
             );
         } catch (RuntimeException $e) {
             break;

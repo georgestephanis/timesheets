@@ -86,6 +86,35 @@
             "minimum": 0,
             "default": 300
         },
+        "timeline_merge_gap_seconds": {
+            "description": "Same-project timeline segments separated by less than this many seconds are merged into one entry in the web UI timeline bar. Default 300 (5 minutes).",
+            "type": "integer",
+            "minimum": 0,
+            "default": 300
+        },
+        "timeline_min_seconds": {
+            "description": "Timeline segments shorter than this many seconds are dropped from the web UI timeline bar. Default 60 (1 minute).",
+            "type": "integer",
+            "minimum": 0,
+            "default": 60
+        },
+        "integration_http_timeout_seconds": {
+            "description": "HTTP request timeout in seconds for Harvest and ClickUp API calls. Default 20.",
+            "type": "integer",
+            "minimum": 1,
+            "default": 20
+        },
+        "github_command_timeout_seconds": {
+            "description": "Timeout in seconds for each gh CLI command when fetching GitHub activity. Default 8.",
+            "type": "integer",
+            "minimum": 1,
+            "default": 8
+        },
+        "github_cache_ttl": {
+            "description": "Cache TTL string passed to gh api --cache when fetching GitHub activity (e.g. \"1h\", \"30m\"). Default \"1h\".",
+            "type": "string",
+            "default": "1h"
+        },
         "min_event_seconds_to_show": {
             "description": "Hide activity segments shorter than this many seconds from output.",
             "type": "integer",

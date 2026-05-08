@@ -53,7 +53,7 @@ function groupingForConnection(string $connectionName, string $source, array $gr
  * @param array<string, mixed> $groupingsMap
  * @return array<string, array<string, bool>>
  */
-function discoverHarvestProjectsByGrouping(array $harvestConnections, array $groupingsMap): array
+function discoverHarvestProjectsByGrouping(array $harvestConnections, array $groupingsMap, int $timeout = 20): array
 {
     $byGrouping = [];
 
@@ -66,7 +66,7 @@ function discoverHarvestProjectsByGrouping(array $harvestConnections, array $gro
         if ($grouping === null) {
             continue;
         }
-        foreach (array_keys(harvestFetchProjectNames($conn)) as $pn) {
+        foreach (array_keys(harvestFetchProjectNames($conn, $timeout)) as $pn) {
             $byGrouping[$grouping][$pn] = true;
         }
     }
@@ -80,7 +80,7 @@ function discoverHarvestProjectsByGrouping(array $harvestConnections, array $gro
  * @param array<string, mixed> $groupingsMap
  * @return array<string, array<string, bool>>
  */
-function discoverClickUpNamesByGrouping(array $clickupConnections, array $groupingsMap): array
+function discoverClickUpNamesByGrouping(array $clickupConnections, array $groupingsMap, int $timeout = 20): array
 {
     $byGrouping = [];
 
@@ -93,7 +93,7 @@ function discoverClickUpNamesByGrouping(array $clickupConnections, array $groupi
         if ($grouping === null) {
             continue;
         }
-        foreach (array_keys(clickupFetchAllNames($conn)) as $n) {
+        foreach (array_keys(clickupFetchAllNames($conn, $timeout)) as $n) {
             $byGrouping[$grouping][$n] = true;
         }
     }
@@ -107,8 +107,9 @@ if (!is_array($groupingsMap) || empty($groupingsMap['priority'])) {
     exit(1);
 }
 
-$harvestByGroup = discoverHarvestProjectsByGrouping($config['integrations']['harvest'] ?? [], $groupingsMap);
-$clickupByGroup = discoverClickUpNamesByGrouping($config['integrations']['clickup'] ?? [], $groupingsMap);
+$httpTimeout = (int)($config['integration_http_timeout_seconds'] ?? 20);
+$harvestByGroup = discoverHarvestProjectsByGrouping($config['integrations']['harvest'] ?? [], $groupingsMap, $httpTimeout);
+$clickupByGroup = discoverClickUpNamesByGrouping($config['integrations']['clickup'] ?? [], $groupingsMap, $httpTimeout);
 
 $updated = 0;
 foreach ($config['projects'] as $projectName => &$projectConfig) {

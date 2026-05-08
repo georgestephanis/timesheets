@@ -148,16 +148,17 @@ function renderTimeline(date, timelines) {
         `<rect x="0" y="0" width="${W}" height="20" fill="#e5e7eb"/>${rects}${ticks.join("")}</svg>`;
 
     const listItems = segs
-        .map((s) => {
+        .flatMap((s) => {
             const resolved = resolveGrouping(s.g);
-            const color = resolved ? groupingColor(resolved) : "#94a3b8";
-            return (
+            if (!resolved) return [];
+            const color = groupingColor(resolved);
+            return [
                 `<li class="tl-row" style="--tl-color:${esc(color)}">` +
                 `<span class="tl-time">${fmtTime(s.s)}–${fmtTime(s.e)}</span>` +
                 `<span class="tl-project">${esc(s.p)}</span>` +
                 `<span class="tl-dur">${fmtDur(s.e - s.s)}</span>` +
-                `</li>`
-            );
+                `</li>`,
+            ];
         })
         .join("");
 

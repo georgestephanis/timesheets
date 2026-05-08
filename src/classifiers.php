@@ -581,20 +581,22 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
         }
     }
 
-    // Merge adjacent same-project timeline segments (gap ≤ 60 s) and drop sub-minute ones.
+    // Merge adjacent same-project timeline segments and drop very short ones.
+    $tlMergeGap = (int)($config['timeline_merge_gap_seconds'] ?? 300);
+    $tlMinSec   = (int)($config['timeline_min_seconds'] ?? 60);
     $timeline = [];
     foreach ($timelineRaw as $date => $segs) {
         usort($segs, fn($a, $b) => $a['s'] <=> $b['s']);
         $merged = [];
         foreach ($segs as $seg) {
             $n = count($merged) - 1;
-            if ($n >= 0 && $merged[$n]['p'] === $seg['p'] && $seg['s'] - $merged[$n]['e'] <= 60) {
+            if ($n >= 0 && $merged[$n]['p'] === $seg['p'] && $seg['s'] - $merged[$n]['e'] <= $tlMergeGap) {
                 $merged[$n]['e'] = max($merged[$n]['e'], $seg['e']);
             } else {
                 $merged[] = $seg;
             }
         }
-        $timeline[$date] = array_values(array_filter($merged, fn($s) => ($s['e'] - $s['s']) >= 60));
+        $timeline[$date] = array_values(array_filter($merged, fn($s) => ($s['e'] - $s['s']) >= $tlMinSec));
     }
 
     return [$bucket, $unmatched, $timeline];

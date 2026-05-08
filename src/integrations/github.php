@@ -34,6 +34,9 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
         return [];
     }
 
+    $ghCacheTtl  = (string)($config['github_cache_ttl'] ?? '1h');
+    $ghCmdTimeout = (int)($config['github_command_timeout_seconds'] ?? 8);
+
     $actorLogins = githubActorLogins($conn, $authors);
     $actorLookup = array_fill_keys($actorLogins, true);
     $connection = (string)($conn['name'] ?? 'github');
@@ -383,7 +386,7 @@ function githubPaginatedGet(string $pathWithQuery, array $conn, int $maxPages = 
 
     for ($page = 1; $page <= $maxPages; $page++) {
         $path = $pathWithQuery . $glue . http_build_query(['per_page' => 100, 'page' => $page]);
-        $json = githubGetJson($path, $conn);
+        $json = githubGetJson($path, $conn, $ghCacheTtl, $ghCmdTimeout);
         if (!is_array($json) || $json === []) {
             break;
         }
@@ -434,7 +437,7 @@ function githubDateInRange(string $iso, DateTimeImmutable $from, DateTimeImmutab
  *
  * @return array<mixed>
  */
-function githubGetJson(string $pathWithQuery, array $conn): array
+function githubGetJson(string $pathWithQuery, array $conn, string $cacheTtl = '1h', int $cmdTimeout = 8): array
 {
     static $ghPath = null;
     static $ghAuthReady = null;
@@ -467,8 +470,8 @@ function githubGetJson(string $pathWithQuery, array $conn): array
         throw new RuntimeException('gh CLI is not authenticated; run gh auth login or configure integrations.github[*].token');
     }
 
-    $cmd = 'GH_PROMPT_DISABLED=1 gh api --cache 1h ' . escapeshellarg($pathWithQuery) . ' 2>/dev/null';
-    $out = githubRunCommandWithTimeout($cmd, 8);
+    $cmd = 'GH_PROMPT_DISABLED=1 gh api --cache ' . escapeshellarg($cacheTtl) . ' ' . escapeshellarg($pathWithQuery) . ' 2>/dev/null';
+    $out = githubRunCommandWithTimeout($cmd, $cmdTimeout);
     if (!is_string($out) || trim($out) === '') {
         throw new RuntimeException('gh api request failed for ' . $pathWithQuery);
     }

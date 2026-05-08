@@ -18,7 +18,7 @@ declare(strict_types=1);
  * @param  array<string, mixed> $conn  One entry from config.integrations.clickup.
  * @return array<string, true>         Map of name => true.
  */
-function clickupFetchAllNames(array $conn): array
+function clickupFetchAllNames(array $conn, int $timeout = 20): array
 {
     $token    = (string)($conn['token'] ?? '');
     $rawTeams = $conn['team_id'] ?? [];
@@ -39,7 +39,8 @@ function clickupFetchAllNames(array $conn): array
         try {
             $spaces = httpGetJson(
                 'https://api.clickup.com/api/v2/team/' . rawurlencode($teamId) . '/space?archived=false',
-                $headers
+                $headers,
+                $timeout
             );
         } catch (RuntimeException $e) {
             continue;
@@ -61,7 +62,8 @@ function clickupFetchAllNames(array $conn): array
             try {
                 $folders = httpGetJson(
                     'https://api.clickup.com/api/v2/space/' . rawurlencode($spaceId) . '/folder?archived=false',
-                    $headers
+                    $headers,
+                    $timeout
                 );
             } catch (RuntimeException $e) {
                 $folders = ['folders' => []];
@@ -83,7 +85,8 @@ function clickupFetchAllNames(array $conn): array
                 try {
                     $lists = httpGetJson(
                         'https://api.clickup.com/api/v2/folder/' . rawurlencode($folderId) . '/list?archived=false',
-                        $headers
+                        $headers,
+                        $timeout
                     );
                 } catch (RuntimeException $e) {
                     $lists = ['lists' => []];
@@ -103,7 +106,8 @@ function clickupFetchAllNames(array $conn): array
             try {
                 $spaceLists = httpGetJson(
                     'https://api.clickup.com/api/v2/space/' . rawurlencode($spaceId) . '/list?archived=false',
-                    $headers
+                    $headers,
+                    $timeout
                 );
             } catch (RuntimeException $e) {
                 $spaceLists = ['lists' => []];
