@@ -153,11 +153,11 @@ function renderTimeline(date, timelines) {
             if (!resolved) return [];
             const color = groupingColor(resolved);
             return [
-                `<li class="tl-row" style="--tl-color:${esc(color)}">` +
-                `<span class="tl-time">${fmtTime(s.s)}–${fmtTime(s.e)}</span>` +
-                `<span class="tl-project">${esc(s.p)}</span>` +
-                `<span class="tl-dur">${fmtDur(s.e - s.s)}</span>` +
-                `</li>`,
+                `<li class="tl-row" style="--tl-color:${esc(color)}" data-proj="${esc(s.p)}">` +
+                    `<span class="tl-time">${fmtTime(s.s)}–${fmtTime(s.e)}</span>` +
+                    `<span class="tl-project">${esc(s.p)}</span>` +
+                    `<span class="tl-dur">${fmtDur(s.e - s.s)}</span>` +
+                    `</li>`,
             ];
         })
         .join("");
@@ -913,6 +913,27 @@ function bindNavEvents() {
         });
     }
 }
+
+document.addEventListener("mouseover", (e) => {
+    const row = e.target.closest(".tl-row");
+    if (!row) return;
+    const list = row.closest(".timeline-list");
+    if (!list) return;
+    const proj = row.dataset.proj;
+    for (const r of list.querySelectorAll(".tl-row")) {
+        r.style.opacity = r.dataset.proj === proj ? "" : "0.3";
+    }
+});
+
+document.addEventListener("mouseout", (e) => {
+    const row = e.target.closest(".tl-row");
+    if (!row) return;
+    const list = row.closest(".timeline-list");
+    if (!list || list.contains(e.relatedTarget)) return;
+    for (const r of list.querySelectorAll(".tl-row")) {
+        r.style.opacity = "";
+    }
+});
 
 window.addEventListener("popstate", (e) => {
     currentParams = e.state || paramsFromUrl();

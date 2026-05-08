@@ -105,7 +105,7 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 | `timeline_min_seconds`              | int         | Drop timeline segments shorter than this from the web UI timeline bar (default 60)                                 |
 | `integration_http_timeout_seconds`  | int         | HTTP timeout for Harvest and ClickUp API calls (default 20)                                                        |
 | `github_command_timeout_seconds`    | int         | Timeout per `gh` CLI command when fetching GitHub activity (default 8)                                             |
-| `github_cache_ttl`                  | string      | Cache TTL passed to `gh api --cache` (e.g. `"1h"`, `"30m"`; default `"1h"`)                                       |
+| `github_cache_ttl`                  | string      | Cache TTL passed to `gh api --cache` (e.g. `"1h"`, `"30m"`; default `"1h"`)                                        |
 | `groupings_map`                     | object      | Rules for `set-integration-groupings` tool: connection glob → grouping label, ClickUp default, priority order      |
 | `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`, `github[]`, `llm[]`)                                          |
 

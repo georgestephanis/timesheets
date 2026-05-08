@@ -111,6 +111,7 @@ svg.day-timeline {
     gap: 0.6em;
     padding: 0.2em 0.5em;
     border-left: 4px solid var(--tl-color, #94a3b8);
+    transition: opacity 0.15s;
 }
 .tl-row:nth-child(even) {
     background: #f9fafb;

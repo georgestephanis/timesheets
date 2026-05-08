@@ -48,23 +48,51 @@ function loadGitHubActivity(array $conn, array $config, DateTimeImmutable $from,
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-            githubFetchCommits($repoFullName, $authors, $conn, $from, $to, $fromIso, $toIso, $connection, $project, $seen, $rows, $deadline);
+            githubFetchCommits(
+                $repoFullName,
+                $authors,
+                $conn,
+                $from,
+                $to,
+                $fromIso,
+                $toIso,
+                $connection,
+                $project,
+                $seen,
+                $rows,
+                $deadline,
+                $ghCacheTtl,
+                $ghCmdTimeout
+            );
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-            githubFetchPullRequests($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows);
+            githubFetchPullRequests($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows, $ghCacheTtl, $ghCmdTimeout);
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-            githubFetchIssues($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows);
+            githubFetchIssues($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows, $ghCacheTtl, $ghCmdTimeout);
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-            githubFetchIssueComments($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows);
+            githubFetchIssueComments($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows, $ghCacheTtl, $ghCmdTimeout);
             if (githubBudgetExceeded($deadline)) {
                 return $rows;
             }
-            githubFetchReviewComments($repoFullName, $conn, $from, $to, $fromIso, $connection, $project, $actorLookup, $seen, $rows);
+            githubFetchReviewComments(
+                $repoFullName,
+                $conn,
+                $from,
+                $to,
+                $fromIso,
+                $connection,
+                $project,
+                $actorLookup,
+                $seen,
+                $rows,
+                $ghCacheTtl,
+                $ghCmdTimeout
+            );
         }
     }
 
@@ -90,7 +118,9 @@ function githubFetchCommits(
     string $project,
     array &$seen,
     array &$rows,
-    ?float $deadline
+    ?float $deadline,
+    string $cacheTtl = '1h',
+    int $cmdTimeout = 8
 ): void {
     foreach ($authors as $author) {
         if (githubBudgetExceeded($deadline)) {
@@ -101,7 +131,7 @@ function githubFetchCommits(
             'until'  => $toIso,
             'author' => $author,
         ]);
-        foreach (githubPaginatedGet($path, $conn, 1) as $commit) {
+        foreach (githubPaginatedGet($path, $conn, 1, $cacheTtl, $cmdTimeout) as $commit) {
             if (!is_array($commit)) {
                 continue;
             }
@@ -144,12 +174,14 @@ function githubFetchPullRequests(
     string $project,
     array $actorLookup,
     array &$seen,
-    array &$rows
+    array &$rows,
+    string $cacheTtl = '1h',
+    int $cmdTimeout = 8
 ): void {
     $path = '/repos/' . $repoFullName . '/pulls?' . http_build_query([
         'state' => 'all', 'sort' => 'updated', 'direction' => 'desc',
     ]);
-    foreach (githubPaginatedGet($path, $conn, 1) as $pr) {
+    foreach (githubPaginatedGet($path, $conn, 1, $cacheTtl, $cmdTimeout) as $pr) {
         if (!is_array($pr)) {
             continue;
         }
@@ -196,12 +228,14 @@ function githubFetchIssues(
     string $project,
     array $actorLookup,
     array &$seen,
-    array &$rows
+    array &$rows,
+    string $cacheTtl = '1h',
+    int $cmdTimeout = 8
 ): void {
     $path = '/repos/' . $repoFullName . '/issues?' . http_build_query([
         'state' => 'all', 'since' => $fromIso, 'sort' => 'updated', 'direction' => 'desc',
     ]);
-    foreach (githubPaginatedGet($path, $conn, 1) as $issue) {
+    foreach (githubPaginatedGet($path, $conn, 1, $cacheTtl, $cmdTimeout) as $issue) {
         if (!is_array($issue) || isset($issue['pull_request'])) {
             continue;
         }
@@ -247,10 +281,12 @@ function githubFetchIssueComments(
     string $project,
     array $actorLookup,
     array &$seen,
-    array &$rows
+    array &$rows,
+    string $cacheTtl = '1h',
+    int $cmdTimeout = 8
 ): void {
     $path = '/repos/' . $repoFullName . '/issues/comments?' . http_build_query(['since' => $fromIso]);
-    foreach (githubPaginatedGet($path, $conn, 1) as $comment) {
+    foreach (githubPaginatedGet($path, $conn, 1, $cacheTtl, $cmdTimeout) as $comment) {
         if (!is_array($comment)) {
             continue;
         }
@@ -295,10 +331,12 @@ function githubFetchReviewComments(
     string $project,
     array $actorLookup,
     array &$seen,
-    array &$rows
+    array &$rows,
+    string $cacheTtl = '1h',
+    int $cmdTimeout = 8
 ): void {
     $path = '/repos/' . $repoFullName . '/pulls/comments?' . http_build_query(['since' => $fromIso]);
-    foreach (githubPaginatedGet($path, $conn, 1) as $comment) {
+    foreach (githubPaginatedGet($path, $conn, 1, $cacheTtl, $cmdTimeout) as $comment) {
         if (!is_array($comment)) {
             continue;
         }
@@ -379,14 +417,14 @@ function githubActorLogins(array $conn, array $authors): array
  *
  * @return list<array<string, mixed>>
  */
-function githubPaginatedGet(string $pathWithQuery, array $conn, int $maxPages = 10): array
+function githubPaginatedGet(string $pathWithQuery, array $conn, int $maxPages = 10, string $cacheTtl = '1h', int $cmdTimeout = 8): array
 {
     $rows = [];
     $glue = str_contains($pathWithQuery, '?') ? '&' : '?';
 
     for ($page = 1; $page <= $maxPages; $page++) {
         $path = $pathWithQuery . $glue . http_build_query(['per_page' => 100, 'page' => $page]);
-        $json = githubGetJson($path, $conn, $ghCacheTtl, $ghCmdTimeout);
+        $json = githubGetJson($path, $conn, $cacheTtl, $cmdTimeout);
         if (!is_array($json) || $json === []) {
             break;
         }
