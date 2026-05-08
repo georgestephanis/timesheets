@@ -85,6 +85,51 @@ svg.day-timeline {
     margin: 0.35em 0 0.1em;
     border-radius: 2px;
 }
+.timeline-wrap {
+    margin: 0.35em 0 0.1em;
+}
+.timeline-summary {
+    display: block;
+    cursor: pointer;
+    list-style: none;
+}
+.timeline-summary::-webkit-details-marker {
+    display: none;
+}
+.timeline-list {
+    margin: 0.4em 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.82rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.tl-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.2em 0.5em;
+    border-left: 4px solid var(--tl-color, #94a3b8);
+}
+.tl-row:nth-child(even) {
+    background: #f9fafb;
+}
+.tl-time {
+    color: #555;
+    white-space: nowrap;
+    min-width: 13em;
+}
+.tl-project {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tl-dur {
+    color: #555;
+    white-space: nowrap;
+}
 .group-logo {
     height: 1.2em;
     width: auto;

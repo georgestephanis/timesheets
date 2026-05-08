@@ -67,7 +67,7 @@ function renderProjectEntry(string $heading, string $name, array $rec, int $minS
     if ($commits) {
         $out .= "- _commits (" . count($commits) . "):_\n";
         foreach ($commits as $c) {
-            $t = $c['dt']->setTimezone($tz)->format('H:i');
+            $t = $c['dt']->setTimezone($tz)->format('g:i a');
             $out .= "    - `$t` `" . substr($c['sha'], 0, 8) . "` " . $c['subj'] . "\n";
         }
     }
@@ -108,7 +108,7 @@ function renderMarkdown(
         $from->setTimezone($tz)->format('Y-m-d'),
         $to->setTimezone($tz)->format('Y-m-d'),
         $tz->getName(),
-        (new DateTimeImmutable('now', $tz))->format('Y-m-d H:i T')
+        (new DateTimeImmutable('now', $tz))->format('Y-m-d g:i A T')
     );
     if ($opts['project']) {
         $out .= "_Filtered to project: **{$opts['project']}**_\n\n";

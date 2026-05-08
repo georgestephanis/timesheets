@@ -80,6 +80,15 @@ function fmtAge(sec) {
     return `${d}d ${String(h % 24).padStart(2, "0")}h`;
 }
 
+// Converts seconds from local midnight to a 12-hour time string, e.g. 32400 → "9:00 am"
+function fmtTime(secFromMidnight) {
+    const h24 = Math.floor(secFromMidnight / 3600);
+    const min = Math.floor((secFromMidnight % 3600) / 60);
+    const h12 = h24 % 12 || 12;
+    const ampm = h24 < 12 ? "am" : "pm";
+    return `${h12}:${String(min).padStart(2, "0")} ${ampm}`;
+}
+
 // ── Grouping helpers ──────────────────────────────────────────────────────────
 function resolveGrouping(name) {
     if (!name) return name;
@@ -123,9 +132,7 @@ function renderTimeline(date, timelines) {
             const w = Math.max(1, ((s.e - s.s) / span) * W).toFixed(1);
             const resolved = resolveGrouping(s.g);
             const color = resolved ? groupingColor(resolved) : "#94a3b8";
-            const fmt = (t) =>
-                `${String(Math.floor(t / 3600)).padStart(2, "0")}:${String(Math.floor((t % 3600) / 60)).padStart(2, "0")}`;
-            const tip = `${esc(s.p)} ${fmt(s.s)}–${fmt(s.e)} (${fmtDur(s.e - s.s)})`;
+            const tip = `${esc(s.p)} ${fmtTime(s.s)}–${fmtTime(s.e)} (${fmtDur(s.e - s.s)})`;
             return `<rect x="${x}" y="0" width="${w}" height="20" fill="${esc(color)}" opacity="0.85"><title>${tip}</title></rect>`;
         })
         .join("");
@@ -136,9 +143,29 @@ function renderTimeline(date, timelines) {
         ticks.push(`<line x1="${x}" y1="0" x2="${x}" y2="20" stroke="#fff" stroke-width="2" opacity="0.4"/>`);
     }
 
-    return (
+    const svg =
         `<svg class="day-timeline" viewBox="0 0 ${W} 20" preserveAspectRatio="none" aria-hidden="true">` +
-        `<rect x="0" y="0" width="${W}" height="20" fill="#e5e7eb"/>${rects}${ticks.join("")}</svg>`
+        `<rect x="0" y="0" width="${W}" height="20" fill="#e5e7eb"/>${rects}${ticks.join("")}</svg>`;
+
+    const listItems = segs
+        .map((s) => {
+            const resolved = resolveGrouping(s.g);
+            const color = resolved ? groupingColor(resolved) : "#94a3b8";
+            return (
+                `<li class="tl-row" style="--tl-color:${esc(color)}">` +
+                `<span class="tl-time">${fmtTime(s.s)}–${fmtTime(s.e)}</span>` +
+                `<span class="tl-project">${esc(s.p)}</span>` +
+                `<span class="tl-dur">${fmtDur(s.e - s.s)}</span>` +
+                `</li>`
+            );
+        })
+        .join("");
+
+    return (
+        `<details class="timeline-wrap">` +
+        `<summary class="timeline-summary">${svg}</summary>` +
+        `<ol class="timeline-list">${listItems}</ol>` +
+        `</details>`
     );
 }
 
@@ -147,12 +174,14 @@ function renderCommits(commits) {
     if (!commits.length) return "";
     const items = commits
         .map((c) => {
-            const t = new Date(c.time).toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-                hour12: false,
-                timeZone: SITE.timezone,
-            });
+            const t = new Date(c.time)
+                .toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    hour12: true,
+                    timeZone: SITE.timezone,
+                })
+                .toLowerCase();
             return `<li><code>${esc(t)}</code> <code>${esc(c.sha.slice(0, 8))}</code> ${esc(c.subj)}</li>`;
         })
         .join("");
