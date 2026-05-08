@@ -10,10 +10,26 @@ if (str_contains($path, '..')) {
     exit;
 }
 
+$file = __DIR__ . $path;
+
 if ($path === '/api.php') {
     require __DIR__ . '/api.php';
-} elseif (file_exists(__DIR__ . $path) && !is_dir(__DIR__ . $path) && $path !== '/') {
-    return false; // let the built-in server serve static files directly
+} elseif ($path !== '/' && file_exists($file) && !is_dir($file)) {
+    // Serve static assets directly so the correct www/ directory is always used,
+    // regardless of which directory the `php -S` process was started from.
+    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+    header('Content-Type: ' . match ($ext) {
+        'css'        => 'text/css; charset=utf-8',
+        'js'         => 'application/javascript; charset=utf-8',
+        'png'        => 'image/png',
+        'jpg', 'jpeg' => 'image/jpeg',
+        'svg'        => 'image/svg+xml',
+        'ico'        => 'image/x-icon',
+        'woff2'      => 'font/woff2',
+        default      => 'application/octet-stream',
+    });
+    readfile($file);
+    exit;
 } else {
     require __DIR__ . '/report_renderer.php';
 }

@@ -284,22 +284,73 @@ select {
     font-size: 0.85rem;
 }
 .proj-actions {
-    margin-left: 0.6rem;
+    display: inline-block;
     font-size: 0.82rem;
+    margin-left: 0.5rem;
+    position: relative;
+    vertical-align: middle;
 }
-.proj-actions a,
-.proj-actions button {
-    color: #2563eb;
-    text-decoration: none;
+.proj-menu-btn {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    color: #bbb;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0 3px;
+    vertical-align: middle;
+}
+.proj-menu-btn:hover,
+.proj-menu-btn[aria-expanded="true"] {
+    background: #f0f0f0;
+    border-color: #ccc;
+    color: #555;
+}
+.proj-menu-dropdown {
+    background: #fff;
+    border: 1px solid #d0d0d0;
+    border-radius: 4px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.12);
+    min-width: 210px;
+    padding: 4px 0;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 2px);
+    z-index: 200;
+}
+.proj-menu-section {
+    align-items: center;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 6px 10px;
+}
+.proj-menu-section select {
+    flex: 1;
+    font-size: 0.85rem;
+    min-width: 0;
+}
+.proj-menu-dropdown > button {
     background: none;
     border: none;
-    padding: 0;
     cursor: pointer;
-    font: inherit;
+    display: block;
+    font-size: 0.88rem;
+    padding: 7px 14px;
+    text-align: left;
+    width: 100%;
 }
-.proj-actions a:hover,
-.proj-actions button:hover {
-    text-decoration: underline;
+.proj-menu-dropdown > button:hover {
+    background: #f5f5f5;
+}
+.menu-error {
+    color: #c00;
+    display: block;
+    font-size: 0.8rem;
+    padding: 2px 0;
+    width: 100%;
 }
 .admin-error {
     font-size: 0.82rem;

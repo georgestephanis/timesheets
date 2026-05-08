@@ -178,9 +178,27 @@ function renderProject(tag, name, rec) {
     if (sec < SITE.minSec && !commits.length) return "";
 
     const isQueuedPersonal = personalProjectQueue.has(name);
-    const action = isQueuedPersonal
-        ? '<span class="proj-actions muted">queued for personal</span>'
-        : `<span class="proj-actions"><button type="button" data-flag-project="${esc(name)}">flag project as personal</button></span>`;
+    let action;
+    if (isQueuedPersonal) {
+        action = '<span class="proj-actions muted">queued for personal</span>';
+    } else {
+        const currentGroup = resolveGrouping(rec.grouping || "") || "";
+        const groupRow = Object.keys(SITE.groupings).length
+            ? `<div class="proj-menu-section">
+                <select data-menu-group-select aria-label="Group">
+                    <option value="">(no group)</option>
+                    ${Object.keys(SITE.groupings)
+                        .map(
+                            (g) =>
+                                `<option value="${esc(g)}"${currentGroup === g ? " selected" : ""}>${esc(g)}</option>`,
+                        )
+                        .join("")}
+                </select>
+                <button type="button" class="btn" data-menu-save-group="${esc(name)}">Save</button>
+               </div>`
+            : "";
+        action = `<span class="proj-actions"><button type="button" class="proj-menu-btn" aria-haspopup="true" aria-expanded="false" aria-label="Project actions for ${esc(name)}">&#8942;</button><div class="proj-menu-dropdown" hidden>${groupRow}<button type="button" data-flag-project="${esc(name)}">Flag as personal / ignore</button></div></span>`;
+    }
 
     const secStr = sec ? ` <span class="dur">&mdash; ${fmtDur(sec)}</span>` : "";
     const body = renderDetail(rec.detail || {}) + renderCommits(commits);
@@ -670,16 +688,6 @@ async function fetchAndRender(params, isRebuild = false) {
 }
 
 function bindAdminEvents() {
-    document.querySelectorAll("[data-flag-project]").forEach((el) => {
-        el.addEventListener("click", (e) => {
-            e.preventDefault();
-            const name = el.getAttribute("data-flag-project") || "";
-            if (!name) return;
-            personalProjectQueue.add(name);
-            renderCurrentView();
-        });
-    });
-
     const applyBtn = document.querySelector("[data-apply-personal]");
     if (applyBtn) {
         applyBtn.addEventListener("click", async (e) => {
@@ -891,6 +899,70 @@ document.addEventListener("keydown", (e) => {
         navLinks[0].click();
     } else if (e.key === "ArrowRight" && navLinks[1]) {
         navLinks[1].click();
+    }
+});
+
+// ── Project menus ─────────────────────────────────────────────────────────────
+function closeAllProjectMenus() {
+    document.querySelectorAll(".proj-menu-dropdown:not([hidden])").forEach((d) => {
+        d.hidden = true;
+        d.closest(".proj-actions")?.querySelector(".proj-menu-btn")?.setAttribute("aria-expanded", "false");
+    });
+}
+
+document.addEventListener("click", (e) => {
+    const menuBtn = e.target.closest(".proj-menu-btn");
+    if (menuBtn) {
+        const wrapper = menuBtn.closest(".proj-actions");
+        const drop = wrapper?.querySelector(".proj-menu-dropdown");
+        if (!drop) return;
+        const wasHidden = drop.hidden;
+        closeAllProjectMenus();
+        if (wasHidden) {
+            drop.hidden = false;
+            menuBtn.setAttribute("aria-expanded", "true");
+        }
+        return;
+    }
+
+    const flagBtn = e.target.closest("[data-flag-project]");
+    if (flagBtn) {
+        closeAllProjectMenus();
+        const name = flagBtn.getAttribute("data-flag-project") || "";
+        if (name) {
+            personalProjectQueue.add(name);
+            renderCurrentView();
+        }
+        return;
+    }
+
+    const saveGroupBtn = e.target.closest("[data-menu-save-group]");
+    if (saveGroupBtn) {
+        const project = saveGroupBtn.getAttribute("data-menu-save-group") || "";
+        const section = saveGroupBtn.closest(".proj-menu-section");
+        const select = section?.querySelector("[data-menu-group-select]");
+        const grouping = select?.value || "";
+        if (!project) return;
+        section?.querySelector(".menu-error")?.remove();
+        saveGroupBtn.setAttribute("disabled", "disabled");
+        postApi({ action: "set_project_grouping", project, grouping })
+            .then(() => {
+                const meta = getProjectMeta(project);
+                if (meta) meta.grouping = grouping || null;
+                return fetchAndRender(currentParams, true);
+            })
+            .catch((err) => {
+                saveGroupBtn.removeAttribute("disabled");
+                const errEl = document.createElement("span");
+                errEl.className = "menu-error error";
+                errEl.textContent = err.message;
+                section?.appendChild(errEl);
+            });
+        return;
+    }
+
+    if (!e.target.closest(".proj-menu-dropdown")) {
+        closeAllProjectMenus();
     }
 });
 
