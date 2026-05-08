@@ -359,7 +359,8 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
         $detailKind = 'app';
         $detailLabel = $ev['app'];
         switch ($ev['app']) {
-            case 'Code':
+            case 'Code':          // macOS / Windows
+            case 'Code - OSS':    // Linux (AW reports this for VSCodium/snap builds)
                 $dir = classifyVscode($ev['title']);
                 $sig['vscode_dir'] = $dir;
                 $proj = projectForSignals($sig, $config);
@@ -401,11 +402,19 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
                 $proj ??= 'Slack (uncategorized)';
                 break;
 
-            case 'Terminal':
-            case 'iTerm2':
-            case 'iTerm':
-            case 'Warp':
-            case 'Ghostty':
+            case 'Terminal':          // macOS built-in
+            case 'iTerm2':            // macOS iTerm2
+            case 'iTerm':             // macOS iTerm (legacy)
+            case 'Warp':              // macOS/Linux Warp
+            case 'Ghostty':           // macOS/Linux Ghostty
+            case 'Windows Terminal':  // Windows Terminal (wt)
+            case 'PowerShell':        // Windows PowerShell
+            case 'pwsh':              // Windows PowerShell Core
+            case 'cmd':               // Windows Command Prompt
+            case 'alacritty':         // Linux/Windows Alacritty
+            case 'kitty':             // Linux/macOS kitty
+            case 'konsole':           // Linux KDE Konsole
+            case 'gnome-terminal':    // Linux GNOME Terminal
                 $host = classifySsh($ev['title']);
                 if ($host) {
                     $sig['ssh_host'] = $host;

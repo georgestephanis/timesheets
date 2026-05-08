@@ -6,23 +6,60 @@ declare(strict_types=1);
  * Discovers git repositories registered in the GitHub Desktop application.
  *
  * Reads GitHub Desktop's Chromium IndexedDB LevelDB files as raw bytes and
- * extracts /Users/... paths. .log files are the active write-ahead log (most
+ * extracts absolute repo paths. .log files are the active write-ahead log (most
  * recent writes); .ldb files are compacted sorted-string tables (older data).
  * Paths that appear only in .log are tagged "recent".
+ *
+ * Supported platforms:
+ *   macOS   — ~/Library/Application Support/GitHub Desktop/
+ *   Windows — %LOCALAPPDATA%/GitHub Desktop/
+ *   Linux   — $XDG_CONFIG_HOME/GitHub Desktop/ (or ~/.config/GitHub Desktop/)
  */
 
 /**
  * Returns the path to GitHub Desktop's IndexedDB LevelDB directory, or null.
+ *
+ * Does not use posix_* functions so it is safe on Windows.
  */
 function githubDesktopLevelDbPath(): ?string
 {
-    $home = (string)(getenv('HOME') ?: posix_getpwuid(posix_getuid())['dir'] ?? '');
-    $path = $home . '/Library/Application Support/GitHub Desktop/IndexedDB/file__0.indexeddb.leveldb';
-    return is_dir($path) ? $path : null;
+    $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '');
+
+    // macOS
+    if ($home !== '') {
+        $p = $home . '/Library/Application Support/GitHub Desktop/IndexedDB/file__0.indexeddb.leveldb';
+        if (is_dir($p)) {
+            return $p;
+        }
+    }
+
+    // Windows (%LOCALAPPDATA%/GitHub Desktop/...)
+    $localAppData = getenv('LOCALAPPDATA') ?: '';
+    if ($localAppData !== '') {
+        $p = str_replace('\\', '/', $localAppData) . '/GitHub Desktop/IndexedDB/file__0.indexeddb.leveldb';
+        if (is_dir($p)) {
+            return $p;
+        }
+    }
+
+    // Linux (Electron via XDG or ~/.config)
+    $configHome = getenv('XDG_CONFIG_HOME') ?: ($home !== '' ? $home . '/.config' : '');
+    if ($configHome !== '') {
+        $p = $configHome . '/GitHub Desktop/IndexedDB/file__0.indexeddb.leveldb';
+        if (is_dir($p)) {
+            return $p;
+        }
+    }
+
+    return null;
 }
 
 /**
- * Scans LevelDB files for raw /Users/... byte strings.
+ * Scans LevelDB files for raw absolute repo path strings.
+ *
+ * Handles macOS (/Users/...), Linux (/home/...), and Windows (C:/Users/...)
+ * path formats. Windows paths stored with backslashes are normalised to
+ * forward slashes so callers can use them uniformly.
  *
  * @return array<string, 'recent'|'archive'>  absolute path => recency tag
  */
@@ -36,9 +73,26 @@ function scanLevelDbForPaths(string $dir): array
             if ($data === false) {
                 continue;
             }
-            // Match printable /Users/ paths; stop at control chars, quotes, backslashes.
-            preg_match_all('~/Users/[^\x00-\x1f"\\\\]+~', $data, $m);
-            foreach ($m[0] as $p) {
+
+            $candidates = [];
+
+            // macOS: /Users/...
+            // Linux: /home/...
+            preg_match_all('~/(?:Users|home)/[^\x00-\x1f"\\\\]+~', $data, $m);
+            $candidates = array_merge($candidates, $m[0]);
+
+            // Windows paths stored with forward slashes: C:/Users/...
+            preg_match_all('~[A-Za-z]:/Users/[^\x00-\x1f"\\\\]+~', $data, $m);
+            $candidates = array_merge($candidates, $m[0]);
+
+            // Windows paths stored with backslashes: C:\Users\...
+            // Normalise to forward slashes immediately.
+            preg_match_all('~[A-Za-z]:\\\\Users\\\\[^\x00-\x1f"]+~', $data, $m);
+            foreach ($m[0] as $raw) {
+                $candidates[] = str_replace('\\', '/', $raw);
+            }
+
+            foreach ($candidates as $p) {
                 // Drop garbled entries produced by multi-byte boundary splits.
                 if (str_contains($p, "\xef\xbf\xbd") || str_contains($p, '?')) {
                     continue;

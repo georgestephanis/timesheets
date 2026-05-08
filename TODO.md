@@ -337,3 +337,50 @@ P1), most of these become standard JS-project work.
       slack rule, etc).
 - [ ] **(P3, m)** Multi-LLM fallback: try `integrations.llm[0]`, then `[1]` if
       the first fails. Useful for local-then-cloud cascades.
+
+## Cross-platform
+
+The following issues were identified when assessing Windows/Linux portability.
+The changes already made (May 2026): `USERPROFILE` fallback in `expandPath()`;
+`posix_*`-free `githubDesktopLevelDbPath()` with macOS/Windows/Linux path
+discovery; generalised `scanLevelDbForPaths()` regex for `/home/`, Windows
+forward-slash, and backslash paths; Windows/Linux terminal and VSCode app-name
+aliases added to the classifier switch. The items below are the observable
+remaining gaps that are too complex to fix without a Windows test environment.
+
+- [ ] **(P2, m)** `shell_exec(...'2>/dev/null')` in `loader-git.php` and
+      `loader-github-desktop.php` suppresses stderr using a Unix shell redirect.
+      On Windows CMD this becomes `2>NUL`; Git Bash/WSL handle the Unix form,
+      but bare `php.exe` with cmd as the shell will leave an unredirected error
+      stream. Detect `PHP_OS_FAMILY === 'Windows'` and switch the redirect
+      suffix, or wrap git calls in `proc_open` with explicit pipe handles so
+      stderr is con      stderr is con      stderr is con      stderr is con      stderr is refore      stderr is con      stderr is con      stderr is con      stderr i for Act      stderr is con      stderr is con      stderr is con      stds `%APPD      stderr is con      stderr is con      stderr is con      stderr /User      stderr is con      stderr is con      stderr is con      stderr is con ig/google-chrome/`). Either
+      add platform-specific example comments in the schema descriptions, or
+      detect `PHP_OS_FAMILY` at startup and emit a warning when the configured
+      paths don't exist on the current OS.
+
+- [ ] **(P2, s)** `expandPath()` converts `~/` using either `HOME` or
+      `USERPROFILE`. On Windows the expanded path will contain a backslash-based
+      prefix (`C:\Users\name`) followed by forward-slash suffixes from config
+      values. PHP accepts mixed separators on Windows for most `file_*`
+      operations, but `glob()` patterns in `loader-chrome.php` and SQLite DSN
+      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      str`D      strings s      strings s      strings s      strings s      strinenera      strings s      strings s      strings s      strings s      strings s  t       strings s      strings s      stks false positives. Needs a Windows test corpus to tune.
+
+- [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [  need- [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [  scheduling example to the README.
+
+- [ ] **(P3, s)** `fnmatch()` is available on all platforms in PHP, but on
+      Windows it does not set `FNM_CASEFOLD` by default (the constant is
+      defined, but Windows filenames are inherently case-insensitive at the OS
+      level while `fnmatch` itself may still be case-sensitive depending on
+      the build). Audit all `fnmatch()`/`fnmatchAny()` call sites and confirm
+      `FNM_CASEFOLD` is passed consistently — it is for domain and app matching,
+      but not for the `glob()` call in `loader-chrome.php`.
+
+- [ ] **(P3, m)** The web server invocation (`php -S localhost:8000`) works on
+      all platforms, but the ActivityWatch watcher app names on Windows may
+      differ from the macOS names already in the classifier switch. Only the
+      most common Windows terminal apps were added (Windows Terminal, PowerShell,
+      pwsh, cmd, alacritty, kitty, konsole, gnome-terminal). Real-world testing
+      on a Windows ActivityWatch installation is needed to find any remaining
+      gaps (e.g. VS Code may report as `Code` or `Code.exe` depending on AW
+      version and OS).

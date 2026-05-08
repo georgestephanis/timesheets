@@ -52,7 +52,7 @@ Every few seconds, ActivityWatch records which app and window title is in focus.
 ## Requirements
 
 - PHP 8.1+
-- [ActivityWatch](https://activitywatch.net/) running locally (macOS)
+- [ActivityWatch](https://activitywatch.net/) running locally (cross-platform: macOS, Windows, Linux)
 - Google Chrome (optional — for browser signal matching)
 - Git (optional — for commit attribution)
 

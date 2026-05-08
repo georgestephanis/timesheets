@@ -12,7 +12,8 @@ declare(strict_types=1);
 function expandPath(string $p): string
 {
     if (str_starts_with($p, '~/')) {
-        $home = $_SERVER['HOME'] ?? getenv('HOME') ?: '~';
+        // HOME covers macOS and Linux; USERPROFILE covers Windows.
+        $home = $_SERVER['HOME'] ?? getenv('HOME') ?: getenv('USERPROFILE') ?: '~';
         return $home . substr($p, 1);
     }
     return $p;
