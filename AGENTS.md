@@ -49,6 +49,8 @@ src/
     harvest.php                  — resolveHarvestUserId(), loadHarvestTimeEntries()
     clickup.php                  — resolveClickUpUserId(), loadClickUpTimeEntries()
     github.php                   — loadGitHubActivity(), github* helpers  [CLI-only; skipped in web]
+    llm.php                      — llmGetConnection(), llmResolveModel(), llmPostJson(),
+                                   llmSuggestAssignments()  [CLI-only; used by --suggest]
   classifiers.php                — classifyVscode(), classifySlack(), classifySsh(),
                                    projectForSignals(), projectForExternal(),
                                    isAfkAt(), activeInputSecondsDuring(),
@@ -153,6 +155,20 @@ External integration rows (Harvest, ClickUp) are matched by `projectForExternal`
 
 `loadGitCommits` checks `config['discover_repos']`; when it equals `'github_desktop'`, it calls `discoverGitHubDesktopRepos()` and appends discovered repos to the explicit `repos` map. Explicitly configured repos take precedence — discovered repos that are already mapped to a project are not re-mapped.
 
+### LLM-assisted signal classification (`--suggest`)
+
+`llmSuggestAssignments(unmatched, config)` in `src/integrations/llm.php` is called by `runLlmSuggest()` in `src/cli.php` when `--suggest` is passed. It is **CLI-only** and never loaded by `api.php`.
+
+Flow:
+
+1. `runLlmSuggest` calls `loadSourcesForRange` (hits the per-day cache, no extra API calls) and `classifyAndAggregate` to collect the `$unmatched` map.
+2. `llmSuggestAssignments` builds two prompt sections: a concise project list (name, grouping, repo basenames, vscode dirs, domains) and the unmatched signals (kind, value, event count).
+3. It calls `/chat/completions` via `llmPostJson`. The model is resolved from `conn['model']` or, if absent, by calling `GET /models` and taking the first entry.
+4. The response is parsed as a JSON array of `{kind, value, project, reason}` objects. Each suggestion is validated: kind must be one of `vscode/browser/slack/apps`, value must be in the actual unmatched set, project must be a known non-ignored project name.
+5. `runLlmSuggest` prints each suggestion with its reason and reads `y/N` from STDIN. Accepted suggestions are applied via `applySignalToConfig()` (same logic as `api.php`'s `reassign_signal` handler) and written to `config.json` with a timestamped backup in `reports/config/`.
+
+`llmPostJson` uses `stream_context_create` (no curl), consistent with `httpGetJson`. The model auto-discovery path (`GET /models`) is used when `model` is not set in the connection config — useful for Ollama and vLLM endpoints where model names vary per installation.
+
 ---
 
 ## Config shape
@@ -195,6 +211,15 @@ Defined and validated by `config.schema.json`. Key fields:
         "harvest": [{ "name": "Main", "account_id": "...", "token": "...", "user_id": "..." }],
         "clickup": [{ "name": "Main", "team_id": "...", "token": "...", "assignee": "123456" }],
         "github": [{ "name": "GitHub via gh", "authors": ["you@example.com"] }],
+        "llm": [
+            {
+                "name": "Local Ollama", // human label
+                "base_url": "http://host/v1", // required; OpenAI-compatible base URL including /v1
+                "api_key": "ollama", // optional Bearer token
+                "model": "llama3", // optional default model name
+                "timeout": 30, // optional; seconds (default 30)
+            },
+        ],
     },
 }
 ```
@@ -260,6 +285,8 @@ No args               Backfill prior 7 completed days (skips days already curren
 --project NAME        Filter output to one project
 --format md|json|tsv  Output format (default md)
 --show-unmatched      Append unmatched signal counts (debug)
+--suggest             Ask the configured LLM for project assignments for unmatched signals,
+                      then prompt to accept each one (writes to config.json with backup)
 --list-projects       Print project names and their signals, then exit
 -h, --help            Usage
 ```

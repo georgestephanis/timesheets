@@ -52,6 +52,7 @@ require_once PROJECT_ROOT . '/src/loader-activitywatch.php';
 require_once PROJECT_ROOT . '/src/loader-chrome.php';
 require_once PROJECT_ROOT . '/src/loader-git.php';
 require_once PROJECT_ROOT . '/src/loader-integrations.php';
+require_once PROJECT_ROOT . '/src/integrations/llm.php';
 require_once PROJECT_ROOT . '/src/classifiers.php';
 require_once PROJECT_ROOT . '/src/renderers.php';
 require_once PROJECT_ROOT . '/src/cli.php';

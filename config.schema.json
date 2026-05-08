@@ -123,6 +123,12 @@
                     "type": "array",
                     "items": { "$ref": "#/$defs/github_connection" },
                     "default": []
+                },
+                "llm": {
+                    "description": "OpenAI-compatible LLM endpoints (Ollama, vLLM, etc.).",
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/llm_connection" },
+                    "default": []
                 }
             },
             "default": {}

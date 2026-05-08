@@ -36,6 +36,10 @@ function main(array $config): void
 
     [$from, $to] = resolveDateRange($opts, $tz);
     echo generateReport($config, $opts, $tz, $from, $to);
+
+    if ($opts['suggest']) {
+        runLlmSuggest($config, $opts, $tz, $from, $to);
+    }
 }
 
 /**
@@ -126,7 +130,6 @@ function generateReport(
 ): string {
     [
         'events' => $events,
-        'chrome' => $chrome,
         'commits' => $commits,
         'external' => $external,
         'from_cache' => $fromCache,
@@ -255,7 +258,7 @@ function loadFreshSourceSlice(array $config, DateTimeImmutable $from, DateTimeIm
  *
  * @param  string[] $argv  Raw argument vector, including the script name at index 0.
  * @return array{days: int|null, from: string|null, to: string|null, project: string|null,
- *               format: string, show_unmatched: bool, list_projects: bool, help: bool}
+ *               format: string, show_unmatched: bool, list_projects: bool, help: bool, suggest: bool}
  */
 function parseArgs(array $argv): array
 {
@@ -263,7 +266,7 @@ function parseArgs(array $argv): array
     $opts = [
         'days' => null, 'from' => null, 'to' => null,
         'project' => null, 'format' => 'md',
-        'show_unmatched' => false, 'list_projects' => false, 'help' => false,
+        'show_unmatched' => false, 'list_projects' => false, 'help' => false, 'suggest' => false,
     ];
     while ($a = array_shift($argv)) {
         switch ($a) {
@@ -276,6 +279,9 @@ function parseArgs(array $argv): array
                 break;
             case '--show-unmatched':
                 $opts['show_unmatched'] = true;
+                break;
+            case '--suggest':
+                $opts['suggest'] = true;
                 break;
             case '--days':
                 $opts['days'] = (int)array_shift($argv);
@@ -328,6 +334,8 @@ activity-report.php v0.1.0 — clusters local activity by project.
   --project NAME       Show only this project.
   --format md|json|tsv Output format (default md).
   --show-unmatched     List app/title/host events that didn't map to a project.
+  --suggest            Ask the configured LLM to suggest project assignments for unmatched signals,
+                       then prompt to accept each one.
   --list-projects      Print configured projects and exit.
   -h, --help           This message.
 
@@ -360,6 +368,193 @@ function printProjects(array $config): void
                 echo "    - " . implode(' ', $bits) . "\n";
             }
         }
+    }
+}
+
+/**
+ * Loads sources (from cache), re-classifies to collect unmatched signals, sends them to the
+ * configured LLM, and interactively prompts the user to accept each suggestion. Accepted
+ * suggestions are written to config.json with a timestamped backup.
+ *
+ * @param array<string, mixed> $config
+ * @param array<string, mixed> $opts
+ */
+function runLlmSuggest(array $config, array $opts, DateTimeZone $tz, DateTimeImmutable $from, DateTimeImmutable $to): void
+{
+    if (llmGetConnection($config) === null) {
+        fwrite(STDERR, "No LLM connection configured — add one under integrations.llm in config.json.\n");
+        return;
+    }
+
+    // Sources are already cached from generateReport; this re-uses the per-day cache.
+    [
+        'events'   => $events,
+        'commits'  => $commits,
+        'external' => $external,
+    ] = loadSourcesForRange($config, $tz, $from, $to);
+
+    $allOpts            = $opts;
+    $allOpts['project'] = null;
+    [, $unmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $allOpts);
+
+    $total = 0;
+    foreach (['vscode', 'browser', 'slack', 'apps'] as $kind) {
+        $total += count($unmatched[$kind] ?? []);
+    }
+
+    if ($total === 0) {
+        fwrite(STDOUT, "\nNo unmatched signals to classify.\n");
+        return;
+    }
+
+    fwrite(STDOUT, "\nAsking LLM to suggest project assignments for $total unmatched signal(s)...\n");
+
+    try {
+        $suggestions = llmSuggestAssignments($unmatched, $config);
+    } catch (\Throwable $e) {
+        fwrite(STDERR, 'LLM error: ' . $e->getMessage() . "\n");
+        return;
+    }
+
+    if (!$suggestions) {
+        fwrite(STDOUT, "LLM returned no confident suggestions.\n");
+        return;
+    }
+
+    $n        = count($suggestions);
+    $accepted = [];
+
+    fwrite(STDOUT, "$n suggestion(s):\n\n");
+    foreach ($suggestions as $i => $s) {
+        fwrite(STDOUT, sprintf(
+            "  [%d/%d] %s \"%s\" → \"%s\"\n        %s\n        Accept? [y/N]: ",
+            $i + 1,
+            $n,
+            $s['kind'],
+            $s['value'],
+            $s['project'],
+            $s['reason']
+        ));
+        $answer = fgets(STDIN);
+        if ($answer !== false && strtolower(trim($answer)) === 'y') {
+            $accepted[] = $s;
+        }
+        fwrite(STDOUT, "\n");
+    }
+
+    if (!$accepted) {
+        fwrite(STDOUT, "No suggestions accepted.\n");
+        return;
+    }
+
+    $configFile = PROJECT_ROOT . '/config.json';
+    $backupDir  = PROJECT_ROOT . '/reports/config';
+    if (!is_dir($backupDir) && !mkdir($backupDir, 0755, true)) {
+        fwrite(STDERR, "error: could not create config backup directory\n");
+        return;
+    }
+    $stamp      = (new DateTimeImmutable('now'))->format('Ymd\THis_u');
+    $backupPath = $backupDir . '/config.llm-suggest.' . $stamp . '.json';
+    if (!copy($configFile, $backupPath)) {
+        fwrite(STDERR, "error: could not back up config.json\n");
+        return;
+    }
+
+    $current = json_decode((string)file_get_contents($configFile), true);
+    if (!is_array($current)) {
+        fwrite(STDERR, "error: config.json is invalid JSON\n");
+        return;
+    }
+
+    foreach ($accepted as $s) {
+        applySignalToConfig($current, $s['kind'], $s['value'], $s['project']);
+    }
+
+    if (file_put_contents($configFile, json_encode($current, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n", LOCK_EX) === false) {
+        fwrite(STDERR, "error: could not write config.json\n");
+        return;
+    }
+
+    fwrite(STDOUT, count($accepted) . " assignment(s) saved to config.json.\n");
+    fwrite(STDOUT, "Backup: $backupPath\n");
+}
+
+/**
+ * Applies one signal-to-project assignment to the config array in place.
+ *
+ * Mirrors the reassign_signal logic from api.php. No-ops silently when the project is
+ * unknown or the value is already present.
+ *
+ * @param array<string, mixed> $config  Config array modified in place.
+ * @param string               $kind    One of: vscode, browser, slack, apps.
+ * @param string               $value   Signal value (e.g. folder name, hostname, "ssh:host").
+ * @param string               $project Exact project name.
+ */
+function applySignalToConfig(array &$config, string $kind, string $value, string $project): void
+{
+    if (!isset($config['projects'][$project])) {
+        return;
+    }
+    $p =& $config['projects'][$project];
+
+    switch ($kind) {
+        case 'vscode':
+            $p['vscode_dirs'] = $p['vscode_dirs'] ?? [];
+            if (!in_array($value, $p['vscode_dirs'], true)) {
+                $p['vscode_dirs'][] = $value;
+            }
+            break;
+
+        case 'browser':
+            if ($value === '' || $value === '(no url)') {
+                break;
+            }
+            $p['domains'] = $p['domains'] ?? [];
+            if (!in_array($value, $p['domains'], true)) {
+                $p['domains'][] = $value;
+            }
+            break;
+
+        case 'slack':
+            if (!str_contains($value, ' / ')) {
+                break;
+            }
+            [$workspace, $channel] = explode(' / ', $value, 2);
+            $workspace = trim($workspace);
+            $channel   = trim($channel);
+            if ($workspace === '' || $channel === '') {
+                break;
+            }
+            $p['slack'] = $p['slack'] ?? [];
+            $rule       = ['workspace' => $workspace];
+            if (!in_array($channel, ['__threads__', '__activity__', '__huddle__'], true)) {
+                $rule['channel_glob'] = $channel;
+            }
+            foreach ($p['slack'] as $existing) {
+                if (
+                    ($existing['workspace'] ?? null) === $rule['workspace']
+                    && ($existing['channel_glob'] ?? null) === ($rule['channel_glob'] ?? null)
+                ) {
+                    return;
+                }
+            }
+            $p['slack'][] = $rule;
+            break;
+
+        case 'apps':
+            if (str_starts_with($value, 'ssh:')) {
+                $host           = substr($value, 4);
+                $p['ssh_hosts'] = $p['ssh_hosts'] ?? [];
+                if (!in_array($host, $p['ssh_hosts'], true)) {
+                    $p['ssh_hosts'][] = $host;
+                }
+            } else {
+                $p['apps'] = $p['apps'] ?? [];
+                if (!in_array($value, $p['apps'], true)) {
+                    $p['apps'][] = $value;
+                }
+            }
+            break;
     }
 }
 

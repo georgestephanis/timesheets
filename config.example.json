@@ -95,6 +95,14 @@
                 "usernames": ["your-github-login"],
                 "authors": ["you@example.com"]
             }
+        ],
+        "llm": [
+            {
+                "name": "Local Ollama",
+                "base_url": "http://localhost:11434/v1",
+                "api_key": "ollama",
+                "model": "llama3"
+            }
         ]
     }
 }

@@ -2,6 +2,10 @@
 
 A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp/GitHub APIs into a project-attributed time report.
 
+## A Recommendation on Building your `config.json`
+
+The config is a somewhat long and detailed json object. Both a `config.example.json` and `config.schema.json` are provided to describe how it should look, but writing it manually is tedious. It is recommended to work with a LLM / AI provider to have it populate the `config.json` for you, describing what you'd like to configure, and what credentials you'd like to add.
+
 ## Quick start
 
 ```bash
@@ -171,19 +175,38 @@ Multiple personal-access-token connections are supported for each provider:
             "name": "GitHub via gh",
             "authors": ["you@example.com"]
         }
+    ],
+    "llm": [
+        {
+            "name": "Local Ollama",
+            "base_url": "http://localhost:11434/v1",  // required; include the /v1 path
+            "api_key": "ollama",                       // optional; many local endpoints accept any string
+            "model": "llama3",                         // optional default model
+            "timeout": 30                              // optional; seconds (default 30)
+        }
     ]
 }
 ```
 
+Works with any OpenAI-compatible server: Ollama, vLLM, LM Studio, OpenAI, etc. Multiple entries are supported. The connection details are available to future features via `$config['integrations']['llm']`.
+
 > **Note:** The GitHub integration (PRs, issues, comments, commit activity) only runs via the CLI. It is skipped during web requests to avoid blocking page loads. Run `php activity-report.php` from the command line, or rely on the daily cron job, to include GitHub data in cached reports.
 
-### Tuning with `--show-unmatched`
+### Tuning with `--show-unmatched` and `--suggest`
 
 Run with `--show-unmatched` to see which VSCode dirs, browser hosts, and Slack channels weren't matched by any project rule:
 
 ```bash
 php activity-report.php --show-unmatched
 ```
+
+Once you have an LLM configured, `--suggest` asks it to recommend project assignments for those unmatched signals and prompts you to accept each one:
+
+```bash
+php activity-report.php --days 7 --suggest
+```
+
+Accepted suggestions are written directly to `config.json` (with a timestamped backup in `reports/config/`) so they take effect on the next run.
 
 ---
 
@@ -199,6 +222,8 @@ php activity-report.php [options]
     --project NAME       Filter output to one project
     --format md|json|tsv Output format (default md)
     --show-unmatched     Append unclassified signals — useful for tuning config
+    --suggest            Ask the configured LLM to suggest project assignments for
+                         unmatched signals, then prompt to accept each one
     --list-projects      Print configured projects and exit
     -h, --help           Show this message
 ```
