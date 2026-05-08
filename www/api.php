@@ -335,7 +335,8 @@ if ($hasProjectFilter) {
     [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
 }
 
-$out = renderJson($bucket, $unmatched, $from, $to, $tz);
+$warnings = getIntegrationWarnings();
+$out     = renderJson($bucket,     $unmatched,     $from, $to, $tz, $warnings);
 $fullOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz);
 
 saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $fullOut);

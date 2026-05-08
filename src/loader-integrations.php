@@ -114,10 +114,13 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
 }
 
 /**
- * Emits a warning in both CLI and web contexts.
+ * Emits a warning in both CLI and web contexts, and collects it for the current request.
  */
 function integrationWarning(string $message): void
 {
+    global $_integrationWarnings;
+    $_integrationWarnings[] = $message;
+
     $line = 'warning: ' . $message;
     if (defined('STDERR')) {
         fwrite(STDERR, $line . "\n");
@@ -125,6 +128,17 @@ function integrationWarning(string $message): void
     }
 
     error_log($line);
+}
+
+/**
+ * Returns all warnings collected by integrationWarning() during this request.
+ *
+ * @return list<string>
+ */
+function getIntegrationWarnings(): array
+{
+    global $_integrationWarnings;
+    return $_integrationWarnings ?? [];
 }
 
 /**

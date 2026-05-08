@@ -29,15 +29,16 @@ if ($format === 'html') {
 
     $tz        = new DateTimeZone($config['timezone']);
     $jsConfig  = json_encode([
-        'timezone'  => $config['timezone'],
-        'minSec'    => (int)($config['min_event_seconds_to_show'] ?? 0),
-        'projects'  => array_map(
+        'timezone'          => $config['timezone'],
+        'minSec'            => (int)($config['min_event_seconds_to_show'] ?? 0),
+        'projects'          => array_map(
             fn($name, $p) => ['name' => $name, 'grouping' => $p['grouping'] ?? null],
             array_keys($config['projects'] ?? []),
             array_values($config['projects'] ?? [])
         ),
-        'today'     => (new DateTimeImmutable('now', $tz))->format('Y-m-d'),
-        'yesterday' => (new DateTimeImmutable('yesterday', $tz))->format('Y-m-d'),
+        'today'             => (new DateTimeImmutable('now', $tz))->format('Y-m-d'),
+        'yesterday'         => (new DateTimeImmutable('yesterday', $tz))->format('Y-m-d'),
+        'harvestConfigured' => !empty($config['integrations']['harvest']),
     ], JSON_UNESCAPED_UNICODE);
 
     ?>
@@ -58,6 +59,9 @@ if ($format === 'html') {
   .harvest-day-total { font-size: 1rem; color: #111; }
   .harvest-entries { margin: 0.2rem 0 0; padding-left: 0; list-style: none; color: #555; }
   .harvest-entries li { margin: 0.15rem 0; }
+  .harvest-day-zero { color: #999; font-style: italic; }
+  .warnings-banner { margin: 0.6rem 0; padding: 0.6rem 1rem; border-radius: 6px; font-size: 0.85rem; background: #fff7ed; border: 1px solid #fed7aa; color: #7c2d12; }
+  .warnings-banner ul { margin: 0.3rem 0 0; padding-left: 1.5em; }
   h1 { margin-top: 0.5em; }
   h2, h3, h4 { margin-top: 1.5em; }
   h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
@@ -108,6 +112,7 @@ if ($format === 'html') {
 </head>
 <body>
 <nav id="nav"></nav>
+<div id="warnings-banner"></div>
 <div id="diff-banner"></div>
 <div id="admin"></div>
 <div id="content-wrap">
@@ -381,10 +386,18 @@ function renderHarvestSidebar(data) {
     const el = document.getElementById('harvest-sidebar');
     if (!el) return;
 
-    const days = Object.keys(data.days || {}).sort().reverse();
+    if (!SITE.harvestConfigured) {
+        el.innerHTML = '';
+        return;
+    }
 
-    // Collect harvest seconds per label per day.
-    const dayEntries = [];
+    const days = Object.keys(data.days || {}).sort().reverse();
+    if (!days.length) {
+        el.innerHTML = '';
+        return;
+    }
+
+    let html = '<p class="harvest-sidebar-title">Harvest logged</p>';
     for (const date of days) {
         const entryMap = {};
         for (const rec of Object.values(data.days[date] || {})) {
@@ -393,28 +406,36 @@ function renderHarvestSidebar(data) {
             }
         }
         const totalSec = Object.values(entryMap).reduce((s, v) => s + v, 0);
-        if (totalSec > 0) dayEntries.push({ date, entryMap, totalSec });
-    }
+        const dow = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
+        const entries = Object.entries(entryMap).sort(([, a], [, b]) => b - a);
 
-    if (!dayEntries.length) {
+        html += `<div class="harvest-day">`;
+        html += `<div class="harvest-day-date">${esc(date)} <span class="dow">(${dow})</span></div>`;
+        if (totalSec > 0) {
+            html += `<div class="harvest-day-total">${fmtDur(totalSec)}</div>`;
+            html += `<ul class="harvest-entries">`;
+            for (const [label, sec] of entries) {
+                html += `<li>${esc(label)}: <span class="dur">${fmtDur(sec)}</span></li>`;
+            }
+            html += `</ul>`;
+        } else {
+            html += `<div class="harvest-day-total harvest-day-zero">0m</div>`;
+        }
+        html += `</div>`;
+    }
+    el.innerHTML = html;
+}
+
+function renderWarningsBanner(data) {
+    const el = document.getElementById('warnings-banner');
+    if (!el) return;
+    const warnings = data?.warnings || [];
+    if (!warnings.length) {
         el.innerHTML = '';
         return;
     }
-
-    let html = '<p class="harvest-sidebar-title">Harvest logged</p>';
-    for (const { date, entryMap, totalSec } of dayEntries) {
-        const dow = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
-        const entries = Object.entries(entryMap).sort(([, a], [, b]) => b - a);
-        html += `<div class="harvest-day">`;
-        html += `<div class="harvest-day-date">${esc(date)} <span class="dow">(${dow})</span></div>`;
-        html += `<div class="harvest-day-total">${fmtDur(totalSec)}</div>`;
-        html += `<ul class="harvest-entries">`;
-        for (const [label, sec] of entries) {
-            html += `<li>${esc(label)}: <span class="dur">${fmtDur(sec)}</span></li>`;
-        }
-        html += `</ul></div>`;
-    }
-    el.innerHTML = html;
+    const items = warnings.map(w => `<li>${esc(w)}</li>`).join('');
+    el.innerHTML = `<div class="warnings-banner"><strong>Data source warnings:</strong><ul>${items}</ul></div>`;
 }
 
 function renderCurrentView() {
@@ -427,6 +448,7 @@ function renderCurrentView() {
     bindNavEvents();
     renderAdminPanel(currentData);
     renderHarvestSidebar(currentData);
+    renderWarningsBanner(currentData);
 }
 
 // ── Diff ──────────────────────────────────────────────────────────────────────
@@ -557,6 +579,8 @@ async function fetchAndRender(params, isRebuild = false) {
     if (elAdmin) elAdmin.innerHTML = '';
     const elSidebar = document.getElementById('harvest-sidebar');
     if (elSidebar) elSidebar.innerHTML = '';
+    const elWarnings = document.getElementById('warnings-banner');
+    if (elWarnings) elWarnings.innerHTML = '';
 
     const prevData = currentData;
 
