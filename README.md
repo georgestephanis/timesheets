@@ -83,22 +83,26 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 
 ### Top-level fields
 
-| Field                               | Type        | Description                                                                                                   |
-| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------- |
-| `timezone`                          | string      | IANA timezone name for all output (e.g. `America/New_York`)                                                   |
-| `paths.activitywatch`               | string      | Path to ActivityWatch data directory                                                                          |
-| `paths.chrome`                      | string      | Path to Chrome user-data directory                                                                            |
-| `paths.chrome_profiles`             | array\|null | Profile folders to scan; `null` = auto-discover all                                                           |
-| `git_authors`                       | string[]    | Your commit author email address(es)                                                                          |
-| `discover_repos`                    | string      | Set to `"github_desktop"` to auto-discover repos from the GitHub Desktop app (see below)                      |
-| `chrome_correlation_window_seconds` | int         | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120)             |
-| `min_event_seconds_to_show`         | int         | Hide activity segments shorter than this (default 30)                                                         |
-| `projects`                          | object      | Named project definitions (see below)                                                                         |
-| `personal_hosts`                    | string[]    | Browser hostnames to bucket as personal, not work                                                             |
-| `personal_apps`                     | string[]    | App names (as reported by ActivityWatch) to bucket as personal                                                |
-| `ignored_projects`                  | string[]    | Project names to exclude from classification and reporting                                                    |
-| `groupings_map`                     | object      | Rules for `set-integration-groupings` tool: connection glob → grouping label, ClickUp default, priority order |
-| `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`, `github[]`, `llm[]`)                                     |
+| Field                               | Type        | Description                                                                                                        |
+| ----------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| `timezone`                          | string      | IANA timezone name for all output (e.g. `America/New_York`)                                                        |
+| `paths.activitywatch`               | string      | Path to ActivityWatch data directory                                                                               |
+| `paths.chrome`                      | string      | Path to Chrome user-data directory                                                                                 |
+| `paths.chrome_profiles`             | array\|null | Profile folders to scan; `null` = auto-discover all                                                                |
+| `git_authors`                       | string[]    | Your commit author email address(es)                                                                               |
+| `discover_repos`                    | string      | Set to `"github_desktop"` to auto-discover repos from the GitHub Desktop app (see below)                           |
+| `chrome_correlation_window_seconds` | int         | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120)                  |
+| `min_event_seconds_to_show`         | int         | Hide activity segments shorter than this (default 30)                                                              |
+| `projects`                          | object      | Named project definitions (see below)                                                                              |
+| `personal_hosts`                    | string[]    | Browser hostnames to bucket as personal, not work                                                                  |
+| `personal_apps`                     | string[]    | App names (as reported by ActivityWatch) to bucket as personal                                                     |
+| `ignored_projects`                  | string[]    | Project names to exclude from classification and reporting                                                         |
+| `groupings`                         | object      | Canonical grouping definitions: `color`, `aliases`, and `logo` per grouping; drives UI dropdowns and accent colors |
+| `correlated_apps`                   | string[]    | App names whose time is attributed to the most-recently-active project within `app_correlation_window_seconds`     |
+| `app_correlation_window_seconds`    | int         | Lookback window (seconds) for correlated-app attribution (default 900)                                             |
+| `project_gap_window_seconds`        | int         | Bridge untracked/personal gaps shorter than this back to the surrounding project (default 300)                     |
+| `groupings_map`                     | object      | Rules for `set-integration-groupings` tool: connection glob → grouping label, ClickUp default, priority order      |
+| `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`, `github[]`, `llm[]`)                                          |
 
 ### Project signals
 
@@ -328,7 +332,10 @@ src/
 www/
   index.php               — router for php -S
   api.php                 — JSON data endpoint with rebuild + config-mutation actions
-  report_renderer.php     — HTML shell + client-side JS renderer
+  report_renderer.php     — HTML shell + static asset references; non-HTML formats served here
+  static/
+    app.css               — all styles
+    app.js                — client-side report renderer and admin panel
 tools/
   list-github-desktop-repos.php
   sync-integration-projects.php

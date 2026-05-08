@@ -195,8 +195,7 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
       `renderCurrentView()` into `renderReportOnly()` so a project-filter
       change doesn't redraw nav, sidebar, and admin panel.
 - [ ] **(P3, s)** Frontend builds harvest sidebar in two passes
-      (`renderHarvestSidebar`, ~line 386–419 of `report_renderer.php`). One
-      pass suffices.
+      (`renderHarvestSidebar` in `www/static/app.js`). One pass suffices.
 - [ ] **(P3, s)** `Intl.DateTimeFormat` for DOW formatting should be cached at
       module scope rather than constructed per-day in `renderDay`.
 - [ ] **(P3, m)** Per-day source caches: 4 JSON file reads per day. For 7-day
@@ -204,10 +203,11 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 
 ## Modularity / refactoring
 
-- [ ] **(P1, l)** Extract embedded JS/CSS from `www/report_renderer.php` into
+- [x] **(P1, l)** Extract embedded JS/CSS from `www/report_renderer.php` into
       `www/static/app.js` and `www/static/app.css`. Keep `report_renderer.php`
       to ~100 lines: HTML shell + `<?= $jsConfig ?>` + `<script src="...">`.
-      Once extracted, add ESLint and `'use strict'` (or move to ES modules).
+      Done — `report_renderer.php` is now 159 lines; JS in `www/static/app.js`,
+      CSS in `www/static/app.css`. ESLint remains to be added.
 - [x] **(P1, m)** Create `src/config.php` with the canonical helpers used by
       `api.php`, `cli.php`, and every tool: `saveConfigWithBackup`, `addUniqueValue`,
       `parseSlackSignal`, `applySignalToProject`. Duplicate copies removed from
@@ -232,9 +232,9 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 - [ ] **(P3, m)** Introduce a `Config` value object (read-only) for the typed
       access paths. Even a typed array shape (PHPStan generic) at boundaries
       would be a big improvement.
-- [ ] **(P3, s)** `set-integration-groupings.php` hardcodes "BethinkStudio" /
-      "Big Orange Lab" mappings. Externalize to a `groupings_map` config field
-      (or generalize to a regex-keyed mapping).
+- [x] **(P3, s)** `set-integration-groupings.php` hardcodes client names.
+      Externalized to `groupings_map` config field with `connections` glob map,
+      `clickup_default`, and `priority` list. Tool is now fully config-driven.
 
 ## Tooling / infrastructure
 
@@ -251,8 +251,8 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 - [ ] **(P2, s)** Add **`.editorconfig`** for indentation and line-ending
       consistency.
 - [ ] **(P2, s)** Add a `composer check` script chaining lint + analyze + test.
-- [ ] **(P2, s)** Add **ESLint** to `www/static/app.js` once it is extracted
-      (see Modularity P1). Recommended config, no plugins needed.
+- [ ] **(P2, s)** Add **ESLint** to `www/static/app.js`. Recommended config,
+      no plugins needed.
 - [ ] **(P3, s)** Pre-commit hook running the lint/format checks (lefthook or a
       simple `.git/hooks/pre-commit` template installed by `composer install`).
 - [ ] **(P3, s)** **Dependabot config** for `composer.json` and `package.json`.
@@ -281,8 +281,8 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 
 ## Frontend (extracted findings)
 
-These all live in `www/report_renderer.php`. After the JS extract (Modularity
-P1), most of these become standard JS-project work.
+These all live in `www/static/app.js` (and `app.css`). The JS/CSS extraction
+is complete; most of these are now standard JS-project work.
 
 ### Accessibility
 
@@ -354,19 +354,25 @@ remaining gaps that are too complex to fix without a Windows test environment.
       but bare `php.exe` with cmd as the shell will leave an unredirected error
       stream. Detect `PHP_OS_FAMILY === 'Windows'` and switch the redirect
       suffix, or wrap git calls in `proc_open` with explicit pipe handles so
-      stderr is con      stderr is con      stderr is con      stderr is con      stderr is refore      stderr is con      stderr is con      stderr is con      stderr i for Act      stderr is con      stderr is con      stderr is con      stds `%APPD      stderr is con      stderr is con      stderr is con      stderr /User      stderr is con      stderr is con      stderr is con      stderr is con ig/google-chrome/`). Either
-      add platform-specific example comments in the schema descriptions, or
-      detect `PHP_OS_FAMILY` at startup and emit a warning when the configured
-      paths don't exist on the current OS.
+      stderr is contained.
+
+- [ ] **(P2, m)** ActivityWatch and Chrome paths differ per OS. AW defaults to
+      `%APPDATA%/activitywatch/` on Windows and `~/.config/activitywatch/` on
+      Linux. Chrome on Windows lives at `%LOCALAPPDATA%/Google/Chrome/User Data/`;
+      on Linux at `~/.config/google-chrome/`. Either add platform-specific example
+      comments in the schema descriptions, or detect `PHP_OS_FAMILY` at startup
+      and emit a warning when the configured paths don't exist on the current OS.
 
 - [ ] **(P2, s)** `expandPath()` converts `~/` using either `HOME` or
       `USERPROFILE`. On Windows the expanded path will contain a backslash-based
       prefix (`C:\Users\name`) followed by forward-slash suffixes from config
       values. PHP accepts mixed separators on Windows for most `file_*`
       operations, but `glob()` patterns in `loader-chrome.php` and SQLite DSN
-      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      strings s      str`D      strings s      strings s      strings s      strings s      strinenera      strings s      strings s      strings s      strings s      strings s  t       strings s      strings s      stks false positives. Needs a Windows test corpus to tune.
+      strings may need normalization. Needs a Windows test corpus to confirm.
 
-- [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [  need- [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [ ] **(P3, s)** - [  scheduling example to the README.
+- [ ] **(P3, s)** Add a Linux/Windows scheduling example to the README (current
+      cron snippet uses macOS paths and `crontab -e`; Windows users need Task
+      Scheduler or a WSL cron entry).
 
 - [ ] **(P3, s)** `fnmatch()` is available on all platforms in PHP, but on
       Windows it does not set `FNM_CASEFOLD` by default (the constant is

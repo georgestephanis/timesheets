@@ -58,15 +58,18 @@ src/
                                    isAfkAt(), activeInputSecondsDuring(),
                                    classifyAndAggregate()
   renderers.php                  — renderProjectEntry(), renderMarkdown(),
-                                   renderJson(bucket, unmatched, from, to, tz, warnings=[]),
+                                   renderJson(bucket, unmatched, from, to, tz, warnings=[], timeline=[]),
                                    renderTsv()
 www/
   index.php                      — router for `php -S localhost:8000 www/index.php`
   api.php                        — JSON data endpoint; GET = fetch/rebuild report,
                                    POST = config mutations (flag_projects_personal,
                                    reassign_signal, set_project_grouping)
-  report_renderer.php            — HTML shell + ~800 lines of client-side JS;
+  report_renderer.php            — HTML shell + static asset references;
                                    non-HTML formats also served here via full PHP pipeline
+  static/
+    app.css                      — all styles
+    app.js                       — client-side report renderer, admin panel, nav
 tools/
   list-github-desktop-repos.php  — lists GitHub Desktop repos sorted by last commit;
                                    --apply adds unconfigured ones to config.json with backup
@@ -129,7 +132,7 @@ Passing `rebuild=true` bypasses **and overwrites** the per-day source caches. Th
 
 **`backfillChromeUrls`** fills in missing URLs on Chrome ActivityWatch events by correlating window-focus times with the Chrome history SQLite within `chrome_correlation_window_seconds`.
 
-**`classifyAndAggregate`** returns `[$bucket, $unmatched]`. `$bucket` is indexed `[date][project]` with `seconds`, `active_seconds`, `activity_ratio`, `detail` (broken down by kind: vscode/browser/slack/ssh/app/harvest/clickup/github), `external` (per-source entry/activity/discussion counts), and `commits`. `$unmatched` records signals that didn't match any project rule.
+**`classifyAndAggregate`** returns `[$bucket, $unmatched, $timeline]`. `$bucket` is indexed `[date][project]` with `seconds`, `active_seconds`, `activity_ratio`, `detail` (broken down by kind: vscode/browser/slack/ssh/app/harvest/clickup/github), `external` (per-source entry/activity/discussion counts), and `commits`. `$unmatched` records signals that didn't match any project rule. `$timeline` is a per-date list of `{s, e, p, g}` segments (seconds from local midnight) for the day-timeline SVG bar in the web UI; sub-minute segments and gaps ≤ 60 s between same-project events are merged/dropped before return.
 
 ### Signal matching priority (inside `projectForSignals`)
 
@@ -211,6 +214,23 @@ Defined and validated by `config.schema.json`. Key fields:
     "personal_hosts": ["youtube.com"],
     "personal_apps": ["Discord"],
     "ignored_projects": ["Project Name"],
+    "groupings": {
+        // canonical grouping registry; keys are authoritative names
+        "Group Label": {
+            "color": "#ED683C", // optional CSS color for accent bars in the web UI
+            "aliases": ["Old Name"], // alternate spellings resolved at render time
+            "logo": "https://...", // optional logo URL shown in group headers
+        },
+    },
+    "correlated_apps": ["ClickUp", "Claude", "Terminal", "Cyberduck"],
+    // ^ App names whose idle time is attributed to the most-recently-active project
+    //   within app_correlation_window_seconds. GitHub Desktop is auto-added when
+    //   discover_repos is "github_desktop".
+    "app_correlation_window_seconds": 900,
+    // ^ How far back to look for a matching project when attributing a correlated app (default 900).
+    "project_gap_window_seconds": 300,
+    // ^ If the user switches to untracked/personal activity for < this many seconds
+    //   and then returns to the same project, the gap is bridged into that project (default 300).
     "groupings_map": {
         // used by set-integration-groupings.php to auto-assign grouping fields
         "connections": { "*pattern*": "Grouping Label" }, // fnmatch globs against connection names
@@ -277,7 +297,15 @@ All project keys are optional — list only the signals that apply. Glob `*` is 
         "browser": { "example.com": 3 },
     },
     "warnings": ["[Harvest Main] HTTP 401 from api.harvestapp.com: Invalid token"],
-    // "warnings" key only present when non-empty; only included in live responses, not cached files
+    // "warnings" key only present when non-empty; only in live responses, not cached files
+    "timelines": {
+        "2026-05-08": [
+            { "s": 32400, "e": 34200, "p": "Project Name", "g": "Group Label" },
+            // s/e = seconds from local midnight; p = project name; g = grouping (or null)
+            // sub-minute segments dropped; same-project gaps ≤ 60 s merged
+        ],
+    },
+    // "timelines" key only present when non-empty (omitted for project-filtered responses)
 }
 ```
 
@@ -307,7 +335,7 @@ No args               Backfill prior 7 completed days (skips days already curren
 
 Served by `php -S localhost:8000 www/index.php`. `www/index.php` routes all requests to `www/report_renderer.php`.
 
-- **HTML requests** (`?format=html`, the default): `report_renderer.php` returns a static HTML shell with a `SITE` config object (timezone, projects list, `harvestConfigured` flag) and ~800 lines of client-side JavaScript. Data is fetched async from `api.php`.
+- **HTML requests** (`?format=html`, the default): `report_renderer.php` returns a static HTML shell with an inline `SITE` config object and `<link>`/`<script>` tags pointing to `www/static/app.css` and `www/static/app.js`. Data is fetched async from `api.php`.
 - **Non-HTML requests** (`?format=json|md|tsv`): the full PHP pipeline runs server-side and streams the result directly.
 - **`api.php` GET**: accepts `from`, `to`, `days`, `project`, `rebuild`. Serves cached JSON with `X-Report-Source: cached` when available; generates fresh data with `X-Report-Source: generated` otherwise. `rebuild=1` bypasses both the report cache and per-day source caches.
 - **`api.php` POST**: `action` field dispatches to `flag_projects_personal`, `reassign_signal`, or `set_project_grouping`, all of which mutate `config.json` with a backup.
@@ -322,10 +350,16 @@ const SITE = {
     today: "2026-05-08",
     yesterday: "2026-05-07",
     harvestConfigured: true, // true when integrations.harvest[] is non-empty in config.json
+    groupings: {
+        // mirrors config.json groupings; keys are canonical names
+        "Group Label": { color: "#ED683C", aliases: ["Old Name"], logo: "https://..." },
+    },
 };
 ```
 
 `harvestConfigured` controls whether the Harvest sidebar renders. When `true`, every day in the report gets a sidebar entry — 0m for days with no logged Harvest time.
+
+`groupings` drives the grouping dropdown in the admin panel (`<select>` instead of free-text `<input>` when non-empty), the `resolveGrouping(name)` alias lookup, and the `groupingColor(name)` function which checks `SITE.groupings[name]?.color` before falling back to the deterministic hash palette.
 
 ---
 
