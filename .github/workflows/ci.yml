@@ -27,6 +27,9 @@ jobs:
             - name: Analyze (phpstan)
               run: composer analyze
 
+            - name: Test (phpunit)
+              run: composer test
+
             - name: Set up Node
               uses: actions/setup-node@v4
               with:
@@ -37,3 +40,6 @@ jobs:
 
             - name: Format check (prettier)
               run: npm run format:check
+
+            - name: Lint JS (eslint)
+              run: npm run lint:js

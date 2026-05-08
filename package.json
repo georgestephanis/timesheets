@@ -1,11 +1,17 @@
 {
     "name": "timesheets",
     "private": true,
+    "type": "module",
     "scripts": {
         "format": "prettier --write .",
-        "format:check": "prettier --check ."
+        "format:check": "prettier --check .",
+        "lint:js": "eslint www/static/app.js",
+        "lint:js:fix": "eslint --fix www/static/app.js"
     },
     "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "eslint": "^10.3.0",
+        "globals": "^17.6.0",
         "prettier": "^3.0"
     }
 }

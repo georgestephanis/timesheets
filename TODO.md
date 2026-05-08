@@ -249,16 +249,18 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
       serialize/deserialize round-trips in `cache.php`. Added `composer test` script
       and `@test` to `composer check`.
 - [x] **(P1, s)** Add **GitHub Actions CI** that runs on push/PR:
-      `composer lint && composer analyze && npm run format:check`.
-      Workflow at `.github/workflows/ci.yml`.
-- [ ] **(P2, s)** Add **`.editorconfig`** for indentation and line-ending
+      `composer lint`, `composer analyze`, `composer test`, `npm run format:check`,
+      `npm run lint:js`. Workflow at `.github/workflows/ci.yml`.
+- [x] **(P2, s)** Add **`.editorconfig`** for indentation and line-ending
       consistency.
 - [x] **(P2, s)** Add a `composer check` script chaining lint + analyze + test.
-- [ ] **(P2, s)** Add **ESLint** to `www/static/app.js`. Recommended config,
-      no plugins needed.
-- [ ] **(P3, s)** Pre-commit hook running the lint/format checks (lefthook or a
-      simple `.git/hooks/pre-commit` template installed by `composer install`).
-- [ ] **(P3, s)** **Dependabot config** for `composer.json` and `package.json`.
+- [x] **(P2, s)** Add **ESLint** to `www/static/app.js`. Flat config with
+      `@eslint/js` recommended + browser globals. Fixed one real unused-variable
+      bug (`elNav` in `fetchAndRender`). Added `npm run lint:js` and CI step.
+- [x] **(P3, s)** Pre-commit hook at `.githooks/pre-commit`; `composer install`
+      auto-configures `core.hooksPath` via `post-install-cmd`.
+- [x] **(P3, s)** **Dependabot config** for `composer.json`, `package.json`,
+      and GitHub Actions — weekly updates for all three ecosystems.
 
 ## Documentation
 

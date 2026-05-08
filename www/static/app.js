@@ -573,7 +573,6 @@ function renderNav(params, fromRaw, toRaw) {
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function fetchAndRender(params, isRebuild = false) {
     const elReport = document.getElementById("report");
-    const elNav = document.getElementById("nav");
     const elBanner = document.getElementById("diff-banner");
     const elAdmin = document.getElementById("admin");
 

@@ -24,7 +24,9 @@
             "@lint:json",
             "@analyze",
             "@test"
-        ]
+        ],
+        "post-install-cmd": "git config core.hooksPath .githooks || true",
+        "post-update-cmd": "git config core.hooksPath .githooks || true"
     },
     "config": {
         "optimize-autoloader": true

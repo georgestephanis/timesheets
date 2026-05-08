@@ -1,0 +1,8 @@
+#!/bin/sh
+# Run fast checks before every commit. Install via: git config core.hooksPath .githooks
+# (composer install does this automatically via the post-install-cmd script)
+set -e
+composer lint
+composer analyze
+npm run format:check
+npm run lint:js
