@@ -178,7 +178,7 @@ function generateReport(
  * @param  array<string, mixed> $config Loaded and validated config array.
  * @return array{events: array, chrome: array, commits: array, external: array, from_cache: bool}
  */
-function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable $from, DateTimeImmutable $to): array
+function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable $from, DateTimeImmutable $to, bool $rebuild = false): array
 {
     $bundles = [];
     $fromCache = true;
@@ -191,7 +191,7 @@ function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable 
         $isFullDay = $sliceFrom == $dayStart && $sliceTo == $dayEnd;
         $isHistoricalDay = rangeIsHistorical($dayEnd, $tz);
 
-        if ($isFullDay && $isHistoricalDay) {
+        if (!$rebuild && $isFullDay && $isHistoricalDay) {
             $cached = loadDailyCachedSources($dayStart);
             if ($cached !== null) {
                 $bundles[] = $cached;

@@ -323,7 +323,7 @@ if (!$rebuild && !$hasProjectFilter && rangeIsHistorical($to, $tz)) {
     'commits' => $commits,
     'external' => $external,
     'from_cache' => $fromCache,
-] = loadSourcesForRange($config, $tz, $from, $to);
+] = loadSourcesForRange($config, $tz, $from, $to, $rebuild);
 
 $fullOpts = $opts;
 $fullOpts['project'] = null;
