@@ -242,15 +242,18 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
       `phpstan-baseline.neon` (7 known false positives from defensive guards).
       Fixed two real bugs in the process: json_encode error check in `config.php`,
       and `@phpstan-impure` on `githubBudgetExceeded`. Added `composer analyze` script.
-- [ ] **(P1, m)** Add **PHPUnit**:
-      `    composer require --dev phpunit/phpunit`
-      Initial test targets — pure functions only: - `classifyVscode`, `classifySlack`, `classifySsh` - `fmtDur`, `bsearchRight`, `chromeTime`, `awEpochToDateTime` - `applySignalToProject`, `parseSlackSignal` - `githubRepoFromRemoteUrl` - `serialize/deserialize` round-trip pairs in `cache.php`
+- [x] **(P1, m)** Add **PHPUnit**: installed `phpunit/phpunit ^13.1`. 84 tests covering
+      `classifyVscode`, `classifySlack`, `classifySsh`, `fmtDur`, `bsearchRight`,
+      `chromeTime`, `awEpochToDateTime`, `applySignalToProject`, `parseSlackSignal`,
+      `githubRepoFromRemoteUrl`, `fnmatchAny`, `hostMatchesDomain`, and all
+      serialize/deserialize round-trips in `cache.php`. Added `composer test` script
+      and `@test` to `composer check`.
 - [x] **(P1, s)** Add **GitHub Actions CI** that runs on push/PR:
       `composer lint && composer analyze && npm run format:check`.
       Workflow at `.github/workflows/ci.yml`.
 - [ ] **(P2, s)** Add **`.editorconfig`** for indentation and line-ending
       consistency.
-- [ ] **(P2, s)** Add a `composer check` script chaining lint + analyze + test.
+- [x] **(P2, s)** Add a `composer check` script chaining lint + analyze + test.
 - [ ] **(P2, s)** Add **ESLint** to `www/static/app.js`. Recommended config,
       no plugins needed.
 - [ ] **(P3, s)** Pre-commit hook running the lint/format checks (lefthook or a
@@ -286,9 +289,10 @@ is complete; most of these are now standard JS-project work.
 
 ### Accessibility
 
-- [ ] **(P1, s)** Replace `<a class="btn" href="#">` action triggers with
-      `<button type="button">` throughout. Anchors with `href="#"` scroll on
-      Enter, break right-click, and confuse screen readers.
+- [x] **(P1, s)** Replace `<a class="btn" href="#">` action triggers with
+      `<button type="button">` throughout. Done for: Add end date, Single day,
+      Config/admin toggle, Rebuild, and "flag project as personal". CSS updated
+      to match `.proj-actions button` alongside `.proj-actions a`.
 - [ ] **(P2, s)** `.btn.disabled` uses `pointer-events: none` instead of the
       `disabled` attribute. Add `aria-disabled="true"` and intercept clicks.
 - [ ] **(P2, s)** Add `aria-live="polite"` to `#report` so screen readers

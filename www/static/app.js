@@ -1,7 +1,7 @@
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentParams = null;
-let currentData   = null;
-let currentBadge  = 'live';
+let currentData = null;
+let currentBadge = "live";
 let currentCacheAgeSec = 0;
 let personalProjectQueue = new Set();
 let showAdminPanel = false;
@@ -9,51 +9,55 @@ let showAdminPanel = false;
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function addDays(dateStr, n) {
     // Slice to 10 chars so ISO datetimes like "2026-05-01T00:00:00-04:00" work too.
-    const [y, m, d] = String(dateStr).slice(0, 10).split('-').map(Number);
+    const [y, m, d] = String(dateStr).slice(0, 10).split("-").map(Number);
     const dt = new Date(y, m - 1, d + n);
-    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
 }
 
 function paramsFromUrl() {
-    const p    = new URLSearchParams(location.search);
-    const days = p.has('days') ? parseInt(p.get('days'), 10) : null;
+    const p = new URLSearchParams(location.search);
+    const days = p.has("days") ? parseInt(p.get("days"), 10) : null;
     return {
-        from:    p.get('from')    || (days ? null : SITE.today),
-        to:      p.get('to')      || (days ? null : SITE.today),
+        from: p.get("from") || (days ? null : SITE.today),
+        to: p.get("to") || (days ? null : SITE.today),
         days,
-        project: p.get('project') || '',
+        project: p.get("project") || "",
     };
 }
 
 function buildApiUrl(params, rebuild = false) {
     const u = new URLSearchParams();
-    if (params.from)    u.set('from',    params.from);
-    if (params.to)      u.set('to',      params.to);
-    if (params.days)    u.set('days',    String(params.days));
-    if (rebuild)        u.set('rebuild', '1');
-    return 'api.php?' + u;
+    if (params.from) u.set("from", params.from);
+    if (params.to) u.set("to", params.to);
+    if (params.days) u.set("days", String(params.days));
+    if (rebuild) u.set("rebuild", "1");
+    return "api.php?" + u;
 }
 
 function buildPageUrl(params) {
     const u = new URLSearchParams();
-    if (params.from)    u.set('from',    params.from);
-    if (params.to)      u.set('to',      params.to);
-    if (params.days)    u.set('days',    String(params.days));
-    if (params.project) u.set('project', params.project);
-    u.set('format', 'html');
-    return '?' + u;
+    if (params.from) u.set("from", params.from);
+    if (params.to) u.set("to", params.to);
+    if (params.days) u.set("days", String(params.days));
+    if (params.project) u.set("project", params.project);
+    u.set("format", "html");
+    return "?" + u;
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 function esc(s) {
-    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
 }
 
 // Mirrors PHP fmtDur: 3661→"1h 01m", 90→"1m", 18→"18s"
 function fmtDur(sec) {
     const m = Math.floor(sec / 60);
-    if (m >= 60) return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
-    if (m >= 1)  return `${m}m`;
+    if (m >= 60) return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+    if (m >= 1) return `${m}m`;
     return `${Math.floor(sec)}s`;
 }
 
@@ -63,9 +67,9 @@ function fmtAge(sec) {
     const m = Math.floor(s / 60);
     if (m < 60) return `${m}m`;
     const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ${String(m % 60).padStart(2, '0')}m`;
+    if (h < 24) return `${h}h ${String(m % 60).padStart(2, "0")}m`;
     const d = Math.floor(h / 24);
-    return `${d}d ${String(h % 24).padStart(2, '0')}h`;
+    return `${d}d ${String(h % 24).padStart(2, "0")}h`;
 }
 
 // ── Grouping helpers ──────────────────────────────────────────────────────────
@@ -81,7 +85,7 @@ function resolveGrouping(name) {
 function groupingColor(name) {
     const fromConfig = SITE.groupings[name]?.color;
     if (fromConfig) return fromConfig;
-    const palette = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316'];
+    const palette = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6", "#f97316"];
     let h = 0;
     for (const c of name) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0;
     return palette[Math.abs(h) % palette.length];
@@ -97,76 +101,87 @@ function hexToRgba(hex, alpha) {
 // ── Timeline bar ──────────────────────────────────────────────────────────────
 function renderTimeline(date, timelines) {
     const segs = timelines?.[date];
-    if (!segs?.length) return '';
+    if (!segs?.length) return "";
 
     const minS = Math.floor(segs[0].s / 3600) * 3600;
     const maxE = Math.ceil(segs[segs.length - 1].e / 3600) * 3600;
     const span = maxE - minS;
-    if (span <= 0) return '';
+    if (span <= 0) return "";
 
     const W = 1000;
-    const rects = segs.map(s => {
-        const x = ((s.s - minS) / span * W).toFixed(1);
-        const w = Math.max(1, (s.e - s.s) / span * W).toFixed(1);
-        const resolved = resolveGrouping(s.g);
-        const color = resolved ? groupingColor(resolved) : '#94a3b8';
-        const fmt = t =>
-            `${String(Math.floor(t / 3600)).padStart(2, '0')}:${String(Math.floor((t % 3600) / 60)).padStart(2, '0')}`;
-        const tip = `${esc(s.p)} ${fmt(s.s)}–${fmt(s.e)} (${fmtDur(s.e - s.s)})`;
-        return `<rect x="${x}" y="0" width="${w}" height="20" fill="${esc(color)}" opacity="0.85"><title>${tip}</title></rect>`;
-    }).join('');
+    const rects = segs
+        .map((s) => {
+            const x = (((s.s - minS) / span) * W).toFixed(1);
+            const w = Math.max(1, ((s.e - s.s) / span) * W).toFixed(1);
+            const resolved = resolveGrouping(s.g);
+            const color = resolved ? groupingColor(resolved) : "#94a3b8";
+            const fmt = (t) =>
+                `${String(Math.floor(t / 3600)).padStart(2, "0")}:${String(Math.floor((t % 3600) / 60)).padStart(2, "0")}`;
+            const tip = `${esc(s.p)} ${fmt(s.s)}–${fmt(s.e)} (${fmtDur(s.e - s.s)})`;
+            return `<rect x="${x}" y="0" width="${w}" height="20" fill="${esc(color)}" opacity="0.85"><title>${tip}</title></rect>`;
+        })
+        .join("");
 
     const ticks = [];
     for (let h = Math.ceil(minS / 3600); h < maxE / 3600; h++) {
-        const x = ((h * 3600 - minS) / span * W).toFixed(1);
+        const x = (((h * 3600 - minS) / span) * W).toFixed(1);
         ticks.push(`<line x1="${x}" y1="0" x2="${x}" y2="20" stroke="#fff" stroke-width="2" opacity="0.4"/>`);
     }
 
-    return `<svg class="day-timeline" viewBox="0 0 ${W} 20" preserveAspectRatio="none" aria-hidden="true">`
-        + `<rect x="0" y="0" width="${W}" height="20" fill="#e5e7eb"/>${rects}${ticks.join('')}</svg>`;
+    return (
+        `<svg class="day-timeline" viewBox="0 0 ${W} 20" preserveAspectRatio="none" aria-hidden="true">` +
+        `<rect x="0" y="0" width="${W}" height="20" fill="#e5e7eb"/>${rects}${ticks.join("")}</svg>`
+    );
 }
 
 // ── Renderers ─────────────────────────────────────────────────────────────────
 function renderCommits(commits) {
-    if (!commits.length) return '';
-    const items = commits.map(c => {
-        const t = new Date(c.time).toLocaleTimeString('en-US', {
-            hour: '2-digit', minute: '2-digit', hour12: false, timeZone: SITE.timezone,
-        });
-        return `<li><code>${esc(t)}</code> <code>${esc(c.sha.slice(0, 8))}</code> ${esc(c.subj)}</li>`;
-    }).join('');
+    if (!commits.length) return "";
+    const items = commits
+        .map((c) => {
+            const t = new Date(c.time).toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+                timeZone: SITE.timezone,
+            });
+            return `<li><code>${esc(t)}</code> <code>${esc(c.sha.slice(0, 8))}</code> ${esc(c.subj)}</li>`;
+        })
+        .join("");
     return `<li><em>commits (${commits.length}):</em><ul>${items}</ul></li>`;
 }
 
 function renderDetail(detail) {
-    return Object.entries(detail).map(([kind, items]) => {
-        const top = Object.entries(items)
-            .filter(([, s]) => s >= SITE.minSec)
-            .sort(([, a], [, b]) => b - a)
-            .slice(0, 6);
-        if (!top.length) return '';
-        return `<li><em>${esc(kind)}:</em> ${top.map(([k, s]) => `${esc(k)} (${fmtDur(s)})`).join(', ')}</li>`;
-    }).join('');
+    return Object.entries(detail)
+        .map(([kind, items]) => {
+            const top = Object.entries(items)
+                .filter(([, s]) => s >= SITE.minSec)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 6);
+            if (!top.length) return "";
+            return `<li><em>${esc(kind)}:</em> ${top.map(([k, s]) => `${esc(k)} (${fmtDur(s)})`).join(", ")}</li>`;
+        })
+        .join("");
 }
 
 function renderProject(tag, name, rec) {
-    const sec     = rec.seconds || 0;
+    const sec = rec.seconds || 0;
     const commits = rec.commits || [];
-    if (sec < SITE.minSec && !commits.length) return '';
+    if (sec < SITE.minSec && !commits.length) return "";
 
     const isQueuedPersonal = personalProjectQueue.has(name);
     const action = isQueuedPersonal
         ? '<span class="proj-actions muted">queued for personal</span>'
-        : `<span class="proj-actions"><a href="#" data-flag-project="${esc(name)}">flag project as personal</a></span>`;
+        : `<span class="proj-actions"><button type="button" data-flag-project="${esc(name)}">flag project as personal</button></span>`;
 
-    const secStr = sec ? ` <span class="dur">&mdash; ${fmtDur(sec)}</span>` : '';
-    const body   = renderDetail(rec.detail || {}) + renderCommits(commits);
-    return `<${tag}>${esc(name)}${secStr}${action}</${tag}>${body ? `<ul>${body}</ul>` : ''}`;
+    const secStr = sec ? ` <span class="dur">&mdash; ${fmtDur(sec)}</span>` : "";
+    const body = renderDetail(rec.detail || {}) + renderCommits(commits);
+    return `<${tag}>${esc(name)}${secStr}${action}</${tag}>${body ? `<ul>${body}</ul>` : ""}`;
 }
 
 function filterProjectsForView(projects, projectFilter) {
     if (!projectFilter) return Object.entries(projects || {});
-    if (projectFilter.startsWith('group:')) {
+    if (projectFilter.startsWith("group:")) {
         const grouping = projectFilter.slice(6);
         return Object.entries(projects || {}).filter(([, rec]) => resolveGrouping(rec?.grouping || null) === grouping);
     }
@@ -174,94 +189,103 @@ function filterProjectsForView(projects, projectFilter) {
 }
 
 function renderDay(date, projects, projectFilter, timelines = {}) {
-    const entries  = filterProjectsForView(projects, projectFilter).sort(([, a], [, b]) => (b.seconds||0) - (a.seconds||0));
-    if (!entries.length) return '';
-    const dayTotal = entries.reduce((s, [, r]) => s + (r.seconds||0), 0);
-    const dow      = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
+    const entries = filterProjectsForView(projects, projectFilter).sort(
+        ([, a], [, b]) => (b.seconds || 0) - (a.seconds || 0),
+    );
+    if (!entries.length) return "";
+    const dayTotal = entries.reduce((s, [, r]) => s + (r.seconds || 0), 0);
+    const dow = new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { weekday: "short" });
 
-    const grouped   = {};
+    const grouped = {};
     const ungrouped = [];
     for (const [name, rec] of entries) {
         const g = resolveGrouping(rec.grouping);
         g ? (grouped[g] ??= []).push([name, rec]) : ungrouped.push([name, rec]);
     }
 
-    let html = `<h2>${esc(date)} <span class="dow">(${dow})</span> <span class="dur">&mdash; ${fmtDur(dayTotal)} active</span></h2>`
-        + renderTimeline(date, timelines);
+    let html =
+        `<h2>${esc(date)} <span class="dow">(${dow})</span> <span class="dur">&mdash; ${fmtDur(dayTotal)} active</span></h2>` +
+        renderTimeline(date, timelines);
 
     const groupTotals = Object.entries(grouped)
-        .map(([g, ps]) => [g, ps.reduce((s, [, r]) => s + (r.seconds||0), 0)])
+        .map(([g, ps]) => [g, ps.reduce((s, [, r]) => s + (r.seconds || 0), 0)])
         .sort(([, a], [, b]) => b - a);
 
     for (const [g, gSec] of groupTotals) {
         const color = groupingColor(g);
         const colorLight = hexToRgba(color, 0.35);
         const blocks = grouped[g]
-            .map(([n, r]) => { const p = renderProject('h4', n, r); return p ? `<div class="project-block">${p}</div>` : ''; })
-            .join('');
+            .map(([n, r]) => {
+                const p = renderProject("h4", n, r);
+                return p ? `<div class="project-block">${p}</div>` : "";
+            })
+            .join("");
         if (blocks.trim()) {
-            const gSecStr = gSec ? ` <span class="dur">&mdash; ${fmtDur(gSec)}</span>` : '';
+            const gSecStr = gSec ? ` <span class="dur">&mdash; ${fmtDur(gSec)}</span>` : "";
             const logo = SITE.groupings[g]?.logo;
-            const logoHtml = logo ? `<img src="${esc(logo)}" alt="" class="group-logo" aria-hidden="true">` : '';
+            const logoHtml = logo ? `<img src="${esc(logo)}" alt="" class="group-logo" aria-hidden="true">` : "";
             html += `<div class="client-group" style="--accent:${color};--accent-light:${colorLight}"><h3>${logoHtml}${esc(g)}${gSecStr}</h3>${blocks}</div>`;
         }
     }
 
-    for (const [name, rec] of ungrouped) html += renderProject('h3', name, rec);
+    for (const [name, rec] of ungrouped) html += renderProject("h3", name, rec);
     return html;
 }
 
-function renderReport(data, projectFilter = '') {
-    const days = Object.keys(data.days || {}).sort().reverse();
-    if (!days.length) return '<p><em>No activity recorded for this period.</em></p>';
+function renderReport(data, projectFilter = "") {
+    const days = Object.keys(data.days || {})
+        .sort()
+        .reverse();
+    if (!days.length) return "<p><em>No activity recorded for this period.</em></p>";
 
     const blocks = days
-        .map(date => renderDay(date, data.days[date], projectFilter, data.timelines || {}))
+        .map((date) => renderDay(date, data.days[date], projectFilter, data.timelines || {}))
         .filter(Boolean);
 
-    if (!blocks.length) return '<p><em>No activity recorded for this filter in this period.</em></p>';
-    return blocks.join('\n');
+    if (!blocks.length) return "<p><em>No activity recorded for this filter in this period.</em></p>";
+    return blocks.join("\n");
 }
 
-function projectOptions(selected = '', kind = '') {
+function projectOptions(selected = "", kind = "") {
     const opts = SITE.projects
-        .map(p => `<option value="${esc(p.name)}"${p.name === selected ? ' selected' : ''}>${esc(p.name)}</option>`)
-        .join('');
+        .map((p) => `<option value="${esc(p.name)}"${p.name === selected ? " selected" : ""}>${esc(p.name)}</option>`)
+        .join("");
 
-    const personalOpt = (kind === 'browser' || kind === 'apps')
-        ? `<option value="__personal__"${selected === '__personal__' ? ' selected' : ''}>Personal</option>`
-        : '';
+    const personalOpt =
+        kind === "browser" || kind === "apps"
+            ? `<option value="__personal__"${selected === "__personal__" ? " selected" : ""}>Personal</option>`
+            : "";
 
     return `<option value="">Select project</option>${personalOpt}<option value="__new__">+ New project...</option>${opts}`;
 }
 
-function projectOptionsSimple(selected = '') {
+function projectOptionsSimple(selected = "") {
     return SITE.projects
-        .map(p => `<option value="${esc(p.name)}"${p.name === selected ? ' selected' : ''}>${esc(p.name)}</option>`)
-        .join('');
+        .map((p) => `<option value="${esc(p.name)}"${p.name === selected ? " selected" : ""}>${esc(p.name)}</option>`)
+        .join("");
 }
 
 function getProjectMeta(name) {
-    return SITE.projects.find(p => p.name === name) || null;
+    return SITE.projects.find((p) => p.name === name) || null;
 }
 
 function renderAdminPanel(data) {
-    const elAdmin = document.getElementById('admin');
+    const elAdmin = document.getElementById("admin");
     if (!elAdmin) return;
 
     if (!showAdminPanel) {
-        elAdmin.innerHTML = '';
+        elAdmin.innerHTML = "";
         return;
     }
 
     const queue = Array.from(personalProjectQueue.values()).sort();
     const queueHtml = queue.length
-        ? `<div class="admin-row"><span>${queue.map(esc).join(', ')}</span><button class="btn" data-apply-personal>Apply personal flags</button></div>`
+        ? `<div class="admin-row"><span>${queue.map(esc).join(", ")}</span><button class="btn" data-apply-personal>Apply personal flags</button></div>`
         : '<p class="muted">No projects queued for personal-ignore.</p>';
 
     const unmatched = data?.unmatched || {};
-    const firstProject = SITE.projects[0]?.name || '';
-    const kinds = ['vscode', 'browser', 'slack', 'apps'];
+    const firstProject = SITE.projects[0]?.name || "";
+    const kinds = ["vscode", "browser", "slack", "apps"];
     const rows = [];
     for (const kind of kinds) {
         const items = Object.entries(unmatched[kind] || {})
@@ -269,22 +293,22 @@ function renderAdminPanel(data) {
             .slice(0, 12);
         if (!items.length) continue;
 
-        const sectionRows = items.map(([value, count]) => {
-            const encodedValue = encodeURIComponent(value);
-            return `<div class="admin-row">
+        const sectionRows = items
+            .map(([value, count]) => {
+                const encodedValue = encodeURIComponent(value);
+                return `<div class="admin-row">
               <span class="sig"><code>${esc(value)}</code> <span class="muted">(${count})</span></span>
-                            <select data-reassign-project>${projectOptions('', kind)}</select>
+                            <select data-reassign-project>${projectOptions("", kind)}</select>
               <button class="btn" data-reassign data-kind="${esc(kind)}" data-value="${encodedValue}">Assign</button>
             </div>`;
-        }).join('');
+            })
+            .join("");
         rows.push(`<h4>${esc(kind)}</h4>${sectionRows}`);
     }
 
-    const unmatchedHtml = rows.length
-        ? rows.join('')
-        : '<p class="muted">No unmatched signals in this range.</p>';
+    const unmatchedHtml = rows.length ? rows.join("") : '<p class="muted">No unmatched signals in this range.</p>';
 
-        elAdmin.innerHTML = `
+    elAdmin.innerHTML = `
       <section class="admin-panel">
                 <h3>Config Actions</h3>
                 <p>Queue projects to ignore as personal, assign unmatched signals, and manage project groupings in config.json.</p>
@@ -293,17 +317,23 @@ function renderAdminPanel(data) {
                 <h4>Project Grouping</h4>
                 <div class="admin-row">
                     <select data-group-project>${projectOptionsSimple(firstProject)}</select>
-                    ${Object.keys(SITE.groupings).length
-                        ? `<select data-group-name>
+                    ${
+                        Object.keys(SITE.groupings).length
+                            ? `<select data-group-name>
                             <option value="">(none)</option>
-                            ${Object.keys(SITE.groupings).map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('')}
+                            ${Object.keys(SITE.groupings)
+                                .map((g) => `<option value="${esc(g)}">${esc(g)}</option>`)
+                                .join("")}
                            </select>`
-                        : `<input type="text" data-group-name placeholder="Group name (blank to clear)">`}
+                            : `<input type="text" data-group-name placeholder="Group name (blank to clear)">`
+                    }
                     <button class="btn" data-save-group>Save grouping</button>
                 </div>
-                <p class="muted">${Object.keys(SITE.groupings).length
-                    ? 'Select a grouping, or blank to clear.'
-                    : 'Set any new group name to create it automatically.'}</p>
+                <p class="muted">${
+                    Object.keys(SITE.groupings).length
+                        ? "Select a grouping, or blank to clear."
+                        : "Set any new group name to create it automatically."
+                }</p>
         <h4>Reassign Unmatched Signals</h4>
         ${unmatchedHtml}
       </section>
@@ -313,9 +343,9 @@ function renderAdminPanel(data) {
 }
 
 async function postApi(payload) {
-    const res = await fetch('api.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("api.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
     });
     const text = await res.text();
@@ -332,17 +362,19 @@ async function postApi(payload) {
 }
 
 function renderHarvestSidebar(data) {
-    const el = document.getElementById('harvest-sidebar');
+    const el = document.getElementById("harvest-sidebar");
     if (!el) return;
 
     if (!SITE.harvestConfigured) {
-        el.innerHTML = '';
+        el.innerHTML = "";
         return;
     }
 
-    const days = Object.keys(data.days || {}).sort().reverse();
+    const days = Object.keys(data.days || {})
+        .sort()
+        .reverse();
     if (!days.length) {
-        el.innerHTML = '';
+        el.innerHTML = "";
         return;
     }
 
@@ -355,7 +387,7 @@ function renderHarvestSidebar(data) {
             }
         }
         const totalSec = Object.values(entryMap).reduce((s, v) => s + v, 0);
-        const dow = new Date(`${date}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short' });
+        const dow = new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { weekday: "short" });
         const entries = Object.entries(entryMap).sort(([, a], [, b]) => b - a);
 
         html += `<div class="harvest-day">`;
@@ -376,24 +408,24 @@ function renderHarvestSidebar(data) {
 }
 
 function renderWarningsBanner(data) {
-    const el = document.getElementById('warnings-banner');
+    const el = document.getElementById("warnings-banner");
     if (!el) return;
     const warnings = data?.warnings || [];
     if (!warnings.length) {
-        el.innerHTML = '';
+        el.innerHTML = "";
         return;
     }
-    const items = warnings.map(w => `<li>${esc(w)}</li>`).join('');
+    const items = warnings.map((w) => `<li>${esc(w)}</li>`).join("");
     el.innerHTML = `<div class="warnings-banner"><strong>Data source warnings:</strong><ul>${items}</ul></div>`;
 }
 
 function renderCurrentView() {
     if (!currentData) return;
-    const elReport = document.getElementById('report');
-    const elNav = document.getElementById('nav');
+    const elReport = document.getElementById("report");
+    const elNav = document.getElementById("nav");
 
     elNav.innerHTML = renderNav(currentParams || {}, currentData.from, currentData.to);
-    elReport.innerHTML = renderReport(currentData, currentParams?.project || '');
+    elReport.innerHTML = renderReport(currentData, currentParams?.project || "");
     bindNavEvents();
     renderAdminPanel(currentData);
     renderHarvestSidebar(currentData);
@@ -406,15 +438,27 @@ function computeDiff(oldData, newData) {
     const changes = [];
     for (const [date, projects] of Object.entries(newData.days || {})) {
         for (const [name, rec] of Object.entries(projects)) {
-            const oldRec     = oldData.days[date]?.[name];
-            const oldShas    = new Set((oldRec?.commits || []).map(c => c.sha));
+            const oldRec = oldData.days[date]?.[name];
+            const oldShas = new Set((oldRec?.commits || []).map((c) => c.sha));
             const newCommits = rec.commits || [];
-            const addedCmts  = newCommits.filter(c => !oldShas.has(c.sha));
-            const secDiff    = (rec.seconds||0) - (oldRec?.seconds||0);
-            if (!oldRec && ((rec.seconds||0) > 0 || newCommits.length)) {
-                changes.push({ type: 'new_project', date, project: name, seconds: rec.seconds||0, commits: newCommits.length });
+            const addedCmts = newCommits.filter((c) => !oldShas.has(c.sha));
+            const secDiff = (rec.seconds || 0) - (oldRec?.seconds || 0);
+            if (!oldRec && ((rec.seconds || 0) > 0 || newCommits.length)) {
+                changes.push({
+                    type: "new_project",
+                    date,
+                    project: name,
+                    seconds: rec.seconds || 0,
+                    commits: newCommits.length,
+                });
             } else if (oldRec && (secDiff > 0 || addedCmts.length)) {
-                changes.push({ type: 'updated', date, project: name, addedSeconds: secDiff, addedCommits: addedCmts.length });
+                changes.push({
+                    type: "updated",
+                    date,
+                    project: name,
+                    addedSeconds: secDiff,
+                    addedCommits: addedCmts.length,
+                });
             }
         }
     }
@@ -422,19 +466,23 @@ function computeDiff(oldData, newData) {
 }
 
 function renderDiffBanner(changes, hadPrior) {
-    if (!hadPrior) return `<div class="diff-banner diff-banner--info">Rebuilt &mdash; no prior snapshot to compare against.</div>`;
-    if (!changes.length) return `<div class="diff-banner diff-banner--clean">&#10003; Rebuilt &mdash; no changes found.</div>`;
-    const items = changes.map(c => {
-        const p = esc(c.project);
-        if (c.type === 'new_project') {
-            const s  = c.seconds > 0  ? ` &mdash; ${fmtDur(c.seconds)}` : '';
-            const cm = c.commits > 0  ? `, ${c.commits} commit(s)` : '';
-            return `<li><strong>${c.date}</strong>: new project <em>${p}</em>${s}${cm}</li>`;
-        }
-        const s  = c.addedSeconds > 0  ? ` +${fmtDur(c.addedSeconds)}` : '';
-        const cm = c.addedCommits > 0  ? `, +${c.addedCommits} commit(s)` : '';
-        return `<li><strong>${c.date}</strong>: updated <em>${p}</em>${s}${cm}</li>`;
-    }).join('');
+    if (!hadPrior)
+        return `<div class="diff-banner diff-banner--info">Rebuilt &mdash; no prior snapshot to compare against.</div>`;
+    if (!changes.length)
+        return `<div class="diff-banner diff-banner--clean">&#10003; Rebuilt &mdash; no changes found.</div>`;
+    const items = changes
+        .map((c) => {
+            const p = esc(c.project);
+            if (c.type === "new_project") {
+                const s = c.seconds > 0 ? ` &mdash; ${fmtDur(c.seconds)}` : "";
+                const cm = c.commits > 0 ? `, ${c.commits} commit(s)` : "";
+                return `<li><strong>${c.date}</strong>: new project <em>${p}</em>${s}${cm}</li>`;
+            }
+            const s = c.addedSeconds > 0 ? ` +${fmtDur(c.addedSeconds)}` : "";
+            const cm = c.addedCommits > 0 ? `, +${c.addedCommits} commit(s)` : "";
+            return `<li><strong>${c.date}</strong>: updated <em>${p}</em>${s}${cm}</li>`;
+        })
+        .join("");
     return `<div class="diff-banner diff-banner--changes"><strong>Rebuilt &mdash; ${changes.length} change(s):</strong><ul>${items}</ul></div>`;
 }
 
@@ -442,43 +490,48 @@ function renderDiffBanner(changes, hadPrior) {
 function renderNav(params, fromRaw, toRaw) {
     // data.from / data.to are full ISO strings ("2026-05-01T00:00:00-04:00"); strip the time part.
     const from = String(fromRaw).slice(0, 10);
-    const to   = String(toRaw).slice(0, 10);
+    const to = String(toRaw).slice(0, 10);
     const start = from <= to ? from : to;
     const end = from <= to ? to : from;
-    const rangeDays = Math.max(1, Math.round((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1);
-    const prevFrom  = addDays(start, -rangeDays), prevTo = addDays(start, -1);
-    const nextFrom  = addDays(end, 1),            nextTo = addDays(end, rangeDays);
-    const isFuture  = nextFrom > SITE.today;
+    const rangeDays = Math.max(
+        1,
+        Math.round((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1,
+    );
+    const prevFrom = addDays(start, -rangeDays),
+        prevTo = addDays(start, -1);
+    const nextFrom = addDays(end, 1),
+        nextTo = addDays(end, rangeDays);
+    const isFuture = nextFrom > SITE.today;
     const hasRange = start !== end;
-    const addRangeClass = hasRange ? 'is-hidden' : '';
-    const rangeClass = hasRange ? '' : 'is-hidden';
-    const removeRangeClass = hasRange ? '' : 'is-hidden';
+    const addRangeClass = hasRange ? "is-hidden" : "";
+    const rangeClass = hasRange ? "" : "is-hidden";
+    const removeRangeClass = hasRange ? "" : "is-hidden";
 
-    const prevUrl   = buildPageUrl({ ...params, from: prevFrom, to: prevTo,   days: null });
-    const nextUrl   = buildPageUrl({ ...params, from: nextFrom, to: nextTo,   days: null });
-    const nextBtn   = isFuture
+    const prevUrl = buildPageUrl({ ...params, from: prevFrom, to: prevTo, days: null });
+    const nextUrl = buildPageUrl({ ...params, from: nextFrom, to: nextTo, days: null });
+    const nextBtn = isFuture
         ? '<span class="btn disabled">Next &rsaquo;</span>'
         : `<a class="btn" data-nav href="${esc(nextUrl)}">Next &rsaquo;</a>`;
-    let rebuildLabel = 'Refresh';
-    if (currentBadge === 'cached') {
+    let rebuildLabel = "Refresh";
+    if (currentBadge === "cached") {
         rebuildLabel = `Rebuild from source (cached ${fmtAge(currentCacheAgeSec)} ago)`;
-    } else if (currentBadge === 'rebuilt') {
-        rebuildLabel = 'Rebuild again';
+    } else if (currentBadge === "rebuilt") {
+        rebuildLabel = "Rebuild again";
     }
-    const configLabel = showAdminPanel ? 'Hide Config' : 'Config';
+    const configLabel = showAdminPanel ? "Hide Config" : "Config";
 
-    const cur = params.project || '';
-    const sel = v => v === cur ? ' selected' : '';
+    const cur = params.project || "";
+    const sel = (v) => (v === cur ? " selected" : "");
 
     // Bucket projects by grouping, preserving config order.
-    const groups    = {};
+    const groups = {};
     const ungrouped = [];
     for (const p of SITE.projects) {
         const g = resolveGrouping(p.grouping);
         g ? (groups[g] ??= []).push(p.name) : ungrouped.push(p.name);
     }
 
-    let projOpts = `<option value=""${sel('')}>All projects</option>`;
+    let projOpts = `<option value=""${sel("")}>All projects</option>`;
     for (const [group, names] of Object.entries(groups)) {
         const gVal = `group:${group}`;
         projOpts += `<optgroup label="${esc(group)}">`;
@@ -498,11 +551,11 @@ function renderNav(params, fromRaw, toRaw) {
       <span class="sep">|</span>
             <form class="date-form" data-date-form>
                 <input type="date" data-date-from value="${esc(start)}" aria-label="Start date" required>
-                <a href="#" class="btn ${addRangeClass}" data-add-range>Add end date</a>
+                <button type="button" class="btn ${addRangeClass}" data-add-range>Add end date</button>
                 <span class="date-range ${rangeClass}" data-date-range>
                     <span>&rarr;</span>
-                    <input type="date" data-date-to value="${esc(hasRange ? end : '')}" aria-label="End date">
-                    <a href="#" class="btn ${removeRangeClass}" data-remove-range>Single day</a>
+                    <input type="date" data-date-to value="${esc(hasRange ? end : "")}" aria-label="End date">
+                    <button type="button" class="btn ${removeRangeClass}" data-remove-range>Single day</button>
                 </span>
                 <button class="btn" type="submit">Apply</button>
             </form>
@@ -511,45 +564,49 @@ function renderNav(params, fromRaw, toRaw) {
         ${projOpts}
       </select>
       <span class="sep">|</span>
-            <a class="btn" data-toggle-admin href="#">${esc(configLabel)}</a>
+            <button type="button" class="btn" data-toggle-admin>${esc(configLabel)}</button>
             <span class="sep">|</span>
-      <a class="btn" data-rebuild href="#">${esc(rebuildLabel)}</a>
+      <button type="button" class="btn" data-rebuild>${esc(rebuildLabel)}</button>
     `;
 }
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function fetchAndRender(params, isRebuild = false) {
-    const elReport = document.getElementById('report');
-    const elNav    = document.getElementById('nav');
-    const elBanner = document.getElementById('diff-banner');
-    const elAdmin = document.getElementById('admin');
+    const elReport = document.getElementById("report");
+    const elNav = document.getElementById("nav");
+    const elBanner = document.getElementById("diff-banner");
+    const elAdmin = document.getElementById("admin");
 
     elReport.innerHTML = '<p class="loading">Loading&hellip;</p>';
-    elBanner.innerHTML = '';
-    if (elAdmin) elAdmin.innerHTML = '';
-    const elSidebar = document.getElementById('harvest-sidebar');
-    if (elSidebar) elSidebar.innerHTML = '';
-    const elWarnings = document.getElementById('warnings-banner');
-    if (elWarnings) elWarnings.innerHTML = '';
+    elBanner.innerHTML = "";
+    if (elAdmin) elAdmin.innerHTML = "";
+    const elSidebar = document.getElementById("harvest-sidebar");
+    if (elSidebar) elSidebar.innerHTML = "";
+    const elWarnings = document.getElementById("warnings-banner");
+    if (elWarnings) elWarnings.innerHTML = "";
 
     const prevData = currentData;
 
     try {
-        const res  = await fetch(buildApiUrl(params, isRebuild));
+        const res = await fetch(buildApiUrl(params, isRebuild));
         const text = await res.text();
         let data;
         try {
             data = JSON.parse(text);
         } catch {
             // PHP returned an HTML error page — strip tags for a readable message.
-            const plain = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 400);
+            const plain = text
+                .replace(/<[^>]+>/g, " ")
+                .replace(/\s+/g, " ")
+                .trim()
+                .slice(0, 400);
             throw new Error(plain || `HTTP ${res.status}`);
         }
         if (!res.ok || data.error) throw new Error(data.error ?? `HTTP ${res.status}`);
 
-        currentData  = data;
-        currentBadge = isRebuild ? 'rebuilt' : (res.headers.get('X-Report-Source') === 'cached' ? 'cached' : 'live');
-        currentCacheAgeSec = Number(res.headers.get('X-Report-Age-Seconds') || 0);
+        currentData = data;
+        currentBadge = isRebuild ? "rebuilt" : res.headers.get("X-Report-Source") === "cached" ? "cached" : "live";
+        currentCacheAgeSec = Number(res.headers.get("X-Report-Age-Seconds") || 0);
 
         renderCurrentView();
 
@@ -558,54 +615,54 @@ async function fetchAndRender(params, isRebuild = false) {
         }
     } catch (err) {
         elReport.innerHTML = `<p class="error">Failed to load report: ${esc(err.message)}</p>`;
-        if (elAdmin) elAdmin.innerHTML = '';
+        if (elAdmin) elAdmin.innerHTML = "";
     }
 }
 
 function bindAdminEvents() {
-    document.querySelectorAll('[data-flag-project]').forEach(el => {
-        el.addEventListener('click', e => {
+    document.querySelectorAll("[data-flag-project]").forEach((el) => {
+        el.addEventListener("click", (e) => {
             e.preventDefault();
-            const name = el.getAttribute('data-flag-project') || '';
+            const name = el.getAttribute("data-flag-project") || "";
             if (!name) return;
             personalProjectQueue.add(name);
             renderCurrentView();
         });
     });
 
-    const applyBtn = document.querySelector('[data-apply-personal]');
+    const applyBtn = document.querySelector("[data-apply-personal]");
     if (applyBtn) {
-        applyBtn.addEventListener('click', async e => {
+        applyBtn.addEventListener("click", async (e) => {
             e.preventDefault();
             const projects = Array.from(personalProjectQueue.values());
             if (!projects.length) return;
-            applyBtn.setAttribute('disabled', 'disabled');
+            applyBtn.setAttribute("disabled", "disabled");
             try {
-                await postApi({ action: 'flag_projects_personal', projects });
+                await postApi({ action: "flag_projects_personal", projects });
                 personalProjectQueue = new Set();
                 await fetchAndRender(currentParams, true);
             } catch (err) {
                 alert(`Failed to apply personal flags: ${err.message}`);
             } finally {
-                applyBtn.removeAttribute('disabled');
+                applyBtn.removeAttribute("disabled");
             }
         });
     }
 
-    document.querySelectorAll('[data-reassign]').forEach(btn => {
-        btn.addEventListener('click', async e => {
+    document.querySelectorAll("[data-reassign]").forEach((btn) => {
+        btn.addEventListener("click", async (e) => {
             e.preventDefault();
-            const row = btn.closest('.admin-row');
-            const select = row?.querySelector('[data-reassign-project]');
-            let project = select?.value || '';
+            const row = btn.closest(".admin-row");
+            const select = row?.querySelector("[data-reassign-project]");
+            let project = select?.value || "";
             if (!project) {
-                alert('Select a project first.');
+                alert("Select a project first.");
                 return;
             }
 
-            let newProjectName = '';
-            if (project === '__new__') {
-                const entered = prompt('New project name:');
+            let newProjectName = "";
+            if (project === "__new__") {
+                const entered = prompt("New project name:");
                 if (!entered || !entered.trim()) {
                     return;
                 }
@@ -613,48 +670,48 @@ function bindAdminEvents() {
                 project = newProjectName;
             }
 
-            const kind = btn.getAttribute('data-kind') || '';
-            const rawValue = btn.getAttribute('data-value') || '';
+            const kind = btn.getAttribute("data-kind") || "";
+            const rawValue = btn.getAttribute("data-value") || "";
             const value = decodeURIComponent(rawValue);
-            btn.setAttribute('disabled', 'disabled');
+            btn.setAttribute("disabled", "disabled");
             try {
-                await postApi({ action: 'reassign_signal', project, kind, value, new_project_name: newProjectName });
+                await postApi({ action: "reassign_signal", project, kind, value, new_project_name: newProjectName });
                 await fetchAndRender(currentParams, true);
             } catch (err) {
                 alert(`Failed to reassign signal: ${err.message}`);
             } finally {
-                btn.removeAttribute('disabled');
+                btn.removeAttribute("disabled");
             }
         });
     });
 
-    const groupProjectSel = document.querySelector('[data-group-project]');
-    const groupNameInput = document.querySelector('[data-group-name]');
-    const saveGroupBtn = document.querySelector('[data-save-group]');
+    const groupProjectSel = document.querySelector("[data-group-project]");
+    const groupNameInput = document.querySelector("[data-group-name]");
+    const saveGroupBtn = document.querySelector("[data-save-group]");
 
     const syncGroupingField = () => {
-        const projectName = groupProjectSel?.value || '';
+        const projectName = groupProjectSel?.value || "";
         const meta = getProjectMeta(projectName);
         if (groupNameInput) {
-            groupNameInput.value = resolveGrouping(meta?.grouping || '') || '';
+            groupNameInput.value = resolveGrouping(meta?.grouping || "") || "";
         }
     };
 
-    groupProjectSel?.addEventListener('change', syncGroupingField);
+    groupProjectSel?.addEventListener("change", syncGroupingField);
     syncGroupingField();
 
-    saveGroupBtn?.addEventListener('click', async e => {
+    saveGroupBtn?.addEventListener("click", async (e) => {
         e.preventDefault();
-        const project = groupProjectSel?.value || '';
-        const grouping = (groupNameInput?.value || '').trim();
+        const project = groupProjectSel?.value || "";
+        const grouping = (groupNameInput?.value || "").trim();
         if (!project) {
-            alert('Select a project first.');
+            alert("Select a project first.");
             return;
         }
 
-        saveGroupBtn.setAttribute('disabled', 'disabled');
+        saveGroupBtn.setAttribute("disabled", "disabled");
         try {
-            await postApi({ action: 'set_project_grouping', project, grouping });
+            await postApi({ action: "set_project_grouping", project, grouping });
             const meta = getProjectMeta(project);
             if (meta) {
                 meta.grouping = grouping || null;
@@ -663,7 +720,7 @@ function bindAdminEvents() {
         } catch (err) {
             alert(`Failed to save grouping: ${err.message}`);
         } finally {
-            saveGroupBtn.removeAttribute('disabled');
+            saveGroupBtn.removeAttribute("disabled");
         }
     });
 }
@@ -672,17 +729,22 @@ function bindAdminEvents() {
 function navigateTo(overrides, isRebuild = false) {
     const next = { ...currentParams, ...overrides };
     // Explicit dates take precedence over days shorthand and vice-versa.
-    if (next.from || next.to) { delete next.days; } else if (next.days) { delete next.from; delete next.to; }
+    if (next.from || next.to) {
+        delete next.days;
+    } else if (next.days) {
+        delete next.from;
+        delete next.to;
+    }
     currentParams = next;
-    history.pushState(next, '', buildPageUrl(next));
+    history.pushState(next, "", buildPageUrl(next));
     fetchAndRender(next, isRebuild);
 }
 
 function bindNavEvents() {
-    const nav = document.getElementById('nav');
+    const nav = document.getElementById("nav");
 
-    nav.querySelectorAll('[data-nav]').forEach(el => {
-        el.addEventListener('click', e => {
+    nav.querySelectorAll("[data-nav]").forEach((el) => {
+        el.addEventListener("click", (e) => {
             e.preventDefault();
             const p = Object.fromEntries(new URL(el.href).searchParams);
             delete p.format;
@@ -690,45 +752,45 @@ function bindNavEvents() {
         });
     });
 
-    const dateForm = nav.querySelector('[data-date-form]');
+    const dateForm = nav.querySelector("[data-date-form]");
     if (dateForm) {
-        const fromInput = nav.querySelector('[data-date-from]');
-        const toInput = nav.querySelector('[data-date-to]');
-        const rangeWrap = nav.querySelector('[data-date-range]');
-        const addRangeBtn = nav.querySelector('[data-add-range]');
-        const removeRangeBtn = nav.querySelector('[data-remove-range]');
+        const fromInput = nav.querySelector("[data-date-from]");
+        const toInput = nav.querySelector("[data-date-to]");
+        const rangeWrap = nav.querySelector("[data-date-range]");
+        const addRangeBtn = nav.querySelector("[data-add-range]");
+        const removeRangeBtn = nav.querySelector("[data-remove-range]");
 
         const showRange = () => {
-            rangeWrap?.classList.remove('is-hidden');
-            addRangeBtn?.classList.add('is-hidden');
+            rangeWrap?.classList.remove("is-hidden");
+            addRangeBtn?.classList.add("is-hidden");
             if (toInput && !toInput.value) {
-                toInput.value = fromInput?.value || '';
+                toInput.value = fromInput?.value || "";
             }
             toInput?.focus();
         };
 
         const hideRange = () => {
-            rangeWrap?.classList.add('is-hidden');
-            addRangeBtn?.classList.remove('is-hidden');
+            rangeWrap?.classList.add("is-hidden");
+            addRangeBtn?.classList.remove("is-hidden");
             if (toInput) {
-                toInput.value = '';
+                toInput.value = "";
             }
         };
 
-        addRangeBtn?.addEventListener('click', e => {
+        addRangeBtn?.addEventListener("click", (e) => {
             e.preventDefault();
             showRange();
         });
 
-        removeRangeBtn?.addEventListener('click', e => {
+        removeRangeBtn?.addEventListener("click", (e) => {
             e.preventDefault();
             hideRange();
         });
 
-        dateForm.addEventListener('submit', e => {
+        dateForm.addEventListener("submit", (e) => {
             e.preventDefault();
-            const from = fromInput?.value || '';
-            const to = rangeWrap?.classList.contains('is-hidden') ? from : (toInput?.value || from);
+            const from = fromInput?.value || "";
+            const to = rangeWrap?.classList.contains("is-hidden") ? from : toInput?.value || from;
             if (!from) return;
             const nextFrom = from <= to ? from : to;
             const nextTo = from <= to ? to : from;
@@ -736,26 +798,26 @@ function bindNavEvents() {
         });
     }
 
-    const sel = nav.querySelector('[data-project-select]');
+    const sel = nav.querySelector("[data-project-select]");
     if (sel) {
-        sel.addEventListener('change', () => {
+        sel.addEventListener("change", () => {
             currentParams = { ...currentParams, project: sel.value };
-            history.pushState(currentParams, '', buildPageUrl(currentParams));
+            history.pushState(currentParams, "", buildPageUrl(currentParams));
             renderCurrentView();
         });
     }
 
-    const rebuildBtn = nav.querySelector('[data-rebuild]');
+    const rebuildBtn = nav.querySelector("[data-rebuild]");
     if (rebuildBtn) {
-        rebuildBtn.addEventListener('click', e => {
+        rebuildBtn.addEventListener("click", (e) => {
             e.preventDefault();
             fetchAndRender(currentParams, true);
         });
     }
 
-    const toggleAdminBtn = nav.querySelector('[data-toggle-admin]');
+    const toggleAdminBtn = nav.querySelector("[data-toggle-admin]");
     if (toggleAdminBtn) {
-        toggleAdminBtn.addEventListener('click', e => {
+        toggleAdminBtn.addEventListener("click", (e) => {
             e.preventDefault();
             showAdminPanel = !showAdminPanel;
             renderCurrentView();
@@ -763,7 +825,7 @@ function bindNavEvents() {
     }
 }
 
-window.addEventListener('popstate', e => {
+window.addEventListener("popstate", (e) => {
     currentParams = e.state || paramsFromUrl();
     fetchAndRender(currentParams);
 });

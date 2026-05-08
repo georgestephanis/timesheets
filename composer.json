@@ -10,17 +10,20 @@
     },
     "require-dev": {
         "squizlabs/php_codesniffer": "^3.9",
-        "phpstan/phpstan": "^2.1"
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^13.1"
     },
     "scripts": {
         "lint": "phpcs",
         "lint:json": "npm run format:check",
         "lint:fix": "phpcbf",
         "analyze": "phpstan analyse --memory-limit 512M",
+        "test": "phpunit",
         "check": [
             "@lint",
             "@lint:json",
-            "@analyze"
+            "@analyze",
+            "@test"
         ]
     },
     "config": {
