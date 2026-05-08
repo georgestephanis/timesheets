@@ -299,3 +299,7 @@ select {
 .proj-actions button:hover {
     text-decoration: underline;
 }
+.admin-error {
+    font-size: 0.82rem;
+    margin-left: 0.4rem;
+}

@@ -5,13 +5,16 @@ let currentBadge = "live";
 let currentCacheAgeSec = 0;
 let personalProjectQueue = new Set();
 let showAdminPanel = false;
+let currentAbortController = null;
+const responseCache = new Map();
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function addDays(dateStr, n) {
     // Slice to 10 chars so ISO datetimes like "2026-05-01T00:00:00-04:00" work too.
+    // Use UTC to avoid DST-boundary shifts when adding days across a clock-change midnight.
     const [y, m, d] = String(dateStr).slice(0, 10).split("-").map(Number);
-    const dt = new Date(y, m - 1, d + n);
-    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    const dt = new Date(Date.UTC(y, m - 1, d + n));
+    return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
 }
 
 function paramsFromUrl() {
@@ -42,6 +45,11 @@ function buildPageUrl(params) {
     if (params.project) u.set("project", params.project);
     u.set("format", "html");
     return "?" + u;
+}
+
+// Cache key covers only the date range (project filter is client-side and doesn't affect the API response).
+function dataCacheKey(params) {
+    return `${params.from || ""}|${params.to || ""}|${params.days || ""}`;
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -361,6 +369,18 @@ async function postApi(payload) {
     return data;
 }
 
+function showAdminError(anchorEl, message) {
+    const row = anchorEl?.closest(".admin-row");
+    if (!row) return;
+    let el = row.querySelector(".admin-error");
+    if (!el) {
+        el = document.createElement("span");
+        el.className = "admin-error error";
+        row.appendChild(el);
+    }
+    el.textContent = message;
+}
+
 function renderHarvestSidebar(data) {
     const el = document.getElementById("harvest-sidebar");
     if (!el) return;
@@ -572,6 +592,25 @@ function renderNav(params, fromRaw, toRaw) {
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function fetchAndRender(params, isRebuild = false) {
+    // Cancel any in-flight request so stale responses never overwrite fresh ones.
+    if (currentAbortController) currentAbortController.abort();
+
+    // Serve from the client-side cache for non-rebuild navigations.
+    const key = dataCacheKey(params);
+    if (!isRebuild && responseCache.has(key)) {
+        const cached = responseCache.get(key);
+        currentData = cached.data;
+        currentBadge = cached.badge;
+        currentCacheAgeSec = cached.ageSec;
+        document.getElementById("diff-banner").innerHTML = "";
+        renderCurrentView();
+        return;
+    }
+
+    const controller = new AbortController();
+    currentAbortController = controller;
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     const elReport = document.getElementById("report");
     const elBanner = document.getElementById("diff-banner");
     const elAdmin = document.getElementById("admin");
@@ -587,7 +626,7 @@ async function fetchAndRender(params, isRebuild = false) {
     const prevData = currentData;
 
     try {
-        const res = await fetch(buildApiUrl(params, isRebuild));
+        const res = await fetch(buildApiUrl(params, isRebuild), { signal: controller.signal });
         const text = await res.text();
         let data;
         try {
@@ -607,14 +646,25 @@ async function fetchAndRender(params, isRebuild = false) {
         currentBadge = isRebuild ? "rebuilt" : res.headers.get("X-Report-Source") === "cached" ? "cached" : "live";
         currentCacheAgeSec = Number(res.headers.get("X-Report-Age-Seconds") || 0);
 
+        responseCache.set(key, { data: currentData, badge: currentBadge, ageSec: currentCacheAgeSec });
+
         renderCurrentView();
 
         if (isRebuild) {
             elBanner.innerHTML = renderDiffBanner(computeDiff(prevData, data), prevData !== null);
         }
     } catch (err) {
+        // Silently discard errors from requests that were superseded by a newer navigation.
+        if (currentAbortController !== controller) return;
         elReport.innerHTML = `<p class="error">Failed to load report: ${esc(err.message)}</p>`;
         if (elAdmin) elAdmin.innerHTML = "";
+        // Render nav even on error so the user can navigate away.
+        const elNav = document.getElementById("nav");
+        elNav.innerHTML = renderNav(params, params.from || SITE.today, params.to || SITE.today);
+        bindNavEvents();
+    } finally {
+        clearTimeout(timeoutId);
+        if (currentAbortController === controller) currentAbortController = null;
     }
 }
 
@@ -641,7 +691,7 @@ function bindAdminEvents() {
                 personalProjectQueue = new Set();
                 await fetchAndRender(currentParams, true);
             } catch (err) {
-                alert(`Failed to apply personal flags: ${err.message}`);
+                showAdminError(applyBtn, `Failed: ${err.message}`);
             } finally {
                 applyBtn.removeAttribute("disabled");
             }
@@ -655,7 +705,7 @@ function bindAdminEvents() {
             const select = row?.querySelector("[data-reassign-project]");
             let project = select?.value || "";
             if (!project) {
-                alert("Select a project first.");
+                showAdminError(btn, "Select a project first.");
                 return;
             }
 
@@ -677,7 +727,7 @@ function bindAdminEvents() {
                 await postApi({ action: "reassign_signal", project, kind, value, new_project_name: newProjectName });
                 await fetchAndRender(currentParams, true);
             } catch (err) {
-                alert(`Failed to reassign signal: ${err.message}`);
+                showAdminError(btn, `Failed: ${err.message}`);
             } finally {
                 btn.removeAttribute("disabled");
             }
@@ -704,7 +754,7 @@ function bindAdminEvents() {
         const project = groupProjectSel?.value || "";
         const grouping = (groupNameInput?.value || "").trim();
         if (!project) {
-            alert("Select a project first.");
+            showAdminError(saveGroupBtn, "Select a project first.");
             return;
         }
 
@@ -717,7 +767,7 @@ function bindAdminEvents() {
             }
             await fetchAndRender(currentParams, true);
         } catch (err) {
-            alert(`Failed to save grouping: ${err.message}`);
+            showAdminError(saveGroupBtn, `Failed: ${err.message}`);
         } finally {
             saveGroupBtn.removeAttribute("disabled");
         }
@@ -810,6 +860,7 @@ function bindNavEvents() {
     if (rebuildBtn) {
         rebuildBtn.addEventListener("click", (e) => {
             e.preventDefault();
+            rebuildBtn.setAttribute("disabled", "");
             fetchAndRender(currentParams, true);
         });
     }

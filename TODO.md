@@ -158,23 +158,25 @@ Severity legend: **P0** ship-blocking, **P1** significant, **P2** worth doing,
 - [ ] **(P2, s)** `renderTsv` does not escape tabs or newlines in project names
       / commit subjects. A project named "Foo\tBar" silently breaks columns.
       Replace tab/newline with space (or use proper TSV escaping).
-- [ ] **(P2, s)** Frontend re-fetches on every Prev/Next even when the date is
-      the same as before. Cache `data` keyed by `from|to|project` and short-
-      circuit. (See frontend findings #8, #12.)
-- [ ] **(P2, s)** Frontend `fetchAndRender` clears `#report` on error but does
-      not re-render `nav` — first-fetch-fails leaves the page navless. Render
-      nav from `currentParams` independently.
-- [ ] **(P2, s)** Frontend has no `fetch()` timeout. A wedged backend hangs the
-      UI forever. Add `AbortSignal.timeout(15000)`.
-- [ ] **(P2, s)** Frontend admin actions (`flag_projects_personal`, etc.) use
-      `alert()` for errors; replace with inline error display.
-- [ ] **(P2, s)** Rebuild button is not disabled while a fetch is in flight —
-      user can spam it.
-- [ ] **(P2, s)** No request coordination: rapid Prev/Next clicks race; the
-      response that arrives last wins. Add an AbortController per-request and
-      cancel the previous fetch.
-- [ ] **(P3, s)** `addDays` uses local-time `Date` arithmetic which can shift
-      across DST transitions. Use UTC or noon-anchored arithmetic.
+- [x] **(P2, s)** Frontend re-fetches on every Prev/Next even when the date is
+      the same as before. Added `responseCache` (Map keyed by `from|to|days`);
+      non-rebuild navigations are served from cache instantly.
+- [x] **(P2, s)** Frontend `fetchAndRender` clears `#report` on error but does
+      not re-render `nav` — first-fetch-fails leaves the page navless. Error path
+      now calls `renderNav(params, ...)` + `bindNavEvents()` directly.
+- [x] **(P2, s)** Frontend has no `fetch()` timeout. Added a 15-second
+      `setTimeout` that aborts the current `AbortController`.
+- [x] **(P2, s)** Frontend admin actions (`flag_projects_personal`, etc.) use
+      `alert()` for errors; replaced with `showAdminError()` — inline `.error`
+      span appended to the triggering `.admin-row`.
+- [x] **(P2, s)** Rebuild button is not disabled while a fetch is in flight.
+      Click handler now sets `disabled` before calling `fetchAndRender`; re-render
+      on completion resets it.
+- [x] **(P2, s)** No request coordination: rapid Prev/Next clicks race. Added
+      `currentAbortController`; each `fetchAndRender` call aborts the previous
+      one. Stale AbortErrors are silently discarded.
+- [x] **(P3, s)** `addDays` uses local-time `Date` arithmetic which can shift
+      across DST transitions. Switched to `Date.UTC` + `getUTC*` getters.
 - [ ] **(P3, s)** Slack signal parsing duplicated between `api.php`
       (`parseSlackSignal`) and `cli.php` (`applySignalToConfig`). Move to a
       shared helper.
