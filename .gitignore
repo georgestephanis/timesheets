@@ -3,3 +3,4 @@ vendor/
 node_modules/
 reports/
 .clinerules
+.phpunit.result.cache
