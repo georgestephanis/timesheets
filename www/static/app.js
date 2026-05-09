@@ -107,6 +107,9 @@ function resolveGrouping(name) {
 }
 
 function groupingColor(name) {
+    // Prefer configDraft when on the config page (fresh from API); fall back to SITE.groupings.
+    const fromDraft = configDraft?.groupings?.[name]?.color;
+    if (fromDraft) return fromDraft;
     const fromConfig = SITE.groupings[name]?.color;
     if (fromConfig) return fromConfig;
     const palette = ["#6366f1", "#0ea5e9", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#14b8a6", "#f97316"];
