@@ -150,15 +150,41 @@ function generateReport(
     }
     $timeline = $hasProjectFilter ? [] : $fullTimeline;
 
+    // Load any cached LLM day summaries for all days in the range.
+    $summaries = [];
+    foreach (rangeDays($from, $to, $tz) as $day) {
+        $cached = loadCachedLlmSummary($day);
+        if ($cached !== null) {
+            $summaries[$day->format('Y-m-d')] = $cached;
+        }
+    }
+
+    // For single-day CLI runs with an LLM configured, generate a summary if not cached.
+    if (
+        PHP_SAPI === 'cli'
+        && $from->format('Y-m-d') === $to->format('Y-m-d')
+        && function_exists('llmGetConnection')
+        && llmGetConnection($config) !== null
+    ) {
+        $date = $from->format('Y-m-d');
+        if (!isset($summaries[$date])) {
+            fwrite(STDERR, "Generating daily summary via LLM for $date...\n");
+            $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz, $fullTimeline[$date] ?? []);
+            if ($summary !== null) {
+                $summaries[$date] = $summary;
+            }
+        }
+    }
+
     $format = $opts['format'];
     $out = match ($format) {
-        'json' => renderJson($bucket, $unmatched, $from, $to, $tz, [], $timeline),
+        'json' => renderJson($bucket, $unmatched, $from, $to, $tz, getWarnings(), $timeline, $summaries),
         'tsv'  => renderTsv($bucket, $from, $to, $tz),
         default => renderMarkdown($bucket ?? [], $unmatched, $from, $to, $tz, $opts, $config),
     };
 
     $fullOut = match ($format) {
-        'json' => renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, [], $fullTimeline),
+        'json' => renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, getWarnings(), $fullTimeline, $summaries),
         'tsv'  => renderTsv($fullBucket, $from, $to, $tz),
         default => renderMarkdown($fullBucket ?? [], $fullUnmatched, $from, $to, $tz, $fullOpts, $config),
     };
@@ -166,7 +192,7 @@ function generateReport(
     saveGeneratedReport($dir, $key, $from, $to, $format, null, $fromCache, $fullOut);
 
     if ($format === 'md') {
-        $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, [], $fullTimeline);
+        $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, getWarnings(), $fullTimeline, $summaries);
         saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $jsonOut);
     }
 
@@ -337,6 +363,8 @@ activity-report.php v0.1.0 — clusters local activity by project.
   --show-unmatched     List app/title/host events that didn't map to a project.
   --suggest            Ask the configured LLM to suggest project assignments for unmatched signals,
                        then prompt to accept each one.
+                       When an LLM is configured, single-day runs also generate a daily accomplishment
+                       summary (from commits, PRs, ClickUp tasks) and embed it in the saved JSON report.
   --list-projects      Print configured projects and exit.
   -h, --help           This message.
 

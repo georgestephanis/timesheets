@@ -57,10 +57,10 @@ function loadGitCommits(array $config, DateTimeImmutable $from, DateTimeImmutabl
         return [];
     }
 
-    $sinceArg = '--since=' . escapeshellarg($from->format('c'));
-    $untilArg = '--until=' . escapeshellarg($to->format('c'));
-    $authorPat = implode('|', array_map('preg_quote', $authors));
-    $authorArg = '--author=' . escapeshellarg($authorPat);
+    $sinceArg   = '--since=' . escapeshellarg($from->format('c'));
+    $untilArg   = '--until=' . escapeshellarg($to->format('c'));
+    // Multiple --author flags are OR'd by git, and work with BRE (unlike a pipe-joined pattern).
+    $authorArgs = implode(' ', array_map(fn($a) => '--author=' . escapeshellarg($a), $authors));
 
     $rows = [];
     foreach ($repos as $repo => $project) {
@@ -68,7 +68,7 @@ function loadGitCommits(array $config, DateTimeImmutable $from, DateTimeImmutabl
             continue;
         }
         $cmd = "git -C " . escapeshellarg($repo)
-             . " log --all $sinceArg $untilArg $authorArg"
+             . " log --all $sinceArg $untilArg $authorArgs"
              . ' --pretty=tformat:"%aI%x09%H%x09%s" 2>/dev/null';
         $out = shell_exec($cmd);
         if (!$out) {

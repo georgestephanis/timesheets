@@ -188,6 +188,73 @@ function saveDailyCachedSources(
 }
 
 /**
+ * Returns the maximum mtime of the four per-day source cache files, or 0 if none exist.
+ *
+ * Used as a fingerprint to detect whether source data has changed since an LLM summary
+ * was generated.
+ */
+function sourceCacheMtime(DateTimeImmutable $day): int
+{
+    $dir = reportsDir($day->setTime(0, 0, 0));
+    $key = dailyCacheKey($day->setTime(0, 0, 0));
+    $mtime = 0;
+    foreach (['activitywatch', 'chrome', 'commits', 'integrations'] as $src) {
+        $f = "$dir/$src-$key.json";
+        if (file_exists($f)) {
+            $mtime = max($mtime, (int)filemtime($f));
+        }
+    }
+    return $mtime;
+}
+
+/**
+ * Loads a cached LLM day summary for $day, if still valid.
+ *
+ * Validity is determined by comparing the stored source fingerprint against the
+ * current max mtime of the four source cache files. Returns null when no cache
+ * file exists, when the stored JSON is malformed, or when source files have been
+ * updated since the summary was generated.
+ */
+function loadCachedLlmSummary(DateTimeImmutable $day): ?string
+{
+    $dir  = reportsDir($day->setTime(0, 0, 0));
+    $key  = dailyCacheKey($day->setTime(0, 0, 0));
+    $path = "$dir/llm-summary-$key.json";
+    if (!file_exists($path)) {
+        return null;
+    }
+    $data = json_decode((string)file_get_contents($path), true);
+    if (!is_array($data) || !isset($data['summary']) || $data['summary'] === '') {
+        return null;
+    }
+    if ((int)($data['source_mtime'] ?? -1) !== sourceCacheMtime($day)) {
+        return null;
+    }
+    return (string)$data['summary'];
+}
+
+/**
+ * Persists a generated LLM day summary to disk alongside a source fingerprint.
+ *
+ * The fingerprint is the max mtime of the four source cache files at save time.
+ * loadCachedLlmSummary() will reject the cache if those files are later updated.
+ */
+function saveCachedLlmSummary(DateTimeImmutable $day, string $summary): void
+{
+    $dir  = reportsDir($day->setTime(0, 0, 0));
+    $key  = dailyCacheKey($day->setTime(0, 0, 0));
+    if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        return;
+    }
+    $path = "$dir/llm-summary-$key.json";
+    file_put_contents($path, json_encode([
+        'summary'      => $summary,
+        'source_mtime' => sourceCacheMtime($day),
+        'generated_at' => (new DateTimeImmutable('now'))->format('c'),
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+}
+
+/**
  * Returns each calendar day touched by the requested range, normalised to midnight.
  *
  * @return list<DateTimeImmutable>

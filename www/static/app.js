@@ -7,6 +7,8 @@ let personalProjectQueue = new Set();
 let showAdminPanel = false;
 let currentAbortController = null;
 const responseCache = new Map();
+// Keyed by YYYY-MM-DD → list of suggestion objects (null = pending, [] = none found)
+const unloggedSuggestions = new Map();
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function addDays(dateStr, n) {
@@ -244,7 +246,25 @@ function filterProjectsForView(projects, projectFilter) {
     return Object.entries(projects || {}).filter(([name]) => name === projectFilter);
 }
 
-function renderDay(date, projects, projectFilter, timelines = {}) {
+function renderDaySummary(text) {
+    const fmt = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, (_, m) => `<strong>${m}</strong>`);
+    let html = "";
+    for (const raw of String(text).split("\n")) {
+        const sub = raw.match(/^\s{2,}[-*]\s+(.*)/);
+        const top = !sub && raw.match(/^[-*]\s+(.*)/);
+        if (sub) html += `<dd>${fmt(sub[1])}</dd>`;
+        else if (top) html += `<dt>${fmt(top[1])}</dt>`;
+    }
+    if (!html) return "";
+    return (
+        `<details class="day-summary" open>` +
+        `<summary class="day-summary-toggle">Day summary</summary>` +
+        `<dl class="day-summary-list">${html}</dl>` +
+        `</details>`
+    );
+}
+
+function renderDay(date, projects, projectFilter, timelines = {}, summaries = {}) {
     const entries = filterProjectsForView(projects, projectFilter).sort(
         ([, a], [, b]) => (b.seconds || 0) - (a.seconds || 0),
     );
@@ -259,9 +279,19 @@ function renderDay(date, projects, projectFilter, timelines = {}) {
         g ? (grouped[g] ??= []).push([name, rec]) : ungrouped.push([name, rec]);
     }
 
+    let summarySlot = "";
+    if (!projectFilter) {
+        if (summaries[date]) {
+            summarySlot = renderDaySummary(summaries[date]);
+        } else if (SITE.llmConfigured) {
+            summarySlot = `<button type="button" class="btn summary-generate-btn" data-generate-summary="${esc(date)}">Generate day summary</button>`;
+        }
+    }
+
     let html =
         `<h2>${esc(date)} <span class="dow">(${dow})</span> <span class="dur">&mdash; ${fmtDur(dayTotal)} active</span></h2>` +
-        renderTimeline(date, timelines);
+        renderTimeline(date, timelines) +
+        summarySlot;
 
     const groupTotals = Object.entries(grouped)
         .map(([g, ps]) => [g, ps.reduce((s, [, r]) => s + (r.seconds || 0), 0)])
@@ -295,7 +325,7 @@ function renderReport(data, projectFilter = "") {
     if (!days.length) return "<p><em>No activity recorded for this period.</em></p>";
 
     const blocks = days
-        .map((date) => renderDay(date, data.days[date], projectFilter, data.timelines || {}))
+        .map((date) => renderDay(date, data.days[date], projectFilter, data.timelines || {}, data.summaries || {}))
         .filter(Boolean);
 
     if (!blocks.length) return "<p><em>No activity recorded for this filter in this period.</em></p>";
@@ -429,6 +459,52 @@ function showAdminError(anchorEl, message) {
     el.textContent = message;
 }
 
+function renderUnloggedSuggestions(suggestions) {
+    if (!suggestions.length) {
+        return '<p class="harvest-suggest-none">No gaps found</p>';
+    }
+    let html = "";
+    for (const s of suggestions) {
+        const where =
+            s.logging_method === "clickup"
+                ? `ClickUp: ${esc(s.clickup_task_name || s.clickup_task_id)}`
+                : `Harvest: ${esc(s.harvest_project)}${s.harvest_task ? " / " + esc(s.harvest_task) : ""}`;
+        html +=
+            `<div class="harvest-suggestion">` +
+            `<div class="harvest-suggestion-meta">${esc(s.project)} &mdash; ${fmtDur(Math.round(s.hours * 3600))}</div>` +
+            `<div class="harvest-suggestion-where">${where}</div>` +
+            `<div class="harvest-suggestion-desc">${esc(s.description)}</div>` +
+            `</div>`;
+    }
+    return html;
+}
+
+function triggerSuggestForDate(date) {
+    if (!SITE.suggestLoggingConfigured || !currentData) return;
+    if (unloggedSuggestions.get(date) !== undefined) return; // already fetched or in flight
+    const dayProjects = (currentData.days || {})[date] || {};
+    let trackedSec = 0;
+    const entryMap = {};
+    for (const rec of Object.values(dayProjects)) {
+        trackedSec += rec.seconds || 0;
+        for (const [label, sec] of Object.entries(rec.detail?.harvest || {})) {
+            entryMap[label] = (entryMap[label] || 0) + sec;
+        }
+    }
+    const loggedSec = Object.values(entryMap).reduce((s, v) => s + v, 0);
+    if (trackedSec - loggedSec < 900) return;
+    unloggedSuggestions.set(date, null); // mark pending
+    renderHarvestSidebar(currentData);
+    postApi({ action: "suggest_time_logging", date })
+        .then(({ suggestions }) => {
+            unloggedSuggestions.set(date, suggestions || []);
+        })
+        .catch(() => {
+            unloggedSuggestions.set(date, []);
+        })
+        .finally(() => renderHarvestSidebar(currentData));
+}
+
 function renderHarvestSidebar(data) {
     const el = document.getElementById("harvest-sidebar");
     if (!el) return;
@@ -448,20 +524,24 @@ function renderHarvestSidebar(data) {
 
     let html = '<p class="harvest-sidebar-title">Harvest logged</p>';
     for (const date of days) {
+        const dayProjects = data.days[date] || {};
         const entryMap = {};
-        for (const rec of Object.values(data.days[date] || {})) {
+        let trackedSec = 0;
+        for (const rec of Object.values(dayProjects)) {
+            trackedSec += rec.seconds || 0;
             for (const [label, sec] of Object.entries(rec.detail?.harvest || {})) {
                 entryMap[label] = (entryMap[label] || 0) + sec;
             }
         }
-        const totalSec = Object.values(entryMap).reduce((s, v) => s + v, 0);
+        const loggedSec = Object.values(entryMap).reduce((s, v) => s + v, 0);
+        const gapSec = trackedSec - loggedSec;
         const dow = new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { weekday: "short" });
         const entries = Object.entries(entryMap).sort(([, a], [, b]) => b - a);
 
         html += `<div class="harvest-day">`;
         html += `<div class="harvest-day-date">${esc(date)} <span class="dow">(${dow})</span></div>`;
-        if (totalSec > 0) {
-            html += `<div class="harvest-day-total">${fmtDur(totalSec)}</div>`;
+        if (loggedSec > 0) {
+            html += `<div class="harvest-day-total">${fmtDur(loggedSec)}</div>`;
             html += `<ul class="harvest-entries">`;
             for (const [label, sec] of entries) {
                 html += `<li>${esc(label)}: <span class="dur">${fmtDur(sec)}</span></li>`;
@@ -470,6 +550,22 @@ function renderHarvestSidebar(data) {
         } else {
             html += `<div class="harvest-day-total harvest-day-zero">0m</div>`;
         }
+
+        // Unlogged suggestions: show button or cached results when there's a meaningful gap.
+        if (SITE.suggestLoggingConfigured && gapSec >= 900) {
+            const cached = unloggedSuggestions.get(date);
+            if (cached === undefined) {
+                html +=
+                    `<button type="button" class="btn harvest-suggest-btn" data-suggest-date="${esc(date)}">` +
+                    `Suggest unlogged (${fmtDur(gapSec)} gap)` +
+                    `</button>`;
+            } else if (cached === null) {
+                html += `<p class="harvest-suggesting">Analyzing&hellip;</p>`;
+            } else {
+                html += renderUnloggedSuggestions(cached);
+            }
+        }
+
         html += `</div>`;
     }
     el.innerHTML = html;
@@ -1009,6 +1105,45 @@ document.addEventListener("click", (e) => {
                 errEl.textContent = err.message;
                 section?.appendChild(errEl);
             });
+        return;
+    }
+
+    const genSummaryBtn = e.target.closest("[data-generate-summary]");
+    if (genSummaryBtn) {
+        closeAllProjectMenus();
+        const date = genSummaryBtn.getAttribute("data-generate-summary") || "";
+        if (!date || genSummaryBtn.disabled) return;
+        genSummaryBtn.disabled = true;
+        genSummaryBtn.textContent = "Generating…";
+        postApi({ action: "generate_summary", date })
+            .then(({ summary }) => {
+                if (currentData) {
+                    currentData.summaries = currentData.summaries || {};
+                    currentData.summaries[date] = summary;
+                }
+                responseCache.clear();
+                renderCurrentView();
+                triggerSuggestForDate(date);
+            })
+            .catch((err) => {
+                genSummaryBtn.disabled = false;
+                genSummaryBtn.textContent = "Generate day summary";
+                let errEl = genSummaryBtn.nextElementSibling;
+                if (!errEl || !errEl.classList.contains("summary-error")) {
+                    errEl = document.createElement("span");
+                    errEl.className = "summary-error error";
+                    genSummaryBtn.after(errEl);
+                }
+                errEl.textContent = `Failed: ${err.message}`;
+            });
+        return;
+    }
+
+    const suggestBtn = e.target.closest("[data-suggest-date]");
+    if (suggestBtn) {
+        const date = suggestBtn.getAttribute("data-suggest-date") || "";
+        if (!date) return;
+        triggerSuggestForDate(date);
         return;
     }
 

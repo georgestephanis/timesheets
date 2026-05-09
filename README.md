@@ -1,14 +1,18 @@
 # activity-report
 
-A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp/GitHub APIs into a project-attributed time report.
+A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp/GitHub APIs into a project-attributed time report — with optional LLM-generated daily accomplishment summaries.
 
 ## A Recommendation on Building your `config.json`
 
-The config is a somewhat long and detailed json object. Both a `config.example.json` and `config.schema.json` are provided to describe how it should look, but writing it manually is tedious. It is recommended to work with a LLM / AI provider to have it populate the `config.json` for you, describing what you'd like to configure, and what credentials you'd like to add.
+The config is a somewhat long and detailed JSON object. Both a `config.example.json` and `config.schema.json` are provided to describe how it should look, but writing it manually is tedious. It is recommended to work with an LLM / AI provider to have it populate the `config.json` for you, describing what you'd like to configure and what credentials you'd like to add.
 
 ## Quick start
 
 ```bash
+# Install dev tools (optional but recommended)
+composer install
+npm install
+
 # Start the web UI
 php -S localhost:8000 www/index.php
 ```
@@ -47,6 +51,8 @@ Every few seconds, ActivityWatch records which app and window title is in focus.
     - `14:38` `c9d0e1f2` Bump API version to 2.1
 ```
 
+When an LLM is configured, single-day CLI runs also generate a concise bullet-point accomplishment summary from your commits, GitHub PRs/issues, and ClickUp tasks. The summary is embedded in the saved JSON report and displayed in the web UI as a collapsible panel above the project list for each day.
+
 ---
 
 ## Requirements
@@ -71,8 +77,8 @@ Edit `config.json` to add your projects, email addresses, and local paths. The f
 ### Dev tools (optional)
 
 ```bash
-composer install   # installs PHP_CodeSniffer
-npm install        # installs Prettier
+composer install   # PHP_CodeSniffer, PHPStan, PHPUnit
+npm install        # Prettier, ESLint
 ```
 
 ---
@@ -191,14 +197,14 @@ Multiple personal-access-token connections are supported for each provider:
             "name": "Local Ollama",
             "base_url": "http://localhost:11434/v1",  // required; include the /v1 path
             "api_key": "ollama",                       // optional; many local endpoints accept any string
-            "model": "llama3",                         // optional default model
+            "model": "llama3",                         // optional; auto-detected from /models if omitted
             "timeout": 30                              // optional; seconds (default 30)
         }
     ]
 }
 ```
 
-Works with any OpenAI-compatible server: Ollama, vLLM, LM Studio, OpenAI, etc. Multiple entries are supported. The connection details are available to future features via `$config['integrations']['llm']`.
+Works with any OpenAI-compatible server: Ollama, LM Studio, vLLM, OpenAI, etc.
 
 > **Note:** The GitHub integration (PRs, issues, comments, commit activity) only runs via the CLI. It is skipped during web requests to avoid blocking page loads. Run `php activity-report.php` from the command line, or rely on the daily cron job, to include GitHub data in cached reports.
 
@@ -217,6 +223,19 @@ php activity-report.php --days 7 --suggest
 ```
 
 Accepted suggestions are written directly to `config.json` (with a timestamped backup in `reports/config/`) so they take effect on the next run.
+
+### LLM daily summaries
+
+When an LLM is configured, single-day CLI runs automatically generate a concise accomplishment summary from git commits, GitHub PRs and issues, and ClickUp tasks. The summary is saved into the JSON report and shown in the web UI as a collapsible panel above the project list.
+
+**CLI:** summary is generated automatically on any single-day run and written to STDERR while the report is generated:
+
+```bash
+php activity-report.php --from 2026-05-08
+# Generating daily summary via LLM for 2026-05-08...
+```
+
+**Web UI:** a "Generate day summary" button appears below the timeline for each day. Clicking it sends the cached activity data to the LLM and replaces the button with the summary inline. The result is also persisted to the saved JSON report so subsequent loads serve it from cache.
 
 ---
 
@@ -265,19 +284,21 @@ php -S localhost:8000 www/index.php
 
 The web UI is a single-page app that fetches JSON from `www/api.php` and renders it client-side. Features:
 
-- **Navigation** — page through days or date ranges; jump to any date with the date picker
+- **Navigation** — page through days or date ranges; jump to any date with the date picker; `←`/`→` keyboard shortcuts for Prev/Next
 - **Project filter** — filter to a single project or group; filtering is client-side (no re-fetch)
-- **Harvest sidebar** — sticky panel on the right showing total Harvest time logged per day, with a per-entry breakdown. Displays 0m for days with no entries so gaps are immediately visible. Hidden when Harvest is not configured.
+- **Day summary** — when an LLM is configured, a collapsible accomplishment summary appears above the project list for each day; click "Generate day summary" to create one on demand for any day that doesn't have one yet
+- **Timeline** — per-project activity bars shown below the day heading, with hover highlighting and a collapsible segment list
+- **Harvest sidebar** — sticky panel on the right showing total Harvest time logged per day, with a per-entry breakdown; hidden when Harvest is not configured
 - **Rebuild** — the "Rebuild from source" button re-fetches all data sources (including re-calling integration APIs and overwriting per-day source caches), then shows a diff of what changed
 - **Connection warnings** — if any integration fails to connect (bad token, network error, etc.) an amber banner appears at the top of the report listing the specific errors
-- **Config panel** — toggle the Config panel to flag projects as personal, reassign unmatched signals to projects, and set project groupings, all without editing config.json directly
+- **Config panel** — toggle the Config panel to flag projects as personal, reassign unmatched signals to projects, and set project groupings, all without editing `config.json` directly
 
 ### Caching
 
 Report data is cached at two levels:
 
 1. **Per-day source caches** (`reports/YYYY-MM/DD/activitywatch-*.json`, `chrome-*.json`, `commits-*.json`, `integrations-*.json`) — raw data per calendar day. Historical days are cached once and reused. Clicking "Rebuild from source" re-fetches and overwrites these.
-2. **Report JSON** (`reports/YYYY-MM/DD/report-*.json`) — the rendered JSON for a date range. Served directly for repeat loads of historical ranges. Rebuild regenerates this from the source caches.
+2. **Report JSON** (`reports/YYYY-MM/DD/report-*.json`) — the rendered JSON for a date range, including any LLM-generated summary. Served directly for repeat loads of historical ranges. Rebuild regenerates this from the source caches (without the summary; re-run the CLI or click "Generate day summary" to restore it).
 
 ---
 
@@ -287,30 +308,71 @@ All tools live in `tools/` and write a timestamped backup to `reports/config/` b
 
 | Tool                               | What it does                                                                                    |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `list-github-desktop-repos.php`    | Lists repos from GitHub Desktop; `--apply` adds unconfigured ones to config.json                |
+| `list-github-desktop-repos.php`    | Lists repos from GitHub Desktop; `--apply` adds unconfigured ones to `config.json`              |
 | `sync-integration-projects.php`    | Pulls Harvest/ClickUp project catalogs and creates `harvest_projects`/`clickup_tasks` mappings  |
-| `set-integration-groupings.php`    | Assigns `grouping` to projects based on `groupings_map` rules in config.json                    |
+| `set-integration-groupings.php`    | Assigns `grouping` to projects based on `groupings_map` rules in `config.json`                  |
 | `cleanup-integration-projects.php` | Merges high-confidence integration stubs back into existing projects (`--dry-run` or `--apply`) |
 | `sync-repo-remotes.php`            | Snapshots `git remote` URLs into `projects[*].repo_remotes`                                     |
 | `ensure-github-integration.php`    | Adds a default `integrations.github` entry (via `gh` auth) if missing                           |
+| `prune-config-backups.php`         | Caps `reports/config/` at `--keep N` most-recent backups; `--max-lines N` caps JSONL log files  |
+| `reset-cache.php`                  | Removes report caches (`--before YYYY-MM-DD`, `--month YYYY-MM`); preserves `config.json`       |
+
+### Application log
+
+All subsystems write structured diagnostic entries to `reports/app.jsonl`. Each line is a JSON object:
+
+```json
+{
+    "time": "2026-05-09 14:23:45",
+    "level": "ERROR",
+    "source": "llm",
+    "message": "[2026-05-08] request failed: HTTP 401 from https://…"
+}
+```
+
+Useful one-liners:
+
+```bash
+# Stream readable output as tab-separated columns
+tail -f reports/app.jsonl | jq -r '[.time, .level, .source, .message] | @tsv'
+
+# Errors only
+jq 'select(.level == "ERROR")' reports/app.jsonl
+
+# Just LLM entries
+jq 'select(.source == "llm")' reports/app.jsonl
+
+# Last 20 entries, pretty-printed
+tail -20 reports/app.jsonl | jq .
+```
 
 ---
 
 ## Development
 
-### Linting
+### Linting and static analysis
 
 ```bash
-composer lint        # run PHP_CodeSniffer (PSR-12)
+composer lint        # PHP_CodeSniffer (PSR-12)
 composer lint:fix    # auto-fix what phpcbf can fix
+composer analyze     # PHPStan at level 5
+composer test        # PHPUnit (87 tests)
+composer check       # lint + analyze + test + Prettier format check in one shot
 ```
 
-### Formatting
+### JavaScript
 
 ```bash
-npm run format        # reformat JSON files with Prettier
+npm run lint:js       # ESLint on www/static/app.js
+npm run format        # reformat JSON/Markdown files with Prettier
 npm run format:check  # dry-run check (used in CI)
 ```
+
+### CI
+
+GitHub Actions runs `composer check` and `npm run lint:js` on every push and pull request (`.github/workflows/ci.yml`). Dependabot keeps Composer, npm, and Actions dependencies up to date weekly.
+
+A pre-commit hook (`.githooks/pre-commit`) runs the same checks locally. It is installed automatically by `composer install` via the `post-install-cmd` script.
 
 ---
 
@@ -319,9 +381,12 @@ npm run format:check  # dry-run check (used in CI)
 ```
 activity-report.php       — CLI entry point
 src/
-  cli.php                 — main(), parseArgs(), resolveDateRange(), loadSourcesForRange()
-  helpers.php             — expandPath(), fnmatchAny(), fmtDur()
+  config.php              — saveConfigWithBackup(), applySignalToProject(), parseSlackSignal()
+  helpers.php             — expandPath(), fmtDur(), appLog(), warning()
   cache.php               — per-day and report-level caching, serialization helpers
+  classifiers.php         — signal matching and aggregation
+  renderers.php           — Markdown, JSON (with warnings[], timelines[], summaries[]), TSV
+  cli.php                 — main(), parseArgs(), generateReport(), backfillRecentDailyReports()
   loader-activitywatch.php
   loader-chrome.php
   loader-git.php          — loadGitCommits() with optional GitHub Desktop discovery
@@ -329,28 +394,39 @@ src/
   loader-integrations.php — orchestrates Harvest/ClickUp/GitHub; collects warnings
   integrations/
     shared.php            — httpGetJson()
-    harvest.php
-    clickup.php
-    github.php            — CLI-only; skipped in web context
-  classifiers.php         — signal matching and aggregation
-  renderers.php           — Markdown, JSON (with optional warnings[]), TSV
+    harvest.php           — loadHarvestTimeEntries()
+    harvest-catalog.php   — loadHarvestProjectCatalog() (shared by sync and groupings tools)
+    clickup.php           — loadClickUpTimeEntries()
+    clickup-catalog.php   — loadClickUpProjectTree() (shared by sync and groupings tools)
+    github.php            — CLI-only; githubFetchCommits/PullRequests/Issues/Comments
+    llm.php               — llmSuggestAssignments(), llmDailySummary()
 www/
   index.php               — router for php -S
-  api.php                 — JSON data endpoint with rebuild + config-mutation actions
+  api.php                 — JSON endpoint: report generation + config mutations + generate_summary
   report_renderer.php     — HTML shell + static asset references; non-HTML formats served here
   static/
     app.css               — all styles
-    app.js                — client-side report renderer and admin panel
+    app.js                — client-side renderer, admin panel, timeline, day summary
 tools/
   list-github-desktop-repos.php
   sync-integration-projects.php
   cleanup-integration-projects.php
   sync-repo-remotes.php
   ensure-github-integration.php
+  prune-config-backups.php
+  reset-cache.php
+reports/                  — gitignored; all generated data lives here
+  app.jsonl               — structured application log (all subsystems)
+  cache-data.jsonl        — index of per-day source cache files
+  generated-reports.jsonl — index of generated report artifacts
+  config/                 — timestamped config.json backups
+  YYYY-MM/DD/             — per-day source caches and report JSON files
 config.json               — your local config (gitignored)
 config.example.json       — safe-to-commit template
 config.schema.json        — JSON Schema for editor validation
 AGENTS.md                 — architecture guide for contributors and AI agents
+SECURITY.md               — local threat model and token-handling notes
+TROUBLESHOOTING.md        — common failures and fixes
 ```
 
 ## License

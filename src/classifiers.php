@@ -227,9 +227,19 @@ function projectForExternal(array $row, array $config): ?string
         return null;
     }
 
+    $clientName = $source === 'harvest' ? (string)($row['client_name'] ?? '') : '';
+
     foreach ($config['projects'] as $name => $p) {
-        if ($source === 'harvest' && !empty($p['harvest_projects']) && fnmatchAny($hint, $p['harvest_projects'])) {
-            return $name;
+        if ($source === 'harvest') {
+            if (!empty($p['harvest_projects']) && fnmatchAny($hint, $p['harvest_projects'])) {
+                return $name;
+            }
+            if (
+                $clientName !== '' && !empty($p['harvest_client'])
+                && strcasecmp((string)$p['harvest_client'], $clientName) === 0
+            ) {
+                return $name;
+            }
         }
         if ($source === 'clickup' && !empty($p['clickup_tasks']) && fnmatchAny($hint, $p['clickup_tasks'])) {
             return $name;

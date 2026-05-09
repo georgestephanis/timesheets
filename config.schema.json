@@ -302,6 +302,10 @@
                     },
                     "minItems": 1
                 },
+                "harvest_client": {
+                    "description": "Harvest client name (exact, case-insensitive) that identifies this project's time entries. Used as an alternative to harvest_projects when multiple projects share a retainer-level Harvest project but each maps to a distinct Harvest client.",
+                    "type": "string"
+                },
                 "clickup_tasks": {
                     "description": "ClickUp task-name or description globs mapped to this local project.",
                     "type": "array",
@@ -433,6 +437,15 @@
                 },
                 "logo": {
                     "description": "URL or data URI for a logo image shown next to the grouping header in the web UI.",
+                    "type": "string"
+                },
+                "time_tracking": {
+                    "description": "Time-tracking method used for projects in this grouping. 'clickup' = log via ClickUp (which syncs to Harvest); 'harvest' = log directly in Harvest; 'none' or omitted = no time tracking for this grouping.",
+                    "type": "string",
+                    "enum": ["clickup", "harvest", "none"]
+                },
+                "harvest_connection": {
+                    "description": "Name of the Harvest connection (matching integrations.harvest[].name) to use when time_tracking is 'harvest'. Required when time_tracking is 'harvest'.",
                     "type": "string"
                 }
             }

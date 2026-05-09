@@ -111,3 +111,154 @@ function loadClickUpTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
 
     return $rows;
 }
+
+/**
+ * Fetches ClickUp tasks relevant to the configured user around a given date.
+ *
+ * Includes:
+ *   - Tasks currently assigned to the user (open and recently closed/completed).
+ *   - Tasks the user is watching, discovered via the notifications endpoint —
+ *     this catches tasks that were reassigned away or moved to QA/waiting but
+ *     that the user is still following.
+ *
+ * Used by llmSuggestTimeLogging() to identify candidate tasks for unlogged time entries.
+ * Returns tasks across all configured team IDs; the LLM is responsible for selecting
+ * the best match per project.
+ *
+ * @param  array<string, mixed> $conn
+ * @param  int    $timeout
+ * @param  string $aroundDate  YYYY-MM-DD — anchors the recency window for closed tasks
+ *                             and notification filtering. Defaults to today.
+ * @return list<array{id: string, name: string, space: string, folder: string, list: string, status: string}>
+ */
+function fetchAssignedClickUpTasks(array $conn, int $timeout = 20, string $aroundDate = ''): array
+{
+    $token    = (string)($conn['token'] ?? '');
+    $rawTeams = $conn['team_id'] ?? [];
+    $teamIds  = is_array($rawTeams) ? $rawTeams : [$rawTeams];
+    $teamIds  = array_values(array_filter(array_map('strval', $teamIds), fn($v) => $v !== ''));
+    $assignee = (string)($conn['assignee'] ?? '');
+
+    if ($token === '' || $teamIds === [] || $assignee === '') {
+        return [];
+    }
+
+    $headers = ['Authorization: ' . $token, 'Accept: application/json'];
+    $tasks   = [];
+    $seenIds = [];
+
+    // Limit closed-task lookback to 30 days before the target date so we don't
+    // drown the LLM in ancient completed work.
+    $cutoffMs = '';
+    if ($aroundDate !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $aroundDate)) {
+        $cutoff   = (new DateTimeImmutable($aroundDate . ' 00:00:00', new DateTimeZone('UTC')))->modify('-30 days');
+        $cutoffMs = (string)($cutoff->getTimestamp() * 1000);
+    }
+
+    foreach ($teamIds as $teamId) {
+        $page = 0;
+        do {
+            $params = [
+                'assignees[]'    => $assignee,
+                'include_closed' => 'true',
+                'subtasks'       => 'true',
+                'page'           => (string)$page,
+            ];
+            if ($cutoffMs !== '') {
+                $params['date_updated_gt'] = $cutoffMs;
+            }
+            try {
+                $json = httpGetJson(
+                    'https://api.clickup.com/api/v2/team/' . rawurlencode($teamId) . '/task?' . http_build_query($params),
+                    $headers,
+                    $timeout
+                );
+            } catch (RuntimeException) {
+                break;
+            }
+            $items = $json['tasks'] ?? [];
+            foreach ($items as $t) {
+                if (!is_array($t)) {
+                    continue;
+                }
+                $id   = (string)($t['id']   ?? '');
+                $name = trim((string)($t['name'] ?? ''));
+                if ($id === '' || $name === '' || isset($seenIds[$id])) {
+                    continue;
+                }
+                $seenIds[$id] = true;
+                $tasks[] = [
+                    'id'     => $id,
+                    'name'   => $name,
+                    'space'  => trim((string)($t['space']['name']  ?? '')),
+                    'folder' => trim((string)($t['folder']['name'] ?? '')),
+                    'list'   => trim((string)($t['list']['name']   ?? '')),
+                    'status' => trim((string)($t['status']['status'] ?? '')),
+                ];
+            }
+            $page++;
+        } while (count($items) >= 100 && $page < 20);
+    }
+
+    // Fetch tasks the user is watching via the notifications endpoint. This catches
+    // tasks that were reassigned away, moved to QA/waiting, or otherwise dropped off
+    // the assignee list but that the user is still receiving updates for.
+    try {
+        $notifJson = httpGetJson('https://api.clickup.com/api/v2/notification', $headers, $timeout);
+        $notifs    = $notifJson['notifications'] ?? [];
+        $needFetch = [];
+        foreach ($notifs as $n) {
+            if (!is_array($n)) {
+                continue;
+            }
+            // The notification payload may embed task info under 'task' or as flat fields.
+            $taskId   = (string)($n['task']['id']   ?? $n['task_id']   ?? '');
+            $taskName = trim((string)($n['task']['name'] ?? $n['task_name'] ?? ''));
+            if ($taskId === '' || isset($seenIds[$taskId])) {
+                continue;
+            }
+            if ($taskName !== '') {
+                // Enough info in the notification itself — add directly.
+                $seenIds[$taskId] = true;
+                $tasks[] = [
+                    'id'     => $taskId,
+                    'name'   => $taskName,
+                    'space'  => trim((string)($n['task']['space']['name']  ?? '')),
+                    'folder' => trim((string)($n['task']['folder']['name'] ?? '')),
+                    'list'   => trim((string)($n['task']['list']['name']   ?? '')),
+                    'status' => trim((string)($n['task']['status']['status'] ?? '')),
+                ];
+            } else {
+                $needFetch[] = $taskId;
+            }
+        }
+        // Fall back to individual task fetches for notifications without embedded task details.
+        foreach (array_unique($needFetch) as $taskId) {
+            if (isset($seenIds[$taskId])) {
+                continue;
+            }
+            try {
+                $t    = httpGetJson('https://api.clickup.com/api/v2/task/' . rawurlencode($taskId), $headers, $timeout);
+                $name = trim((string)($t['name'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                $seenIds[$taskId] = true;
+                $tasks[] = [
+                    'id'     => $taskId,
+                    'name'   => $name,
+                    'space'  => trim((string)($t['space']['name']  ?? '')),
+                    'folder' => trim((string)($t['folder']['name'] ?? '')),
+                    'list'   => trim((string)($t['list']['name']   ?? '')),
+                    'status' => trim((string)($t['status']['status'] ?? '')),
+                ];
+            } catch (RuntimeException) {
+                // Skip tasks whose details we cannot fetch.
+            }
+        }
+    } catch (RuntimeException) {
+        // Notifications endpoint unavailable — not fatal, assigned tasks still returned.
+    }
+
+    return $tasks;
+}

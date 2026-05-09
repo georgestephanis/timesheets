@@ -236,7 +236,8 @@ function renderJson(
     DateTimeImmutable $to,
     DateTimeZone $tz,
     array $warnings = [],
-    array $timeline = []
+    array $timeline = [],
+    array $summaries = []
 ): string {
     $clean = [];
     foreach ($bucket as $date => $projs) {
@@ -269,6 +270,9 @@ function renderJson(
     }
     if ($timeline) {
         $envelope['timelines'] = $timeline;
+    }
+    if ($summaries) {
+        $envelope['summaries'] = $summaries;
     }
     return json_encode($envelope, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
 }

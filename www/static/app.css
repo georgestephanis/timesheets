@@ -53,6 +53,47 @@ body {
     color: #999;
     font-style: italic;
 }
+.harvest-suggest-btn {
+    display: block;
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    width: 100%;
+    text-align: left;
+    color: #555;
+}
+.harvest-suggesting {
+    margin-top: 0.35rem;
+    font-size: 0.78rem;
+    color: #888;
+    font-style: italic;
+}
+.harvest-suggest-none {
+    margin-top: 0.35rem;
+    font-size: 0.78rem;
+    color: #aaa;
+    font-style: italic;
+}
+.harvest-suggestion {
+    margin-top: 0.45rem;
+    padding: 0.3rem 0.45rem;
+    background: #f0f7ff;
+    border-left: 3px solid #6ea8d4;
+    border-radius: 0 3px 3px 0;
+    font-size: 0.78rem;
+}
+.harvest-suggestion-meta {
+    font-weight: 600;
+    color: #1d4e79;
+    margin-bottom: 0.1rem;
+}
+.harvest-suggestion-where {
+    color: #2c6da3;
+    margin-bottom: 0.1rem;
+}
+.harvest-suggestion-desc {
+    color: #444;
+    line-height: 1.4;
+}
 .warnings-banner {
     margin: 0.6rem 0;
     padding: 0.6rem 1rem;
@@ -401,4 +442,46 @@ select {
 .admin-error {
     font-size: 0.82rem;
     margin-left: 0.4rem;
+}
+.summary-generate-btn {
+    display: block;
+    font-size: 0.82rem;
+    margin: 0.4em 0 1em;
+}
+.summary-error {
+    font-size: 0.82rem;
+    margin-left: 0.5em;
+}
+.day-summary {
+    margin: 0.5em 0 1em;
+    padding: 0.35em 0.75em;
+    background: #f6f8fa;
+    border-left: 3px solid #0969da;
+    border-radius: 0 4px 4px 0;
+    font-size: 0.88rem;
+}
+.day-summary-toggle {
+    display: block;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 600;
+    color: #57606a;
+    user-select: none;
+}
+.day-summary-toggle::-webkit-details-marker {
+    display: none;
+}
+.day-summary-list {
+    margin: 0.4em 0 0;
+    line-height: 1.55;
+}
+.day-summary-list dt {
+    font-weight: 600;
+    margin-top: 0.5em;
+}
+.day-summary-list dt:first-child {
+    margin-top: 0;
+}
+.day-summary-list dd {
+    margin: 0.1em 0 0 1.4em;
 }

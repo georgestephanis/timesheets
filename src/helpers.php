@@ -142,6 +142,35 @@ function chromeTime(int $ct, DateTimeZone $tz): DateTimeImmutable
 }
 
 /**
+ * Appends a timestamped entry to reports/app.log.
+ *
+ * Designed to be callable from any subsystem (LLM, GitHub, loaders, etc.).
+ * Writes are protected by FILE_APPEND | LOCK_EX so concurrent callers are safe.
+ * Falls back silently when PROJECT_ROOT is not defined or reports/ is not writable.
+ *
+ * @param string $level   Severity: 'DEBUG', 'INFO', 'WARNING', 'ERROR'.
+ * @param string $source  Short subsystem tag, e.g. 'llm', 'github', 'clickup'.
+ * @param string $message Log message; internal newlines are collapsed to spaces.
+ */
+function appLog(string $level, string $source, string $message): void
+{
+    if (!defined('PROJECT_ROOT')) {
+        return;
+    }
+    $logDir = PROJECT_ROOT . '/reports';
+    if (!is_dir($logDir)) {
+        return;
+    }
+    $record = json_encode([
+        'time'    => (new DateTimeImmutable('now'))->format('Y-m-d H:i:s'),
+        'level'   => strtoupper($level),
+        'source'  => $source,
+        'message' => str_replace(["\r", "\n"], ' ', $message),
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    @file_put_contents($logDir . '/app.jsonl', $record . "\n", FILE_APPEND | LOCK_EX);
+}
+
+/**
  * Emits a warning to STDERR (CLI) or error_log (web) and collects it for later retrieval.
  *
  * All warnings are pooled in a single global collector regardless of source, so
