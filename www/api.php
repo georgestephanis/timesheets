@@ -202,6 +202,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['ok' => true]);
             exit;
 
+        case 'generate_summary':
+            $date = (string)($payload['date'] ?? '');
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'date must be YYYY-MM-DD']);
+                exit(1);
+            }
+
+            require_once PROJECT_ROOT . '/src/helpers.php';
+            require_once PROJECT_ROOT . '/src/cache.php';
+            require_once PROJECT_ROOT . '/src/loader-activitywatch.php';
+            require_once PROJECT_ROOT . '/src/loader-chrome.php';
+            require_once PROJECT_ROOT . '/src/loader-git.php';
+            require_once PROJECT_ROOT . '/src/loader-integrations.php';
+            require_once PROJECT_ROOT . '/src/integrations/llm.php';
+            require_once PROJECT_ROOT . '/src/classifiers.php';
+            require_once PROJECT_ROOT . '/src/renderers.php';
+            require_once PROJECT_ROOT . '/src/cli.php';
+
+            if (llmGetConnection($config) === null) {
+                http_response_code(400);
+                echo json_encode(['error' => 'No LLM connection configured in integrations.llm']);
+                exit(1);
+            }
+
+            $tz   = new DateTimeZone($config['timezone']);
+            $from = new DateTimeImmutable($date . ' 00:00:00', $tz);
+            $to   = new DateTimeImmutable($date . ' 23:59:59', $tz);
+
+            [
+                'events'     => $events,
+                'commits'    => $commits,
+                'external'   => $external,
+                'from_cache' => $fromCache,
+            ] = loadSourcesForRange($config, $tz, $from, $to);
+
+            $sumOpts = [
+                'days' => null, 'from' => $date, 'to' => $date,
+                'project' => null, 'format' => 'json',
+                'show_unmatched' => false, 'list_projects' => false,
+                'help' => false, 'suggest' => false,
+            ];
+            [$fullBucket, $fullUnmatched, $fullTimeline] = classifyAndAggregate(
+                $events,
+                $commits,
+                $external,
+                $config,
+                $tz,
+                $sumOpts
+            );
+
+            $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz);
+            if ($summary === null) {
+                http_response_code(500);
+                echo json_encode(['error' => 'LLM returned no summary — check your LLM configuration and ensure there is activity data for this date']);
+                exit(1);
+            }
+
+            // Persist the summary by saving a fresh JSON report for this day.
+            $summaries = [$date => $summary];
+            $warnings  = getIntegrationWarnings();
+            $dir       = reportsDir($from);
+            $key       = reportsCacheKey($from, $to);
+            $jsonOut   = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, $warnings, $fullTimeline, $summaries);
+            saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $jsonOut);
+
+            echo json_encode(['ok' => true, 'summary' => $summary]);
+            exit;
+
         default:
             http_response_code(400);
             echo json_encode(['error' => 'Unsupported action']);

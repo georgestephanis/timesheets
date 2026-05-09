@@ -39,6 +39,7 @@ if ($format === 'html') {
         'today'             => (new DateTimeImmutable('now', $tz))->format('Y-m-d'),
         'yesterday'         => (new DateTimeImmutable('yesterday', $tz))->format('Y-m-d'),
         'harvestConfigured' => !empty($config['integrations']['harvest']),
+        'llmConfigured'     => !empty($config['integrations']['llm']),
         'groupings'         => (object)($config['groupings'] ?? []),
     ], JSON_UNESCAPED_UNICODE);
 

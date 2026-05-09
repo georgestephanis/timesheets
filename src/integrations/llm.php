@@ -109,6 +109,162 @@ function llmPostJson(array $conn, string $path, array $payload): array
 }
 
 /**
+ * Asks the LLM to produce a concise accomplishment summary for a single work day.
+ *
+ * Pulls together git commit subjects, GitHub PR/issue labels, ClickUp task names,
+ * and Harvest entry labels from the classified bucket and raw external rows, then
+ * sends them to the configured LLM for a bullet-list summary focused on what was
+ * accomplished (not how long it took).
+ *
+ * Returns null when no LLM is configured, when no actionable data exists, or when
+ * the LLM call fails — so callers can safely skip the summary without aborting.
+ *
+ * @param  string        $date      Date being summarised (YYYY-MM-DD).
+ * @param  array         $dayBucket $fullBucket[$date]: project-keyed records including commits.
+ * @param  array         $external  Raw external rows already filtered to the day's range.
+ * @param  array<string, mixed> $config
+ * @param  DateTimeZone  $tz
+ * @return string|null   Markdown bullet list, or null on failure / no data / no LLM.
+ */
+function llmDailySummary(
+    string $date,
+    array $dayBucket,
+    array $external,
+    array $config,
+    DateTimeZone $tz
+): ?string {
+    $conn = llmGetConnection($config);
+    if ($conn === null) {
+        return null;
+    }
+
+    // Collect commit subjects across all projects for this day.
+    $commitLines = [];
+    foreach ($dayBucket as $rec) {
+        foreach ($rec['commits'] ?? [] as $c) {
+            $commitLines[] = '[' . $c['repo'] . '] ' . $c['subj'];
+        }
+    }
+
+    // Collect external activity labels, deduped by source+label.
+    $githubLines  = [];
+    $clickupLines = [];
+    $harvestLines = [];
+    $seen = [];
+    foreach ($external as $row) {
+        $rawLabel = (string)($row['label'] ?? '');
+        $source   = (string)($row['source'] ?? '');
+        if ($rawLabel === '' || $source === '') {
+            continue;
+        }
+        $label = mb_substr(str_replace(["\n", "\r", "\t"], ' ', $rawLabel), 0, 200);
+        $key   = $source . ':' . $label;
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+
+        switch ($source) {
+            case 'github':
+                // Skip bare comment placeholders; only include PR and issue titles.
+                if (str_contains($label, ' PR #') || str_contains($label, ' Issue #')) {
+                    $githubLines[] = $label;
+                }
+                break;
+            case 'clickup':
+                if ($label !== 'ClickUp time entry') {
+                    $sec = (int)($row['seconds'] ?? 0);
+                    $clickupLines[] = $sec > 0 ? "$label (" . fmtDur($sec) . ' logged)' : $label;
+                }
+                break;
+            case 'harvest':
+                $sec = (int)($row['seconds'] ?? 0);
+                $harvestLines[] = $sec > 0 ? "$label (" . fmtDur($sec) . ' logged)' : $label;
+                break;
+        }
+    }
+
+    appLog('INFO', 'llm', "[$date] data: " . count($commitLines) . " commits, "
+        . count($githubLines) . " github, "
+        . count($clickupLines) . " clickup, "
+        . count($harvestLines) . " harvest");
+
+    if (!$commitLines && !$githubLines && !$clickupLines && !$harvestLines) {
+        appLog('INFO', 'llm', "[$date] no actionable data — summary skipped");
+        return null;
+    }
+
+    // Build prompt sections, capping each to avoid saturating the context window.
+    // Priority order: commits > GitHub > ClickUp > Harvest.
+    $sections = [];
+    if ($commitLines) {
+        $lines      = array_slice($commitLines, 0, 30);
+        $sections[] = "Git commits:\n" . implode("\n", array_map(fn($l) => "- $l", $lines));
+    }
+    if ($githubLines) {
+        $lines      = array_slice($githubLines, 0, 20);
+        $sections[] = "GitHub PRs and issues:\n" . implode("\n", array_map(fn($l) => "- $l", $lines));
+    }
+    if ($clickupLines) {
+        $lines      = array_slice($clickupLines, 0, 20);
+        $sections[] = "ClickUp tasks logged:\n" . implode("\n", array_map(fn($l) => "- $l", $lines));
+    }
+    if ($harvestLines) {
+        $lines      = array_slice($harvestLines, 0, 20);
+        $sections[] = "Harvest time entries:\n" . implode("\n", array_map(fn($l) => "- $l", $lines));
+    }
+
+    $systemPrompt = 'You are a technical work-log assistant. Given raw activity data for a single '
+        . 'work day, write a concise bulleted accomplishment summary focused on *what was done*, '
+        . 'not how long it took. Use past tense. Group closely related commits under one bullet '
+        . 'when appropriate. Omit boilerplate openers like "Worked on" or "Continued work on". '
+        . 'Respond with a markdown bullet list only — no headings, no prose, no code fences.';
+
+    $userPrompt = "Summarize the work accomplished on $date into 3–8 concise bullet points:\n\n"
+        . implode("\n\n", $sections);
+
+    $baseUrl = rtrim((string)($conn['base_url'] ?? 'unknown'), '/');
+    appLog('INFO', 'llm', "[$date] sending request to $baseUrl — prompt length: " . mb_strlen($userPrompt) . " chars");
+
+    try {
+        $model = llmResolveModel($conn);
+        appLog('INFO', 'llm', "[$date] model: $model");
+        $response = llmPostJson($conn, '/chat/completions', [
+            'model'    => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user',   'content' => $userPrompt],
+            ],
+        ]);
+    } catch (RuntimeException $e) {
+        appLog('ERROR', 'llm', "[$date] request failed: " . $e->getMessage());
+        return null;
+    }
+
+    $content = trim((string)($response['choices'][0]['message']['content'] ?? ''));
+    appLog('DEBUG', 'llm', "[$date] raw response: " . mb_substr($content, 0, 400));
+
+    if ($content === '') {
+        appLog('ERROR', 'llm', "[$date] empty content. finish_reason="
+            . (string)($response['choices'][0]['finish_reason'] ?? '?')
+            . " full_response=" . mb_substr((string)json_encode($response), 0, 500));
+        return null;
+    }
+
+    // Strip markdown code fences some models add despite instructions.
+    $content = (string)preg_replace('/^```(?:markdown)?\s*/m', '', $content);
+    $content = (string)preg_replace('/\s*```\s*$/m', '', $content);
+    $result  = trim($content) ?: null;
+
+    if ($result === null) {
+        appLog('WARNING', 'llm', "[$date] summary empty after stripping fences");
+    } else {
+        appLog('INFO', 'llm', "[$date] summary ok (" . mb_strlen($result) . " chars)");
+    }
+    return $result;
+}
+
+/**
  * Asks the LLM to suggest project assignments for unmatched signals.
  *
  * Sends a structured prompt describing configured projects and unmatched signals, then

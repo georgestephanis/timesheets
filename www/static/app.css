@@ -402,3 +402,36 @@ select {
     font-size: 0.82rem;
     margin-left: 0.4rem;
 }
+.summary-generate-btn {
+    display: block;
+    font-size: 0.82rem;
+    margin: 0.4em 0 1em;
+}
+.summary-error {
+    font-size: 0.82rem;
+    margin-left: 0.5em;
+}
+.day-summary {
+    margin: 0.5em 0 1em;
+    padding: 0.35em 0.75em;
+    background: #f6f8fa;
+    border-left: 3px solid #0969da;
+    border-radius: 0 4px 4px 0;
+    font-size: 0.88rem;
+}
+.day-summary-toggle {
+    display: block;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 600;
+    color: #57606a;
+    user-select: none;
+}
+.day-summary-toggle::-webkit-details-marker {
+    display: none;
+}
+.day-summary-list {
+    margin: 0.4em 0 0;
+    padding-left: 1.4em;
+    line-height: 1.55;
+}

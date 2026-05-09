@@ -244,7 +244,23 @@ function filterProjectsForView(projects, projectFilter) {
     return Object.entries(projects || {}).filter(([name]) => name === projectFilter);
 }
 
-function renderDay(date, projects, projectFilter, timelines = {}) {
+function renderDaySummary(text) {
+    const items = String(text)
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.startsWith("- ") || l.startsWith("* "))
+        .map((l) => `<li>${esc(l.replace(/^[-*]\s+/, ""))}</li>`)
+        .join("");
+    if (!items) return "";
+    return (
+        `<details class="day-summary" open>` +
+        `<summary class="day-summary-toggle">Day summary</summary>` +
+        `<ul class="day-summary-list">${items}</ul>` +
+        `</details>`
+    );
+}
+
+function renderDay(date, projects, projectFilter, timelines = {}, summaries = {}) {
     const entries = filterProjectsForView(projects, projectFilter).sort(
         ([, a], [, b]) => (b.seconds || 0) - (a.seconds || 0),
     );
@@ -259,9 +275,19 @@ function renderDay(date, projects, projectFilter, timelines = {}) {
         g ? (grouped[g] ??= []).push([name, rec]) : ungrouped.push([name, rec]);
     }
 
+    let summarySlot = "";
+    if (!projectFilter) {
+        if (summaries[date]) {
+            summarySlot = renderDaySummary(summaries[date]);
+        } else if (SITE.llmConfigured) {
+            summarySlot = `<button type="button" class="btn summary-generate-btn" data-generate-summary="${esc(date)}">Generate day summary</button>`;
+        }
+    }
+
     let html =
         `<h2>${esc(date)} <span class="dow">(${dow})</span> <span class="dur">&mdash; ${fmtDur(dayTotal)} active</span></h2>` +
-        renderTimeline(date, timelines);
+        renderTimeline(date, timelines) +
+        summarySlot;
 
     const groupTotals = Object.entries(grouped)
         .map(([g, ps]) => [g, ps.reduce((s, [, r]) => s + (r.seconds || 0), 0)])
@@ -295,7 +321,7 @@ function renderReport(data, projectFilter = "") {
     if (!days.length) return "<p><em>No activity recorded for this period.</em></p>";
 
     const blocks = days
-        .map((date) => renderDay(date, data.days[date], projectFilter, data.timelines || {}))
+        .map((date) => renderDay(date, data.days[date], projectFilter, data.timelines || {}, data.summaries || {}))
         .filter(Boolean);
 
     if (!blocks.length) return "<p><em>No activity recorded for this filter in this period.</em></p>";
@@ -1008,6 +1034,36 @@ document.addEventListener("click", (e) => {
                 errEl.className = "menu-error error";
                 errEl.textContent = err.message;
                 section?.appendChild(errEl);
+            });
+        return;
+    }
+
+    const genSummaryBtn = e.target.closest("[data-generate-summary]");
+    if (genSummaryBtn) {
+        closeAllProjectMenus();
+        const date = genSummaryBtn.getAttribute("data-generate-summary") || "";
+        if (!date || genSummaryBtn.disabled) return;
+        genSummaryBtn.disabled = true;
+        genSummaryBtn.textContent = "Generating…";
+        postApi({ action: "generate_summary", date })
+            .then(({ summary }) => {
+                if (currentData) {
+                    currentData.summaries = currentData.summaries || {};
+                    currentData.summaries[date] = summary;
+                }
+                responseCache.clear();
+                renderCurrentView();
+            })
+            .catch((err) => {
+                genSummaryBtn.disabled = false;
+                genSummaryBtn.textContent = "Generate day summary";
+                let errEl = genSummaryBtn.nextElementSibling;
+                if (!errEl || !errEl.classList.contains("summary-error")) {
+                    errEl = document.createElement("span");
+                    errEl.className = "summary-error error";
+                    genSummaryBtn.after(errEl);
+                }
+                errEl.textContent = `Failed: ${err.message}`;
             });
         return;
     }

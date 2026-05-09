@@ -181,13 +181,13 @@ block; none require a different provider.
 
 ### Pattern detection and reporting
 
-- [ ] **(P1, m)** **Daily accomplishment summary.** After loading a day's data,
+- [x] **(P1, m)** **Daily accomplishment summary.** After loading a day's data,
       serialize the richest intent signals — git commit messages and diffs (from
       `loader-git.php`), GitHub PR/issue/review-comment activity (from
       `src/integrations/github.php`), ClickUp task names and time entries (from
       `src/integrations/clickup.php`), and Slack threads (once that integration
       exists) — and send them to the LLM with a prompt asking it to write a concise
-      bullet-point summary of what was actually *accomplished* (not just where time
+      bullet-point summary of what was actually _accomplished_ (not just where time
       was spent). The output differs from the time-allocation narrative: it names
       specific PRs merged, issues closed, tasks completed, and decisions made.
       Store the result in the day's report JSON under a `"summary"` key and render
@@ -223,7 +223,7 @@ block; none require a different provider.
 
 - [ ] **(P3, m)** **Natural-language query over report history.** Expose a CLI
       command (`php activity-report.php --ask "How much time did I spend on
-      infrastructure work last month?"`) that serializes recent report data and
+infrastructure work last month?"`) that serializes recent report data and
       passes it with the question to the LLM. Complement to the structured web UI,
       not a replacement.
 - [ ] **(P3, l)** **"Why was this categorized?" explanation.** Already listed under
