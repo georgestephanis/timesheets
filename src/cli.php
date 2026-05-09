@@ -160,7 +160,7 @@ function generateReport(
     ) {
         $date = $from->format('Y-m-d');
         fwrite(STDERR, "Generating daily summary via LLM for $date...\n");
-        $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz);
+        $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz, $fullTimeline[$date] ?? []);
         if ($summary !== null) {
             $summaries[$date] = $summary;
         }

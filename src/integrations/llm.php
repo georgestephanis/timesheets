@@ -109,21 +109,23 @@ function llmPostJson(array $conn, string $path, array $payload): array
 }
 
 /**
- * Asks the LLM to produce a concise accomplishment summary for a single work day.
+ * Asks the LLM to produce a concise accomplishment summary for a single work day,
+ * organised by project with duration and time-of-day context.
  *
- * Pulls together git commit subjects, GitHub PR/issue labels, ClickUp task names,
- * and Harvest entry labels from the classified bucket and raw external rows, then
- * sends them to the configured LLM for a bullet-list summary focused on what was
- * accomplished (not how long it took).
+ * Pulls together tracked time, git commits, GitHub PR/issue labels, ClickUp task
+ * names, and Harvest entry labels — grouped per project — then sends them to the
+ * configured LLM for a project-by-project bullet summary.
  *
  * Returns null when no LLM is configured, when no actionable data exists, or when
  * the LLM call fails — so callers can safely skip the summary without aborting.
  *
- * @param  string        $date      Date being summarised (YYYY-MM-DD).
- * @param  array         $dayBucket $fullBucket[$date]: project-keyed records including commits.
- * @param  array         $external  Raw external rows already filtered to the day's range.
+ * @param  string        $date        Date being summarised (YYYY-MM-DD).
+ * @param  array         $dayBucket   $fullBucket[$date]: project-keyed records including commits.
+ * @param  array         $external    Raw external rows already filtered to the day's range.
  * @param  array<string, mixed> $config
  * @param  DateTimeZone  $tz
+ * @param  list<array{s: int, e: int, p: string, g: string|null}> $dayTimeline
+ *         Timeline segments for the day; used to compute per-project active windows.
  * @return string|null   Markdown bullet list, or null on failure / no data / no LLM.
  */
 function llmDailySummary(
@@ -131,25 +133,42 @@ function llmDailySummary(
     array $dayBucket,
     array $external,
     array $config,
-    DateTimeZone $tz
+    DateTimeZone $tz,
+    array $dayTimeline = []
 ): ?string {
     $conn = llmGetConnection($config);
     if ($conn === null) {
         return null;
     }
 
-    // Collect commit subjects across all projects for this day.
-    $commitLines = [];
-    foreach ($dayBucket as $rec) {
-        foreach ($rec['commits'] ?? [] as $c) {
-            $commitLines[] = '[' . $c['repo'] . '] ' . $c['subj'];
+    $ignoredNames = array_fill_keys($config['ignored_projects'] ?? [], true);
+
+    // Compute per-project active windows (first start → last end) from timeline segments.
+    $projectWindows = [];
+    foreach ($dayTimeline as $seg) {
+        $p = (string)($seg['p'] ?? '');
+        $s = (int)($seg['s'] ?? 0);
+        $e = (int)($seg['e'] ?? 0);
+        if ($p === '' || $s === 0) {
+            continue;
+        }
+        if (!isset($projectWindows[$p])) {
+            $projectWindows[$p] = ['first' => $s, 'last' => $e];
+        } else {
+            if ($s < $projectWindows[$p]['first']) {
+                $projectWindows[$p]['first'] = $s;
+            }
+            if ($e > $projectWindows[$p]['last']) {
+                $projectWindows[$p]['last'] = $e;
+            }
         }
     }
+    $fmtTime = fn(int $ts): string =>
+        (new DateTimeImmutable('@' . $ts))->setTimezone($tz)->format('g:ia');
 
-    // Collect external activity labels, deduped by source+label.
-    $githubLines  = [];
-    $clickupLines = [];
-    $harvestLines = [];
+    // Group external activity by the project already attributed in each row ('project'
+    // field is populated by GitHub; ClickUp/Harvest rows use '__unattributed__').
+    $extByProj = [];
     $seen = [];
     foreach ($external as $row) {
         $rawLabel = (string)($row['label'] ?? '');
@@ -164,63 +183,125 @@ function llmDailySummary(
         }
         $seen[$key] = true;
 
+        $proj = (string)($row['project'] ?? '');
+        $bucket = $proj !== '' ? $proj : '__unattributed__';
+
         switch ($source) {
             case 'github':
-                // Skip bare comment placeholders; only include PR and issue titles.
                 if (str_contains($label, ' PR #') || str_contains($label, ' Issue #')) {
-                    $githubLines[] = $label;
+                    $extByProj[$bucket]['github'][] = $label;
                 }
                 break;
             case 'clickup':
                 if ($label !== 'ClickUp time entry') {
                     $sec = (int)($row['seconds'] ?? 0);
-                    $clickupLines[] = $sec > 0 ? "$label (" . fmtDur($sec) . ' logged)' : $label;
+                    $extByProj[$bucket]['clickup'][] = $sec > 0 ? "$label (" . fmtDur($sec) . ' logged)' : $label;
                 }
                 break;
             case 'harvest':
                 $sec = (int)($row['seconds'] ?? 0);
-                $harvestLines[] = $sec > 0 ? "$label (" . fmtDur($sec) . ' logged)' : $label;
+                $extByProj[$bucket]['harvest'][] = $sec > 0 ? "$label (" . fmtDur($sec) . ' logged)' : $label;
                 break;
         }
     }
 
-    appLog('INFO', 'llm', "[$date] data: " . count($commitLines) . " commits, "
-        . count($githubLines) . " github, "
-        . count($clickupLines) . " clickup, "
-        . count($harvestLines) . " harvest");
+    // Merge project names from bucket + attributed external rows, sort by time desc.
+    $allProjects = array_unique(array_merge(
+        array_keys($dayBucket),
+        array_filter(array_keys($extByProj), fn($k) => $k !== '__unattributed__')
+    ));
+    usort($allProjects, fn($a, $b) =>
+        ($dayBucket[$b]['seconds'] ?? 0) <=> ($dayBucket[$a]['seconds'] ?? 0));
 
-    if (!$commitLines && !$githubLines && !$clickupLines && !$harvestLines) {
+    // Build one prompt section per project.
+    $sections = [];
+    $totalCommits = 0;
+    $totalGithub  = 0;
+    $totalClickup = 0;
+    $totalHarvest = 0;
+
+    foreach ($allProjects as $proj) {
+        if (isset($ignoredNames[$proj])) {
+            continue;
+        }
+
+        $sec     = (int)($dayBucket[$proj]['seconds'] ?? 0);
+        $commits = array_slice($dayBucket[$proj]['commits'] ?? [], 0, 15);
+        $ext     = $extByProj[$proj] ?? [];
+
+        if ($sec < 60 && !$commits && !$ext) {
+            continue;
+        }
+
+        // Header: project name + duration + time window.
+        $meta = [];
+        if ($sec >= 60) {
+            $meta[] = fmtDur($sec) . ' tracked';
+        }
+        if (isset($projectWindows[$proj])) {
+            $meta[] = $fmtTime($projectWindows[$proj]['first'])
+                    . '–' . $fmtTime($projectWindows[$proj]['last']);
+        }
+        $header = $proj . ($meta ? ' (' . implode(', ', $meta) . ')' : '') . ':';
+
+        $lines = [$header];
+        foreach ($commits as $c) {
+            $lines[] = '  commit: ' . $c['subj'];
+        }
+        foreach (array_slice($ext['github'] ?? [], 0, 10) as $l) {
+            $lines[] = '  github: ' . $l;
+        }
+        foreach (array_slice($ext['clickup'] ?? [], 0, 10) as $l) {
+            $lines[] = '  clickup: ' . $l;
+        }
+        foreach (array_slice($ext['harvest'] ?? [], 0, 10) as $l) {
+            $lines[] = '  harvest: ' . $l;
+        }
+
+        $sections[] = implode("\n", $lines);
+
+        $totalCommits += count($commits);
+        $totalGithub  += count($ext['github'] ?? []);
+        $totalClickup += count($ext['clickup'] ?? []);
+        $totalHarvest += count($ext['harvest'] ?? []);
+    }
+
+    // Unattributed external activity (no matched project).
+    $unattr = $extByProj['__unattributed__'] ?? [];
+    if ($unattr) {
+        $lines = ['Other activity (no project match):'];
+        foreach (array_slice($unattr['github'] ?? [], 0, 10) as $l) {
+            $lines[] = '  github: ' . $l;
+        }
+        foreach (array_slice($unattr['clickup'] ?? [], 0, 10) as $l) {
+            $lines[] = '  clickup: ' . $l;
+        }
+        foreach (array_slice($unattr['harvest'] ?? [], 0, 10) as $l) {
+            $lines[] = '  harvest: ' . $l;
+        }
+        $sections[] = implode("\n", $lines);
+        $totalGithub  += count($unattr['github'] ?? []);
+        $totalClickup += count($unattr['clickup'] ?? []);
+        $totalHarvest += count($unattr['harvest'] ?? []);
+    }
+
+    appLog('INFO', 'llm', "[$date] data: $totalCommits commits, $totalGithub github, "
+        . "$totalClickup clickup, $totalHarvest harvest across " . count($sections) . " project sections");
+
+    if (!$sections) {
         appLog('INFO', 'llm', "[$date] no actionable data — summary skipped");
         return null;
     }
 
-    // Build prompt sections, capping each to avoid saturating the context window.
-    // Priority order: commits > GitHub > ClickUp > Harvest.
-    $sections = [];
-    if ($commitLines) {
-        $lines      = array_slice($commitLines, 0, 30);
-        $sections[] = "Git commits:\n" . implode("\n", array_map(fn($l) => "- $l", $lines));
-    }
-    if ($githubLines) {
-        $lines      = array_slice($githubLines, 0, 20);
-        $sections[] = "GitHub PRs and issues:\n" . implode("\n", array_map(fn($l) => "- $l", $lines));
-    }
-    if ($clickupLines) {
-        $lines      = array_slice($clickupLines, 0, 20);
-        $sections[] = "ClickUp tasks logged:\n" . implode("\n", array_map(fn($l) => "- $l", $lines));
-    }
-    if ($harvestLines) {
-        $lines      = array_slice($harvestLines, 0, 20);
-        $sections[] = "Harvest time entries:\n" . implode("\n", array_map(fn($l) => "- $l", $lines));
-    }
-
-    $systemPrompt = 'You are a technical work-log assistant. Given raw activity data for a single '
-        . 'work day, write a concise bulleted accomplishment summary focused on *what was done*, '
-        . 'not how long it took. Use past tense. Group closely related commits under one bullet '
-        . 'when appropriate. Omit boilerplate openers like "Worked on" or "Continued work on". '
+    $systemPrompt = 'You are a technical work-log assistant. Given daily activity data organised by '
+        . 'project (with time tracked and active window), write a concise accomplishment summary '
+        . 'organised by project. For each project, use one top-level bullet with the project name, '
+        . 'duration, and approximate time of day, then sub-bullets for what was specifically '
+        . 'accomplished. Use past tense. Group related commits into a single sub-bullet when '
+        . 'appropriate. Omit boilerplate like "Worked on" or "Continued work on". '
         . 'Respond with a markdown bullet list only — no headings, no prose, no code fences.';
 
-    $userPrompt = "Summarize the work accomplished on $date into 3–8 concise bullet points:\n\n"
+    $userPrompt = "Summarize the work accomplished on $date by project:\n\n"
         . implode("\n\n", $sections);
 
     $baseUrl = rtrim((string)($conn['base_url'] ?? 'unknown'), '/');
