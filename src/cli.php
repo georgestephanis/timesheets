@@ -150,8 +150,16 @@ function generateReport(
     }
     $timeline = $hasProjectFilter ? [] : $fullTimeline;
 
-    // For single-day CLI runs with an LLM configured, generate a daily accomplishment summary.
+    // Load any cached LLM day summaries for all days in the range.
     $summaries = [];
+    foreach (rangeDays($from, $to, $tz) as $day) {
+        $cached = loadCachedLlmSummary($day);
+        if ($cached !== null) {
+            $summaries[$day->format('Y-m-d')] = $cached;
+        }
+    }
+
+    // For single-day CLI runs with an LLM configured, generate a summary if not cached.
     if (
         PHP_SAPI === 'cli'
         && $from->format('Y-m-d') === $to->format('Y-m-d')
@@ -159,10 +167,12 @@ function generateReport(
         && llmGetConnection($config) !== null
     ) {
         $date = $from->format('Y-m-d');
-        fwrite(STDERR, "Generating daily summary via LLM for $date...\n");
-        $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz, $fullTimeline[$date] ?? []);
-        if ($summary !== null) {
-            $summaries[$date] = $summary;
+        if (!isset($summaries[$date])) {
+            fwrite(STDERR, "Generating daily summary via LLM for $date...\n");
+            $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz, $fullTimeline[$date] ?? []);
+            if ($summary !== null) {
+                $summaries[$date] = $summary;
+            }
         }
     }
 

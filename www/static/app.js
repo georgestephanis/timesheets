@@ -7,6 +7,8 @@ let personalProjectQueue = new Set();
 let showAdminPanel = false;
 let currentAbortController = null;
 const responseCache = new Map();
+// Keyed by YYYY-MM-DD → list of suggestion objects (null = pending, [] = none found)
+const unloggedSuggestions = new Map();
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function addDays(dateStr, n) {
@@ -457,6 +459,26 @@ function showAdminError(anchorEl, message) {
     el.textContent = message;
 }
 
+function renderUnloggedSuggestions(suggestions) {
+    if (!suggestions.length) {
+        return '<p class="harvest-suggest-none">No gaps found</p>';
+    }
+    let html = "";
+    for (const s of suggestions) {
+        const where =
+            s.logging_method === "clickup"
+                ? `ClickUp: ${esc(s.clickup_task_name || s.clickup_task_id)}`
+                : `Harvest: ${esc(s.harvest_project)}${s.harvest_task ? " / " + esc(s.harvest_task) : ""}`;
+        html +=
+            `<div class="harvest-suggestion">` +
+            `<div class="harvest-suggestion-meta">${esc(s.project)} &mdash; ${fmtDur(Math.round(s.hours * 3600))}</div>` +
+            `<div class="harvest-suggestion-where">${where}</div>` +
+            `<div class="harvest-suggestion-desc">${esc(s.description)}</div>` +
+            `</div>`;
+    }
+    return html;
+}
+
 function renderHarvestSidebar(data) {
     const el = document.getElementById("harvest-sidebar");
     if (!el) return;
@@ -476,20 +498,24 @@ function renderHarvestSidebar(data) {
 
     let html = '<p class="harvest-sidebar-title">Harvest logged</p>';
     for (const date of days) {
+        const dayProjects = data.days[date] || {};
         const entryMap = {};
-        for (const rec of Object.values(data.days[date] || {})) {
+        let trackedSec = 0;
+        for (const rec of Object.values(dayProjects)) {
+            trackedSec += rec.seconds || 0;
             for (const [label, sec] of Object.entries(rec.detail?.harvest || {})) {
                 entryMap[label] = (entryMap[label] || 0) + sec;
             }
         }
-        const totalSec = Object.values(entryMap).reduce((s, v) => s + v, 0);
+        const loggedSec = Object.values(entryMap).reduce((s, v) => s + v, 0);
+        const gapSec = trackedSec - loggedSec;
         const dow = new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { weekday: "short" });
         const entries = Object.entries(entryMap).sort(([, a], [, b]) => b - a);
 
         html += `<div class="harvest-day">`;
         html += `<div class="harvest-day-date">${esc(date)} <span class="dow">(${dow})</span></div>`;
-        if (totalSec > 0) {
-            html += `<div class="harvest-day-total">${fmtDur(totalSec)}</div>`;
+        if (loggedSec > 0) {
+            html += `<div class="harvest-day-total">${fmtDur(loggedSec)}</div>`;
             html += `<ul class="harvest-entries">`;
             for (const [label, sec] of entries) {
                 html += `<li>${esc(label)}: <span class="dur">${fmtDur(sec)}</span></li>`;
@@ -498,6 +524,22 @@ function renderHarvestSidebar(data) {
         } else {
             html += `<div class="harvest-day-total harvest-day-zero">0m</div>`;
         }
+
+        // Unlogged suggestions: show button or cached results when there's a meaningful gap.
+        if (SITE.suggestLoggingConfigured && gapSec >= 900) {
+            const cached = unloggedSuggestions.get(date);
+            if (cached === undefined) {
+                html +=
+                    `<button type="button" class="btn harvest-suggest-btn" data-suggest-date="${esc(date)}">` +
+                    `Suggest unlogged (${fmtDur(gapSec)} gap)` +
+                    `</button>`;
+            } else if (cached === null) {
+                html += `<p class="harvest-suggesting">Analyzing&hellip;</p>`;
+            } else {
+                html += renderUnloggedSuggestions(cached);
+            }
+        }
+
         html += `</div>`;
     }
     el.innerHTML = html;
@@ -1067,6 +1109,23 @@ document.addEventListener("click", (e) => {
                 }
                 errEl.textContent = `Failed: ${err.message}`;
             });
+        return;
+    }
+
+    const suggestBtn = e.target.closest("[data-suggest-date]");
+    if (suggestBtn) {
+        const date = suggestBtn.getAttribute("data-suggest-date") || "";
+        if (!date) return;
+        unloggedSuggestions.set(date, null); // mark pending
+        renderHarvestSidebar(currentData);
+        postApi({ action: "suggest_time_logging", date })
+            .then(({ suggestions }) => {
+                unloggedSuggestions.set(date, suggestions || []);
+            })
+            .catch(() => {
+                unloggedSuggestions.set(date, []);
+            })
+            .finally(() => renderHarvestSidebar(currentData));
         return;
     }
 

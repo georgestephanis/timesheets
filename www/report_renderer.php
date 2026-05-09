@@ -38,8 +38,13 @@ if ($format === 'html') {
         ),
         'today'             => (new DateTimeImmutable('now', $tz))->format('Y-m-d'),
         'yesterday'         => (new DateTimeImmutable('yesterday', $tz))->format('Y-m-d'),
-        'harvestConfigured' => !empty($config['integrations']['harvest']),
-        'llmConfigured'     => !empty($config['integrations']['llm']),
+        'harvestConfigured'        => !empty($config['integrations']['harvest']),
+        'llmConfigured'            => !empty($config['integrations']['llm']),
+        'suggestLoggingConfigured' => !empty($config['integrations']['llm'])
+            && (bool)array_filter(
+                $config['groupings'] ?? [],
+                fn($g) => in_array($g['time_tracking'] ?? '', ['clickup', 'harvest'], true)
+            ),
         'groupings'         => (object)($config['groupings'] ?? []),
     ], JSON_UNESCAPED_UNICODE);
 

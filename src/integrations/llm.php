@@ -339,10 +339,345 @@ function llmDailySummary(
 
     if ($result === null) {
         appLog('WARNING', 'llm', "[$date] summary empty after stripping fences");
-    } else {
-        appLog('INFO', 'llm', "[$date] summary ok (" . mb_strlen($result) . " chars)");
+        return null;
     }
+
+    appLog('INFO', 'llm', "[$date] summary ok (" . mb_strlen($result) . " chars)");
+
+    // Persist to the LLM summary cache so subsequent calls (page loads, CLI re-runs)
+    // can return the result without another LLM round-trip.
+    if (function_exists('saveCachedLlmSummary')) {
+        $dayObj = new DateTimeImmutable($date . ' 00:00:00', $tz);
+        saveCachedLlmSummary($dayObj, $result);
+    }
+
     return $result;
+}
+
+/**
+ * Returns true if at least one non-ignored grouping has time_tracking configured.
+ *
+ * Used by report_renderer.php to conditionally enable the "Suggest unlogged" UI.
+ *
+ * @param  array<string, mixed> $config
+ */
+function llmSuggestLoggingAvailable(array $config): bool
+{
+    if (llmGetConnection($config) === null) {
+        return false;
+    }
+    foreach ($config['groupings'] ?? [] as $def) {
+        $method = (string)($def['time_tracking'] ?? '');
+        if ($method === 'clickup' || $method === 'harvest') {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Uses the LLM to suggest specific Harvest time log entries for unlogged project time.
+ *
+ * For each non-ignored project that has tracked time significantly exceeding logged
+ * Harvest time, this function:
+ *   - Fetches open ClickUp tasks (for groupings with time_tracking = "clickup")
+ *   - Fetches Harvest task assignments (for groupings with time_tracking = "harvest")
+ *   - Sends a structured prompt with activity data and available logging targets
+ *   - Returns validated suggestions ready to display in the UI
+ *
+ * Groupings opt in via config: groupings[name].time_tracking = "clickup"|"harvest"|"none"
+ * and groupings[name].harvest_connection = "Harvest / <name>" (must match an integrations.harvest entry).
+ *
+ * @param  string       $date
+ * @param  array        $dayBucket   $fullBucket[$date]: project-keyed records.
+ * @param  array        $external    Raw external rows for the day.
+ * @param  array<string, mixed> $config
+ * @param  DateTimeZone $tz
+ * @return list<array{project: string, hours: float, gap_hours: float, description: string,
+ *                   logging_method: string, harvest_project?: string, harvest_task?: string,
+ *                   clickup_task_id?: string, clickup_task_name?: string}>
+ */
+function llmSuggestTimeLogging(
+    string $date,
+    array $dayBucket,
+    array $external,
+    array $config,
+    DateTimeZone $tz
+): array {
+    $conn = llmGetConnection($config);
+    if ($conn === null) {
+        return [];
+    }
+
+    $groupings    = $config['groupings'] ?? [];
+    $ignoredNames = array_fill_keys($config['ignored_projects'] ?? [], true);
+
+    // Sum Harvest-logged seconds per configured project using harvest_projects mapping.
+    $harvestLogged = [];
+    foreach ($external as $row) {
+        if (($row['source'] ?? '') !== 'harvest') {
+            continue;
+        }
+        $hint = (string)($row['project_hint'] ?? '');
+        $sec  = (int)($row['seconds'] ?? 0);
+        foreach ($config['projects'] ?? [] as $proj => $p) {
+            if (in_array($hint, (array)($p['harvest_projects'] ?? []), true)) {
+                $harvestLogged[$proj] = ($harvestLogged[$proj] ?? 0) + $sec;
+            }
+        }
+    }
+
+    // Identify projects with a gap of at least 15 minutes.
+    $gaps = [];
+    foreach ($dayBucket as $proj => $rec) {
+        if (isset($ignoredNames[$proj])) {
+            continue;
+        }
+        $projConfig  = $config['projects'][$proj] ?? [];
+        $grouping    = (string)($projConfig['grouping'] ?? '');
+        $groupDef    = $groupings[$grouping] ?? null;
+        $timeTrack   = (string)($groupDef['time_tracking'] ?? '');
+        if ($timeTrack !== 'clickup' && $timeTrack !== 'harvest') {
+            continue;
+        }
+        if (empty($projConfig['harvest_projects'])) {
+            continue;
+        }
+
+        $tracked = (int)($rec['seconds'] ?? 0);
+        $logged  = $harvestLogged[$proj] ?? 0;
+        $gap     = $tracked - $logged;
+        if ($gap < 900) {
+            continue;
+        }
+
+        $gaps[$proj] = [
+            'tracked'            => $tracked,
+            'logged'             => $logged,
+            'gap'                => $gap,
+            'grouping'           => $grouping,
+            'time_tracking'      => $timeTrack,
+            'harvest_projects'   => (array)$projConfig['harvest_projects'],
+            'harvest_connection' => (string)($groupDef['harvest_connection'] ?? ''),
+            'commits'            => array_slice($rec['commits'] ?? [], 0, 10),
+        ];
+    }
+
+    if (!$gaps) {
+        return [];
+    }
+
+    // Build connection lookup for Harvest.
+    $harvestConnsByName = [];
+    foreach ($config['integrations']['harvest'] ?? [] as $hConn) {
+        $n = (string)($hConn['name'] ?? '');
+        if ($n !== '') {
+            $harvestConnsByName[$n] = $hConn;
+        }
+    }
+
+    // Fetch Harvest task assignments for each relevant Harvest connection.
+    $harvestTaskMap = [];
+    foreach (array_unique(array_column(array_values($gaps), 'harvest_connection')) as $connName) {
+        if ($connName === '' || !isset($harvestConnsByName[$connName])) {
+            continue;
+        }
+        foreach (fetchHarvestTaskAssignments($harvestConnsByName[$connName]) as $proj => $tasks) {
+            $harvestTaskMap[$proj] = array_unique(array_merge($harvestTaskMap[$proj] ?? [], $tasks));
+        }
+    }
+
+    // Fetch open ClickUp tasks if any project uses that method.
+    $clickupTasks = [];
+    if (array_filter($gaps, fn($g) => $g['time_tracking'] === 'clickup')) {
+        $clickupConns = $config['integrations']['clickup'] ?? [];
+        if (!is_array($clickupConns) || isset($clickupConns['token'])) {
+            $clickupConns = [$clickupConns];
+        }
+        foreach ($clickupConns as $cConn) {
+            $clickupTasks = array_merge($clickupTasks, fetchAssignedClickUpTasks($cConn, 20, $date));
+        }
+    }
+
+    // Collect external (non-Harvest) activity per project with a gap.
+    $extByProj = [];
+    $seen      = [];
+    foreach ($external as $row) {
+        $source   = (string)($row['source'] ?? '');
+        $rawLabel = (string)($row['label']  ?? '');
+        if ($source === 'harvest' || $rawLabel === '') {
+            continue;
+        }
+        $label = mb_substr(str_replace(["\n", "\r", "\t"], ' ', $rawLabel), 0, 200);
+        $key   = $source . ':' . $label;
+        if (isset($seen[$key])) {
+            continue;
+        }
+        $seen[$key] = true;
+        $proj = (string)($row['project'] ?? '');
+        if ($proj !== '' && isset($gaps[$proj])) {
+            $extByProj[$proj][$source][] = $label;
+        }
+    }
+
+    // Build one prompt section per project.
+    $sections = [];
+    foreach ($gaps as $proj => $gap) {
+        $trackedStr = fmtDur($gap['tracked']);
+        $loggedStr  = $gap['logged'] > 0 ? fmtDur($gap['logged']) : 'nothing';
+        $gapStr     = fmtDur($gap['gap']);
+        $methodHint = $gap['time_tracking'] === 'clickup'
+            ? '[Big Orange Lab — log via ClickUp → Harvest]'
+            : '[Bethink — log directly to Harvest]';
+
+        $lines   = ["$proj — tracked $trackedStr, logged $loggedStr, gap $gapStr $methodHint:"];
+        $lines[] = '  Activity:';
+        foreach ($gap['commits'] as $c) {
+            $lines[] = '    commit: ' . $c['subj'];
+        }
+        foreach (array_slice($extByProj[$proj]['github'] ?? [], 0, 5) as $l) {
+            $lines[] = '    github: ' . $l;
+        }
+        foreach (array_slice($extByProj[$proj]['clickup'] ?? [], 0, 5) as $l) {
+            $lines[] = '    clickup logged: ' . $l;
+        }
+
+        if ($gap['time_tracking'] === 'harvest') {
+            $lines[] = '  Available Harvest projects and tasks:';
+            foreach ($gap['harvest_projects'] as $hp) {
+                $tasks = $harvestTaskMap[$hp] ?? [];
+                if (!$tasks) {
+                    continue;
+                }
+                $lines[] = '    Project: "' . $hp . '"';
+                foreach (array_slice($tasks, 0, 8) as $t) {
+                    $lines[] = '      Task: "' . $t . '"';
+                }
+            }
+        } else {
+            $shown   = 0;
+            $lines[] = '  Open ClickUp tasks assigned to you:';
+            foreach ($clickupTasks as $t) {
+                $lines[] = sprintf(
+                    '    id:%s name:"%s" (space:%s, list:%s)',
+                    $t['id'],
+                    $t['name'],
+                    $t['space'],
+                    $t['list']
+                );
+                if (++$shown >= 20) {
+                    $lines[] = '    (…more tasks omitted)';
+                    break;
+                }
+            }
+        }
+
+        $sections[] = implode("\n", $lines);
+    }
+
+    $systemPrompt = 'You are a time-tracking assistant. Given tracked computer activity and gaps '
+        . 'between time tracked and time logged for each project, suggest specific Harvest time '
+        . 'log entries to fill the gaps. Be conservative with hours — suggest only clearly '
+        . 'evidenced work, rounded to the nearest quarter hour. Use only exact project, task, '
+        . 'and ClickUp values from the provided lists. '
+        . 'Respond with a JSON array only — no prose, no markdown fences.';
+
+    $userPrompt = "Suggest Harvest time log entries for $date to fill these gaps:\n\n"
+        . implode("\n\n", $sections) . "\n\n"
+        . "For each project, output one JSON object.\n"
+        . "Harvest-direct: {\"project\":\"<name>\",\"hours\":<decimal>,"
+        . "\"description\":\"<brief>\",\"logging_method\":\"harvest\","
+        . "\"harvest_project\":\"<exact>\",\"harvest_task\":\"<exact>\"}\n"
+        . "ClickUp: {\"project\":\"<name>\",\"hours\":<decimal>,"
+        . "\"description\":\"<brief>\",\"logging_method\":\"clickup\","
+        . "\"clickup_task_id\":\"<id>\",\"clickup_task_name\":\"<name>\"}\n"
+        . "Reply with the JSON array only.";
+
+    appLog('INFO', 'llm', "[$date] suggest_time_logging: " . count($gaps) . " gaps, sending request");
+
+    try {
+        $model    = llmResolveModel($conn);
+        $response = llmPostJson($conn, '/chat/completions', [
+            'model'    => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $systemPrompt],
+                ['role' => 'user',   'content' => $userPrompt],
+            ],
+        ]);
+    } catch (RuntimeException $e) {
+        appLog('ERROR', 'llm', "[$date] suggest_time_logging failed: " . $e->getMessage());
+        return [];
+    }
+
+    $content = trim((string)($response['choices'][0]['message']['content'] ?? ''));
+    $content = (string)preg_replace('/^```(?:json)?\s*/m', '', $content);
+    $content = (string)preg_replace('/\s*```\s*$/m', '', $content);
+    $content = trim($content);
+
+    $raw = json_decode($content, true);
+    if (!is_array($raw)) {
+        appLog('ERROR', 'llm', "[$date] suggest_time_logging: invalid JSON response");
+        return [];
+    }
+
+    // Validate each suggestion against known values.
+    $projectNames = array_keys($config['projects'] ?? []);
+    $clickupById  = [];
+    foreach ($clickupTasks as $t) {
+        $clickupById[$t['id']] = $t['name'];
+    }
+
+    $valid = [];
+    foreach ($raw as $s) {
+        if (!is_array($s)) {
+            continue;
+        }
+        $proj   = (string)($s['project']        ?? '');
+        $hours  = (float)($s['hours']           ?? 0);
+        $desc   = trim((string)($s['description']    ?? ''));
+        $method = (string)($s['logging_method'] ?? '');
+
+        if (!in_array($proj, $projectNames, true) || $hours <= 0 || $desc === '') {
+            continue;
+        }
+        if (!in_array($method, ['harvest', 'clickup'], true)) {
+            continue;
+        }
+        if (!isset($gaps[$proj])) {
+            continue;
+        }
+
+        $entry = [
+            'project'        => $proj,
+            'hours'          => round($hours * 4) / 4,
+            'gap_hours'      => round($gaps[$proj]['gap'] / 3600 * 4) / 4,
+            'description'    => $desc,
+            'logging_method' => $method,
+        ];
+
+        if ($method === 'harvest') {
+            $hp = (string)($s['harvest_project'] ?? '');
+            $ht = (string)($s['harvest_task']    ?? '');
+            if ($hp === '') {
+                continue;
+            }
+            $entry['harvest_project'] = $hp;
+            $entry['harvest_task']    = $ht;
+        } else {
+            $tid   = (string)($s['clickup_task_id']   ?? '');
+            $tname = (string)($s['clickup_task_name'] ?? '');
+            if ($tid === '' || !isset($clickupById[$tid])) {
+                continue;
+            }
+            $entry['clickup_task_id']   = $tid;
+            $entry['clickup_task_name'] = $tname !== '' ? $tname : $clickupById[$tid];
+        }
+
+        $valid[] = $entry;
+    }
+
+    appLog('INFO', 'llm', "[$date] suggest_time_logging: " . count($valid) . " valid suggestions");
+    return $valid;
 }
 
 /**
