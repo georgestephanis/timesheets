@@ -104,6 +104,7 @@ function loadHarvestTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
                 'end' => $end,
                 'seconds' => $seconds,
                 'project_hint' => $projectName !== '' ? $projectName : $label,
+                'client_name' => $clientName,
                 'label' => $label,
                 'entry_count' => 1,
                 'activity_count' => 1,
@@ -126,12 +127,13 @@ function loadHarvestTimeEntries(array $conn, DateTimeImmutable $from, DateTimeIm
 /**
  * Fetches active Harvest task assignments for one connection.
  *
- * Returns a map of harvest_project_name => [task_name, ...] covering all active
+ * Returns a map of harvest_project_name => {client, tasks} covering all active
  * task assignments in the account. Used by llmSuggestTimeLogging() to give the
- * LLM a concrete list of valid task names to choose from.
+ * LLM a concrete list of valid project/task names and to correlate BOL projects
+ * by Harvest client name.
  *
  * @param  array<string, mixed> $conn
- * @return array<string, list<string>>
+ * @return array<string, array{client: string, tasks: list<string>}>
  */
 function fetchHarvestTaskAssignments(array $conn, int $timeout = 20): array
 {
@@ -166,12 +168,16 @@ function fetchHarvestTaskAssignments(array $conn, int $timeout = 20): array
             if (!is_array($ta)) {
                 continue;
             }
-            $projName = trim((string)($ta['project']['name'] ?? ''));
-            $taskName = trim((string)($ta['task']['name']    ?? ''));
+            $projName   = trim((string)($ta['project']['name']          ?? ''));
+            $clientName = trim((string)($ta['project']['client']['name'] ?? ''));
+            $taskName   = trim((string)($ta['task']['name']              ?? ''));
             if ($projName === '' || $taskName === '') {
                 continue;
             }
-            $result[$projName][] = $taskName;
+            if (!isset($result[$projName])) {
+                $result[$projName] = ['client' => $clientName, 'tasks' => []];
+            }
+            $result[$projName]['tasks'][] = $taskName;
         }
 
         $page++;

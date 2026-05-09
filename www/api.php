@@ -317,7 +317,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
             [$fullBucket] = classifyAndAggregate($events, $commits, $external, $config, $tz, $sumOpts);
 
-            $suggestions = llmSuggestTimeLogging($date, $fullBucket[$date] ?? [], $external, $config, $tz);
+            $suggestions = llmSuggestTimeLogging($date, $fullBucket[$date] ?? [], $external, $config);
             echo json_encode(['ok' => true, 'suggestions' => $suggestions]);
             exit;
 

@@ -302,6 +302,10 @@
                     },
                     "minItems": 1
                 },
+                "harvest_client": {
+                    "description": "Harvest client name (exact, case-insensitive) that identifies this project's time entries. Used as an alternative to harvest_projects when multiple projects share a retainer-level Harvest project but each maps to a distinct Harvest client.",
+                    "type": "string"
+                },
                 "clickup_tasks": {
                     "description": "ClickUp task-name or description globs mapped to this local project.",
                     "type": "array",

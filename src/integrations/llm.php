@@ -392,7 +392,6 @@ function llmSuggestLoggingAvailable(array $config): bool
  * @param  array        $dayBucket   $fullBucket[$date]: project-keyed records.
  * @param  array        $external    Raw external rows for the day.
  * @param  array<string, mixed> $config
- * @param  DateTimeZone $tz
  * @return list<array{project: string, hours: float, gap_hours: float, description: string,
  *                   logging_method: string, harvest_project?: string, harvest_task?: string,
  *                   clickup_task_id?: string, clickup_task_name?: string}>
@@ -401,8 +400,7 @@ function llmSuggestTimeLogging(
     string $date,
     array $dayBucket,
     array $external,
-    array $config,
-    DateTimeZone $tz
+    array $config
 ): array {
     $conn = llmGetConnection($config);
     if ($conn === null) {
@@ -412,22 +410,11 @@ function llmSuggestTimeLogging(
     $groupings    = $config['groupings'] ?? [];
     $ignoredNames = array_fill_keys($config['ignored_projects'] ?? [], true);
 
-    // Sum Harvest-logged seconds per configured project using harvest_projects mapping.
-    $harvestLogged = [];
-    foreach ($external as $row) {
-        if (($row['source'] ?? '') !== 'harvest') {
-            continue;
-        }
-        $hint = (string)($row['project_hint'] ?? '');
-        $sec  = (int)($row['seconds'] ?? 0);
-        foreach ($config['projects'] ?? [] as $proj => $p) {
-            if (in_array($hint, (array)($p['harvest_projects'] ?? []), true)) {
-                $harvestLogged[$proj] = ($harvestLogged[$proj] ?? 0) + $sec;
-            }
-        }
-    }
-
     // Identify projects with a gap of at least 15 minutes.
+    // Logged seconds come directly from the classified bucket's detail maps, which
+    // already contain Harvest and ClickUp time entries matched during classification.
+    // For ClickUp projects (whose time syncs to Harvest), both sources are counted so
+    // the gap reflects what actually made it into Harvest regardless of entry path.
     $gaps = [];
     foreach ($dayBucket as $proj => $rec) {
         if (isset($ignoredNames[$proj])) {
@@ -440,12 +427,10 @@ function llmSuggestTimeLogging(
         if ($timeTrack !== 'clickup' && $timeTrack !== 'harvest') {
             continue;
         }
-        if (empty($projConfig['harvest_projects'])) {
-            continue;
-        }
 
         $tracked = (int)($rec['seconds'] ?? 0);
-        $logged  = $harvestLogged[$proj] ?? 0;
+        $logged  = array_sum($rec['detail']['harvest'] ?? [])
+                 + array_sum($rec['detail']['clickup'] ?? []);
         $gap     = $tracked - $logged;
         if ($gap < 900) {
             continue;
@@ -453,11 +438,11 @@ function llmSuggestTimeLogging(
 
         $gaps[$proj] = [
             'tracked'            => $tracked,
-            'logged'             => $logged,
+            'logged'             => (int)$logged,
             'gap'                => $gap,
             'grouping'           => $grouping,
             'time_tracking'      => $timeTrack,
-            'harvest_projects'   => (array)$projConfig['harvest_projects'],
+            'harvest_projects'   => (array)($projConfig['harvest_projects'] ?? []),
             'harvest_connection' => (string)($groupDef['harvest_connection'] ?? ''),
             'commits'            => array_slice($rec['commits'] ?? [], 0, 10),
         ];
@@ -482,8 +467,13 @@ function llmSuggestTimeLogging(
         if ($connName === '' || !isset($harvestConnsByName[$connName])) {
             continue;
         }
-        foreach (fetchHarvestTaskAssignments($harvestConnsByName[$connName]) as $proj => $tasks) {
-            $harvestTaskMap[$proj] = array_unique(array_merge($harvestTaskMap[$proj] ?? [], $tasks));
+        foreach (fetchHarvestTaskAssignments($harvestConnsByName[$connName]) as $proj => $info) {
+            if (!isset($harvestTaskMap[$proj])) {
+                $harvestTaskMap[$proj] = ['client' => $info['client'], 'tasks' => []];
+            }
+            $harvestTaskMap[$proj]['tasks'] = array_unique(
+                array_merge($harvestTaskMap[$proj]['tasks'], $info['tasks'])
+            );
         }
     }
 
@@ -542,10 +532,14 @@ function llmSuggestTimeLogging(
             $lines[] = '    clickup logged: ' . $l;
         }
 
+        $projConfig  = $config['projects'][$proj] ?? [];
+        $harvestClient = strtolower(trim((string)($projConfig['harvest_client'] ?? '')));
+
         if ($gap['time_tracking'] === 'harvest') {
             $lines[] = '  Available Harvest projects and tasks:';
             foreach ($gap['harvest_projects'] as $hp) {
-                $tasks = $harvestTaskMap[$hp] ?? [];
+                $info  = $harvestTaskMap[$hp] ?? null;
+                $tasks = $info['tasks'] ?? [];
                 if (!$tasks) {
                     continue;
                 }
@@ -568,6 +562,20 @@ function llmSuggestTimeLogging(
                 if (++$shown >= 20) {
                     $lines[] = '    (…more tasks omitted)';
                     break;
+                }
+            }
+            // Show the Harvest projects this client's ClickUp time syncs to, so the
+            // user can verify the sync happened after logging.
+            if ($harvestClient !== '') {
+                $syncProjects = [];
+                foreach ($harvestTaskMap as $hp => $info) {
+                    if (strtolower(trim($info['client'])) === $harvestClient) {
+                        $syncProjects[] = $hp;
+                    }
+                }
+                if ($syncProjects) {
+                    $lines[] = '  ClickUp entries sync to Harvest project(s): '
+                        . implode(', ', array_map(fn($p) => '"' . $p . '"', $syncProjects));
                 }
             }
         }
