@@ -163,8 +163,11 @@ function llmDailySummary(
             }
         }
     }
-    $fmtTime = fn(int $ts): string =>
-        (new DateTimeImmutable('@' . $ts))->setTimezone($tz)->format('g:ia');
+    // Timeline s/e values are seconds-since-local-midnight, not Unix timestamps.
+    // Recover the absolute timestamp by adding the day's local-midnight Unix offset.
+    $dayMidnightTs = (new DateTimeImmutable($date . ' 00:00:00', $tz))->getTimestamp();
+    $fmtTime = fn(int $offset): string =>
+        (new DateTimeImmutable('@' . ($dayMidnightTs + $offset)))->setTimezone($tz)->format('g:ia');
 
     // Group external activity by the project already attributed in each row ('project'
     // field is populated by GitHub; ClickUp/Harvest rows use '__unattributed__').
