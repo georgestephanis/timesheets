@@ -40,6 +40,12 @@ if (!is_array($config)) {
     exit(1);
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'config') {
+    header('Content-Type: application/json; charset=UTF-8');
+    readfile($configFile);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Reject cross-origin POST requests. Browsers always send Origin for cross-site fetches;
     // when it is present, it must be localhost or 127.0.0.1 (any port).
@@ -134,6 +140,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             }
 
+            if ($project === '__correlated__') {
+                if ($kind !== 'apps') {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Correlated attribution is only supported for apps signals']);
+                    exit(1);
+                }
+                $app = str_starts_with($value, 'ssh:') ? substr($value, 4) : $value;
+                addUniqueValue($config, 'correlated_apps', $app);
+                saveConfigWithBackup($config, $configFile, 'api');
+                echo json_encode(['ok' => true]);
+                exit;
+            }
+
             if (!array_key_exists($project, $config['projects'] ?? [])) {
                 http_response_code(400);
                 echo json_encode(['error' => 'Unknown project']);
@@ -200,6 +219,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             saveConfigWithBackup($config, $configFile, 'api');
             echo json_encode(['ok' => true]);
+            exit;
+
+        case 'save_config':
+            require_once PROJECT_ROOT . '/src/helpers.php';
+            $newConfig = $payload['config'] ?? null;
+            if (!is_array($newConfig)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'config must be an object']);
+                exit(1);
+            }
+            foreach (['timezone', 'paths', 'git_authors', 'projects'] as $req) {
+                if (!isset($newConfig[$req])) {
+                    http_response_code(400);
+                    echo json_encode(['error' => "Missing required config key: $req"]);
+                    exit(1);
+                }
+            }
+            if (
+                !is_array($newConfig['paths'])
+                || empty($newConfig['paths']['activitywatch'])
+                || empty($newConfig['paths']['chrome'])
+            ) {
+                http_response_code(400);
+                echo json_encode(['error' => 'paths.activitywatch and paths.chrome are required']);
+                exit(1);
+            }
+            if (!is_array($newConfig['projects'])) {
+                http_response_code(400);
+                echo json_encode(['error' => 'projects must be an object']);
+                exit(1);
+            }
+            // Validate that the data paths exist on this server.
+            $awPath = expandPath((string)$newConfig['paths']['activitywatch']);
+            if (!is_dir($awPath)) {
+                http_response_code(400);
+                echo json_encode(['error' => "ActivityWatch path does not exist: {$awPath}"]);
+                exit(1);
+            }
+            $chromePath = expandPath((string)$newConfig['paths']['chrome']);
+            if (!is_dir($chromePath)) {
+                http_response_code(400);
+                echo json_encode(['error' => "Chrome user data path does not exist: {$chromePath}"]);
+                exit(1);
+            }
+            $backupPath = saveConfigWithBackup($newConfig, $configFile, 'ui');
+            echo json_encode(['ok' => true, 'backup' => $backupPath]);
             exit;
 
         case 'generate_summary':

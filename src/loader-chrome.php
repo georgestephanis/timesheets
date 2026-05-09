@@ -21,7 +21,7 @@ declare(strict_types=1);
 function loadChromeHistory(array $config, DateTimeImmutable $from, DateTimeImmutable $to): array
 {
     $base = expandPath($config['paths']['chrome']);
-    $profiles = $config['paths']['chrome_profiles'];
+    $profiles = $config['paths']['chrome_profiles'] ?? null;
     if ($profiles === null) {
         $profiles = [];
         foreach (glob("$base/*", GLOB_ONLYDIR) ?: [] as $d) {
