@@ -479,6 +479,32 @@ function renderUnloggedSuggestions(suggestions) {
     return html;
 }
 
+function triggerSuggestForDate(date) {
+    if (!SITE.suggestLoggingConfigured || !currentData) return;
+    if (unloggedSuggestions.get(date) !== undefined) return; // already fetched or in flight
+    const dayProjects = (currentData.days || {})[date] || {};
+    let trackedSec = 0;
+    const entryMap = {};
+    for (const rec of Object.values(dayProjects)) {
+        trackedSec += rec.seconds || 0;
+        for (const [label, sec] of Object.entries(rec.detail?.harvest || {})) {
+            entryMap[label] = (entryMap[label] || 0) + sec;
+        }
+    }
+    const loggedSec = Object.values(entryMap).reduce((s, v) => s + v, 0);
+    if (trackedSec - loggedSec < 900) return;
+    unloggedSuggestions.set(date, null); // mark pending
+    renderHarvestSidebar(currentData);
+    postApi({ action: "suggest_time_logging", date })
+        .then(({ suggestions }) => {
+            unloggedSuggestions.set(date, suggestions || []);
+        })
+        .catch(() => {
+            unloggedSuggestions.set(date, []);
+        })
+        .finally(() => renderHarvestSidebar(currentData));
+}
+
 function renderHarvestSidebar(data) {
     const el = document.getElementById("harvest-sidebar");
     if (!el) return;
@@ -1097,6 +1123,7 @@ document.addEventListener("click", (e) => {
                 }
                 responseCache.clear();
                 renderCurrentView();
+                triggerSuggestForDate(date);
             })
             .catch((err) => {
                 genSummaryBtn.disabled = false;
@@ -1116,16 +1143,7 @@ document.addEventListener("click", (e) => {
     if (suggestBtn) {
         const date = suggestBtn.getAttribute("data-suggest-date") || "";
         if (!date) return;
-        unloggedSuggestions.set(date, null); // mark pending
-        renderHarvestSidebar(currentData);
-        postApi({ action: "suggest_time_logging", date })
-            .then(({ suggestions }) => {
-                unloggedSuggestions.set(date, suggestions || []);
-            })
-            .catch(() => {
-                unloggedSuggestions.set(date, []);
-            })
-            .finally(() => renderHarvestSidebar(currentData));
+        triggerSuggestForDate(date);
         return;
     }
 
