@@ -178,13 +178,13 @@ function generateReport(
 
     $format = $opts['format'];
     $out = match ($format) {
-        'json' => renderJson($bucket, $unmatched, $from, $to, $tz, [], $timeline, $summaries),
+        'json' => renderJson($bucket, $unmatched, $from, $to, $tz, getWarnings(), $timeline, $summaries),
         'tsv'  => renderTsv($bucket, $from, $to, $tz),
         default => renderMarkdown($bucket ?? [], $unmatched, $from, $to, $tz, $opts, $config),
     };
 
     $fullOut = match ($format) {
-        'json' => renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, [], $fullTimeline, $summaries),
+        'json' => renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, getWarnings(), $fullTimeline, $summaries),
         'tsv'  => renderTsv($fullBucket, $from, $to, $tz),
         default => renderMarkdown($fullBucket ?? [], $fullUnmatched, $from, $to, $tz, $fullOpts, $config),
     };
@@ -192,7 +192,7 @@ function generateReport(
     saveGeneratedReport($dir, $key, $from, $to, $format, null, $fromCache, $fullOut);
 
     if ($format === 'md') {
-        $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, [], $fullTimeline, $summaries);
+        $jsonOut = renderJson($fullBucket, $fullUnmatched, $from, $to, $tz, getWarnings(), $fullTimeline, $summaries);
         saveGeneratedReport($dir, $key, $from, $to, 'json', null, $fromCache, $jsonOut);
     }
 

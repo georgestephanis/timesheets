@@ -165,7 +165,7 @@ function appLog(string $level, string $source, string $message): void
         'time'    => (new DateTimeImmutable('now'))->format('Y-m-d H:i:s'),
         'level'   => strtoupper($level),
         'source'  => $source,
-        'message' => $message,
+        'message' => str_replace(["\r", "\n"], ' ', $message),
     ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     @file_put_contents($logDir . '/app.jsonl', $record . "\n", FILE_APPEND | LOCK_EX);
 }
