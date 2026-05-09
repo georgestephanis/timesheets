@@ -245,17 +245,19 @@ function filterProjectsForView(projects, projectFilter) {
 }
 
 function renderDaySummary(text) {
-    const items = String(text)
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l.startsWith("- ") || l.startsWith("* "))
-        .map((l) => `<li>${esc(l.replace(/^[-*]\s+/, ""))}</li>`)
-        .join("");
-    if (!items) return "";
+    const fmt = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, (_, m) => `<strong>${m}</strong>`);
+    let html = "";
+    for (const raw of String(text).split("\n")) {
+        const sub = raw.match(/^\s{2,}[-*]\s+(.*)/);
+        const top = !sub && raw.match(/^[-*]\s+(.*)/);
+        if (sub) html += `<dd>${fmt(sub[1])}</dd>`;
+        else if (top) html += `<dt>${fmt(top[1])}</dt>`;
+    }
+    if (!html) return "";
     return (
         `<details class="day-summary" open>` +
         `<summary class="day-summary-toggle">Day summary</summary>` +
-        `<ul class="day-summary-list">${items}</ul>` +
+        `<dl class="day-summary-list">${html}</dl>` +
         `</details>`
     );
 }
