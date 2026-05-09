@@ -322,7 +322,12 @@ All tools live in `tools/` and write a timestamped backup to `reports/config/` b
 All subsystems write structured diagnostic entries to `reports/app.jsonl`. Each line is a JSON object:
 
 ```json
-{"time":"2026-05-09 14:23:45","level":"ERROR","source":"llm","message":"[2026-05-08] request failed: HTTP 401 from https://…"}
+{
+    "time": "2026-05-09 14:23:45",
+    "level": "ERROR",
+    "source": "llm",
+    "message": "[2026-05-08] request failed: HTTP 401 from https://…"
+}
 ```
 
 Useful one-liners:
