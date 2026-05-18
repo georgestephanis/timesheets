@@ -46,7 +46,6 @@ if ($format === 'html') {
                 fn($g) => in_array($g['time_tracking'] ?? '', ['clickup', 'harvest'], true)
             ),
         'groupings'         => (object)($config['groupings'] ?? []),
-        'configSchema'      => json_decode(file_get_contents(PROJECT_ROOT . '/config.schema.json'), true),
     ], JSON_UNESCAPED_UNICODE);
 
     ?>
