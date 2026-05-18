@@ -33,7 +33,7 @@ declare(strict_types=1);
 //  BOOTSTRAP
 // =====================================================================
 
-const PROJECT_ROOT = dirname(__DIR__, 2);
+define('PROJECT_ROOT', dirname(__DIR__, 2));
 
 $configFile = PROJECT_ROOT . '/config.json';
 if (!file_exists($configFile)) {

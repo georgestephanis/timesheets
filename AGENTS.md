@@ -136,7 +136,7 @@ Logic is split across `src/` includes with no classes. All code is plain functio
 | `src/classifiers.php`                   | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `projectForExternal`, `isAfkAt`, `activeInputSecondsDuring`, `classifyAndAggregate`                                                                                                                                                                                |
 | `src/renderers.php`                     | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv`                                                                                                                                                                                                                                                                         |
 
-`PROJECT_ROOT` is defined as `dirname(__DIR__, 2)` in `apps/cli/activity-report.php` — two levels up from `apps/cli/` to reach the project root. Cache functions in `src/cache.php` use `PROJECT_ROOT` so `reports/` always resolves to the project root regardless of include depth.
+`PROJECT_ROOT` is set via `define('PROJECT_ROOT', dirname(__DIR__, 2))` in `apps/cli/activity-report.php` — two levels up from `apps/cli/` to reach the project root. `const` cannot be used here because `dirname()` is a function call, not a compile-time constant expression. Cache functions in `src/cache.php` use `PROJECT_ROOT` so `reports/` always resolves to the project root regardless of include depth.
 
 ### Data flow
 

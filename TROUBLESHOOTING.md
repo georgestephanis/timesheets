@@ -157,8 +157,8 @@ chmod 600 config.json   # owner read/write only
 
 1. Start the server if it isn't running:
     ```bash
-    php -S localhost:8000 apps/web/index.php
+    composer serve
     ```
 2. Open the browser console (F12) to see the underlying error.
-3. Check the terminal where `php -S` is running for PHP error output.
+3. Check the terminal where `composer serve` is running for PHP error output.
 4. If the report area shows a red banner, it includes the error message from `api.php`.

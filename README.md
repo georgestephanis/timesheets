@@ -58,7 +58,7 @@ composer install
 npm install
 
 # Start the web UI
-php -S localhost:8000 apps/web/index.php
+composer serve
 ```
 
 Then open [http://localhost:8000](http://localhost:8000). The UI loads today's activity, lets you page through previous days, rebuild stale data, and cross-reference what you've logged in Harvest for each day.
@@ -334,7 +334,7 @@ chmod +x activity-report.php
 ## Web UI
 
 ```bash
-php -S localhost:8000 apps/web/index.php
+composer serve
 ```
 
 The web UI is a single-page app that fetches JSON from `apps/web/api.php` and renders it client-side. Features:
@@ -405,6 +405,17 @@ tail -20 reports/app.jsonl | jq .
 
 ## Development
 
+### Running the app
+
+```bash
+composer serve                              # PHP web UI at http://localhost:8000
+composer report                             # PHP CLI (no args = backfill last 7 days)
+composer report -- --days 3                 # pass flags after --
+composer report -- --from 2026-05-08        # explicit date
+npm run desktop:start                       # React Native metro bundler
+npm run desktop:macos                       # build and run macOS desktop app
+```
+
 ### Linting and static analysis
 
 ```bash
@@ -412,10 +423,11 @@ composer lint        # PHP_CodeSniffer (PSR-12)
 composer lint:fix    # auto-fix what phpcbf can fix
 composer analyze     # PHPStan at level 5
 composer test        # PHPUnit (87 tests)
-composer check       # lint + analyze + test + Prettier format check in one shot
+composer check       # lint + analyze + tests + Prettier format check in one shot
+npm run check        # same as composer check (entry point for npm users)
 ```
 
-### JavaScript
+### JavaScript / TypeScript
 
 ```bash
 npm run lint:js       # ESLint on apps/web/static/app.js
