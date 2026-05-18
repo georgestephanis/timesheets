@@ -288,7 +288,7 @@ select {
     gap: 0.4rem;
 }
 .is-hidden {
-    display: none;
+    display: none !important;
 }
 .badge {
     display: inline-block;
