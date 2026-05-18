@@ -2,12 +2,12 @@
 // Based on the existing web UI structure
 
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, FlatList } from "react-native";
+import { View, Text, StyleSheet, ScrollView, FlatList, Pressable } from "react-native";
 
 // Mock data for demonstration
 const mockReportData = {
     from: "2026-05-08T00:00:00-04:00",
-    to: "2026-05-08T23:59:59-04:00",
+    to: "2026-05-09T23:59:59-04:00",
     tz: "America/New_York",
     days: {
         "2026-05-08": {
@@ -25,7 +25,25 @@ const mockReportData = {
                     clickup: { entries: 0, activity: 0, discussion: 0 },
                     clockify: { entries: 1, activity: 1, discussion: 1 },
                 },
-                commits: [{ time: "2026-05-08T09:14:00-04:00", sha: "a1b2c3d4...", subj: "...", repo: "~/..." }],
+                commits: [
+                    {
+                        time: "2026-05-08T09:14:00-04:00",
+                        sha: "a1b2c3d4...",
+                        subj: "...",
+                        repo: "~/...",
+                    },
+                ],
+            },
+        },
+        "2026-05-09": {
+            "Another Project": {
+                grouping: "Group Label",
+                seconds: 1800,
+                active_seconds: 1500,
+                activity_ratio: 0.83,
+                detail: { vscode: { "another-dir": 1800 } },
+                external: {},
+                commits: [],
             },
         },
     },
@@ -48,15 +66,12 @@ const TimesheetsApp = () => {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Simulate data fetching
         const fetchData = async () => {
             try {
-                // In a real implementation, this would call the engine
+                // In a real implementation, this would call the engine:
                 // const data = await engine.generateReport(dateRange);
-                setTimeout(() => {
-                    setReportData(mockReportData);
-                    setLoading(false);
-                }, 500);
+                setReportData(mockReportData);
+                setLoading(false);
             } catch (err) {
                 setError(err.message);
                 setLoading(false);
@@ -103,27 +118,40 @@ const ReportHeader = ({ from, to, timezone }) => (
 );
 
 /**
- * Main report content component
+ * Main report content component — shows one day at a time with prev/next navigation
  */
 const ReportContent = ({ data }) => {
-    const [selectedProject, setSelectedProject] = useState(null);
+    const dates = Object.keys(data.days).sort();
+    const [dayIndex, setDayIndex] = useState(dates.length - 1);
 
-    const projects = Object.entries(data.days[Object.keys(data.days)[0]] || {});
+    const currentDate = dates[dayIndex];
+    const projects = Object.entries(data.days[currentDate] || {});
 
     return (
         <View style={styles.content}>
+            <View style={styles.dayNav}>
+                <Pressable
+                    onPress={() => setDayIndex((i) => Math.max(0, i - 1))}
+                    disabled={dayIndex === 0}
+                    style={[styles.navButton, dayIndex === 0 && styles.navButtonDisabled]}
+                >
+                    <Text style={styles.navButtonText}>← Prev</Text>
+                </Pressable>
+                <Text style={styles.dayLabel}>{currentDate}</Text>
+                <Pressable
+                    onPress={() => setDayIndex((i) => Math.min(dates.length - 1, i + 1))}
+                    disabled={dayIndex === dates.length - 1}
+                    style={[styles.navButton, dayIndex === dates.length - 1 && styles.navButtonDisabled]}
+                >
+                    <Text style={styles.navButtonText}>Next →</Text>
+                </Pressable>
+            </View>
             <FlatList
                 data={projects}
                 keyExtractor={([key]) => key}
                 renderItem={({ item }) => {
                     const [projectName, projectData] = item;
-                    return (
-                        <ProjectCard
-                            projectName={projectName}
-                            projectData={projectData}
-                            onPress={() => setSelectedProject(projectData)}
-                        />
-                    );
+                    return <ProjectCard projectName={projectName} projectData={projectData} />;
                 }}
             />
         </View>
@@ -133,14 +161,14 @@ const ReportContent = ({ data }) => {
 /**
  * Project card component
  */
-const ProjectCard = ({ projectName, projectData, onPress }) => (
-    <View style={styles.projectCard} onPress={onPress}>
+const ProjectCard = ({ projectName, projectData }) => (
+    <Pressable style={styles.projectCard}>
         <Text style={styles.projectTitle}>{projectName}</Text>
         <Text style={styles.projectDetails}>
             Duration: {Math.floor(projectData.seconds / 3600)}h {Math.floor((projectData.seconds % 3600) / 60)}m
         </Text>
         <Text style={styles.projectDetails}>Activity Ratio: {(projectData.activity_ratio * 100).toFixed(1)}%</Text>
-    </View>
+    </Pressable>
 );
 
 const styles = StyleSheet.create({
@@ -164,6 +192,26 @@ const styles = StyleSheet.create({
     },
     content: {
         padding: 20,
+    },
+    dayNav: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12,
+    },
+    dayLabel: {
+        fontSize: 16,
+        fontWeight: "600",
+    },
+    navButton: {
+        padding: 8,
+    },
+    navButtonDisabled: {
+        opacity: 0.3,
+    },
+    navButtonText: {
+        fontSize: 14,
+        color: "#007AFF",
     },
     projectCard: {
         padding: 15,
