@@ -801,6 +801,8 @@ function setNestedValue(obj, parts, value) {
 function syncSiteFromConfig(cfg) {
     SITE.projects = Object.entries(cfg.projects || {}).map(([name, p]) => ({ name, grouping: p.grouping ?? null }));
     SITE.groupings = cfg.groupings || {};
+    if (cfg.timezone) SITE.timezone = cfg.timezone;
+    if (cfg.min_event_seconds_to_show !== undefined) SITE.minSec = cfg.min_event_seconds_to_show;
 }
 
 function showConfigToast(msg, type = "success") {
