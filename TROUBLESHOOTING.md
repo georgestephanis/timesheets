@@ -66,6 +66,25 @@
 
 ---
 
+## Clockify integration: no entries or "workspace_id required"
+
+**Symptom:** Clockify time entries are missing from the report; STDERR may show nothing (silent empty return) or a warning about missing credentials.
+
+**Cause:** `workspace_id` and `user_id` must be present for the API call to proceed. They are auto-resolved on first run, but only if `api_key` is set and reachable.
+
+**Fix:**
+
+1. Make sure your `config.json` has at least `name` and `api_key` in the Clockify connection:
+    ```json
+    "clockify": [{ "name": "Main", "api_key": "YOUR_CLOCKIFY_API_KEY" }]
+    ```
+2. Run the report once from the CLI. If `workspace_id`/`user_id` are absent or non-standard, the tool calls `GET /v1/user` to resolve them and writes them back to `config.json` automatically.
+3. If auto-resolve fails (e.g. bad API key), a warning is emitted to STDERR. Check the key in Clockify under **Profile → API**.
+4. Clockify IDs are strings, not integers — if you copy them manually, make sure they are quoted in `config.json`.
+5. If entries still don't appear after IDs are resolved, check that `clockify_projects` globs in your project definitions match the project names in your Clockify workspace.
+
+---
+
 ## LLM / `--suggest`: endpoint unreachable
 
 **Symptom:** `--suggest` exits immediately or prints a "Could not fetch model list" / "LLM request failed" error.

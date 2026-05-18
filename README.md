@@ -1,6 +1,6 @@
 # activity-report
 
-A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp/GitHub APIs into a project-attributed time report — with optional LLM-generated daily accomplishment summaries.
+A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp/Clockify/GitHub APIs into a project-attributed time report — with optional LLM-generated daily accomplishment summaries.
 
 ## A Recommendation on Building your `config.json`
 
@@ -35,7 +35,7 @@ With no arguments, `activity-report.php` backfills the prior seven completed cal
 
 ## How it works
 
-Every few seconds, ActivityWatch records which app and window title is in focus. With `aw-watcher-input` enabled, it also records keyboard/mouse/scroll activity slices. This script reads that data, correlates it with Chrome browsing history, Git commits, and optional Harvest/ClickUp time-entry feeds, then classifies each event into a named **project** based on rules you define in `config.json`. The result is a per-day, per-project breakdown of where your time went, including active-input ratios and external-integration metrics.
+Every few seconds, ActivityWatch records which app and window title is in focus. With `aw-watcher-input` enabled, it also records keyboard/mouse/scroll activity slices. This script reads that data, correlates it with Chrome browsing history, Git commits, and optional Harvest/ClickUp/Clockify time-entry feeds, then classifies each event into a named **project** based on rules you define in `config.json`. The result is a per-day, per-project breakdown of where your time went, including active-input ratios and external-integration metrics.
 
 ```
 ## 2026-04-28 (Mon) — 7h 22m active
@@ -109,11 +109,11 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 | `project_gap_window_seconds`        | int         | Bridge untracked/personal gaps shorter than this back to the surrounding project (default 300)                     |
 | `timeline_merge_gap_seconds`        | int         | Merge same-project timeline segments separated by less than this many seconds in the web UI (default 300)          |
 | `timeline_min_seconds`              | int         | Drop timeline segments shorter than this from the web UI timeline bar (default 60)                                 |
-| `integration_http_timeout_seconds`  | int         | HTTP timeout for Harvest and ClickUp API calls (default 20)                                                        |
+| `integration_http_timeout_seconds`  | int         | HTTP timeout for Harvest, ClickUp, and Clockify API calls (default 20)                                             |
 | `github_command_timeout_seconds`    | int         | Timeout per `gh` CLI command when fetching GitHub activity (default 8)                                             |
 | `github_cache_ttl`                  | string      | Cache TTL passed to `gh api --cache` (e.g. `"1h"`, `"30m"`; default `"1h"`)                                        |
 | `groupings_map`                     | object      | Rules for `set-integration-groupings` tool: connection glob → grouping label, ClickUp default, priority order      |
-| `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`, `github[]`, `llm[]`)                                          |
+| `integrations`                      | object      | Optional external sources (`harvest[]`, `clickup[]`, `clockify[]`, `github[]`, `llm[]`)                            |
 
 ### Project signals
 
@@ -145,7 +145,10 @@ Each project in `projects` is an object whose keys are all optional — include 
     "harvest_projects": ["Acme*"],
 
     // ClickUp task/description globs mapped into this local project
-    "clickup_tasks": ["*acme*"]
+    "clickup_tasks": ["*acme*"],
+
+    // Clockify project-name globs mapped into this local project
+    "clockify_projects": ["Acme*", "Client Work"]
 }
 ```
 
@@ -184,6 +187,14 @@ Multiple personal-access-token connections are supported for each provider:
             "team_id": "1234567",
             "token": "CLICKUP_PERSONAL_ACCESS_TOKEN",
             "assignee": "me"             // auto-resolved and saved on first run if omitted
+        }
+    ],
+    "clockify": [
+        {
+            "name": "Clockify Main",
+            "api_key": "CLOCKIFY_API_KEY",
+            "workspace_id": "abc123",   // auto-resolved and saved on first run if omitted
+            "user_id": "xyz789"         // auto-resolved and saved on first run if omitted
         }
     ],
     "github": [
@@ -391,13 +402,15 @@ src/
   loader-chrome.php
   loader-git.php          — loadGitCommits() with optional GitHub Desktop discovery
   loader-github-desktop.php — discoverGitHubDesktopRepos() via LevelDB scanning
-  loader-integrations.php — orchestrates Harvest/ClickUp/GitHub; collects warnings
+  loader-integrations.php — orchestrates Harvest/ClickUp/Clockify/GitHub; collects warnings
   integrations/
     shared.php            — httpGetJson()
     harvest.php           — loadHarvestTimeEntries()
     harvest-catalog.php   — loadHarvestProjectCatalog() (shared by sync and groupings tools)
     clickup.php           — loadClickUpTimeEntries()
     clickup-catalog.php   — loadClickUpProjectTree() (shared by sync and groupings tools)
+    clockify.php          — resolveClockifyUserInfo(), loadClockifyTimeEntries()
+    clockify-catalog.php  — clockifyFetchProjectNames() (for future sync tooling)
     github.php            — CLI-only; githubFetchCommits/PullRequests/Issues/Comments
     llm.php               — llmSuggestAssignments(), llmDailySummary()
 www/

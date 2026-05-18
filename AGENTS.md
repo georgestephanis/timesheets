@@ -13,7 +13,7 @@ A PHP CLI tool + local web UI that aggregates local activity data from four sour
 | ActivityWatch            | App/window focus events + AFK status + input slices (presses/clicks/mouse/scroll) | `~/Library/Application Support/activitywatch/` (SQLite)                                                                 |
 | Chrome history           | Browser visits with URLs and titles                                               | `~/Library/Application Support/Google/Chrome/` (SQLite)                                                                 |
 | Git                      | Commits authored by configured email(s)                                           | All repos in `projects[*].repos`, plus any discovered via GitHub Desktop when `discover_repos: "github_desktop"` is set |
-| External APIs (optional) | Harvest + ClickUp time/activity rows; GitHub commit/PR/issue activity             | HTTPS APIs                                                                                                              |
+| External APIs (optional) | Harvest + ClickUp + Clockify time/activity rows; GitHub commit/PR/issue activity  | HTTPS APIs                                                                                                              |
 
 Events are classified into named **projects** by matching signals (VSCode window title, browser domain, Slack workspace/channel, SSH hostname) against rules in `config.json`. Unmatched events fall into catch-all buckets (`Browser (uncategorized)`, `VSCode (uncategorized)`, etc.).
 
@@ -49,7 +49,11 @@ src/
   integrations/
     shared.php                   — idLooksStandard(), httpGetJson()
     harvest.php                  — resolveHarvestUserId(), loadHarvestTimeEntries()
+    harvest-catalog.php          — harvestFetchProjectNames()
     clickup.php                  — resolveClickUpUserId(), loadClickUpTimeEntries()
+    clickup-catalog.php          — clickupFetchAllNames()
+    clockify.php                 — resolveClockifyUserInfo(), loadClockifyTimeEntries()
+    clockify-catalog.php         — clockifyFetchProjectNames()
     github.php                   — loadGitHubActivity(), github* helpers  [CLI-only; skipped in web]
     llm.php                      — llmGetConnection(), llmResolveModel(), llmPostJson(),
                                    llmSuggestAssignments()  [CLI-only; used by --suggest]
@@ -94,23 +98,25 @@ package.json                     — dev dep: prettier ^3.0
 
 Logic is split across `src/` includes with no classes. All code is plain functions grouped by concern. `activity-report.php` is a thin entry point that loads config, defines `PROJECT_ROOT`, requires all includes, and calls `main()`.
 
-| File                            | Key functions                                                                                                                                                                                                                                                                                                                             |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/cli.php`                   | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange`, `generateReport`, `loadSourcesForRange`, `loadFreshSourceSlice`, `backfillRecentDailyReports`                                                                                                                                                                      |
-| `src/helpers.php`               | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime`                                                                                                                                                                                                                                                                  |
-| `src/config.php`                | `saveConfigWithBackup`, `addUniqueValue`, `parseSlackSignal`, `applySignalToProject`                                                                                                                                                                                                                                                      |
-| `src/cache.php`                 | `reportsDir`, `reportsCacheKey`, `rangeIsHistorical`, `rangeDays`, `mergeSourceBundles`, `filterSourcesToRange`, `loadCachedSources`, `saveCachedSources`, `loadDailyCachedSources`, `saveDailyCachedSources`, `findLatestReport`, `findLatestFullReportGeneratedAt`, `saveGeneratedReport`, `appendToIndex`, serialize/deserialize pairs |
-| `src/loader-activitywatch.php`  | `loadActivityWatch`, `loadAwSqlite`                                                                                                                                                                                                                                                                                                       |
-| `src/loader-chrome.php`         | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight`                                                                                                                                                                                                                                                                                 |
-| `src/loader-git.php`            | `loadGitCommits`                                                                                                                                                                                                                                                                                                                          |
-| `src/loader-github-desktop.php` | `githubDesktopLevelDbPath`, `scanLevelDbForPaths`, `discoverGitHubDesktopRepos`                                                                                                                                                                                                                                                           |
-| `src/loader-integrations.php`   | `loadIntegrationActivity`, `integrationWarning`, `getIntegrationWarnings`, `backupConfigSnapshot`                                                                                                                                                                                                                                         |
-| `src/integrations/shared.php`   | `idLooksStandard`, `httpGetJson`                                                                                                                                                                                                                                                                                                          |
-| `src/integrations/harvest.php`  | `resolveHarvestUserId`, `loadHarvestTimeEntries`                                                                                                                                                                                                                                                                                          |
-| `src/integrations/clickup.php`  | `resolveClickUpUserId`, `loadClickUpTimeEntries`                                                                                                                                                                                                                                                                                          |
-| `src/integrations/github.php`   | `loadGitHubActivity`, `githubActorLogins`, `githubPaginatedGet`, `githubDateInRange`, `githubGetJson`, `githubReposByProject`, `githubRepoFromRemoteUrl`                                                                                                                                                                                  |
-| `src/classifiers.php`           | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `projectForExternal`, `isAfkAt`, `activeInputSecondsDuring`, `classifyAndAggregate`                                                                                                                                                                                |
-| `src/renderers.php`             | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv`                                                                                                                                                                                                                                                                         |
+| File                                    | Key functions                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/cli.php`                           | `main`, `parseArgs`, `printHelp`, `printProjects`, `resolveDateRange`, `generateReport`, `loadSourcesForRange`, `loadFreshSourceSlice`, `backfillRecentDailyReports`                                                                                                                                                                      |
+| `src/helpers.php`                       | `expandPath`, `fnmatchAny`, `fmtDur`, `copyForRead`, `pdo`, `chromeTime`                                                                                                                                                                                                                                                                  |
+| `src/config.php`                        | `saveConfigWithBackup`, `addUniqueValue`, `parseSlackSignal`, `applySignalToProject`                                                                                                                                                                                                                                                      |
+| `src/cache.php`                         | `reportsDir`, `reportsCacheKey`, `rangeIsHistorical`, `rangeDays`, `mergeSourceBundles`, `filterSourcesToRange`, `loadCachedSources`, `saveCachedSources`, `loadDailyCachedSources`, `saveDailyCachedSources`, `findLatestReport`, `findLatestFullReportGeneratedAt`, `saveGeneratedReport`, `appendToIndex`, serialize/deserialize pairs |
+| `src/loader-activitywatch.php`          | `loadActivityWatch`, `loadAwSqlite`                                                                                                                                                                                                                                                                                                       |
+| `src/loader-chrome.php`                 | `loadChromeHistory`, `backfillChromeUrls`, `bsearchRight`                                                                                                                                                                                                                                                                                 |
+| `src/loader-git.php`                    | `loadGitCommits`                                                                                                                                                                                                                                                                                                                          |
+| `src/loader-github-desktop.php`         | `githubDesktopLevelDbPath`, `scanLevelDbForPaths`, `discoverGitHubDesktopRepos`                                                                                                                                                                                                                                                           |
+| `src/loader-integrations.php`           | `loadIntegrationActivity`, `integrationWarning`, `getIntegrationWarnings`, `backupConfigSnapshot`                                                                                                                                                                                                                                         |
+| `src/integrations/shared.php`           | `idLooksStandard`, `httpGetJson`                                                                                                                                                                                                                                                                                                          |
+| `src/integrations/harvest.php`          | `resolveHarvestUserId`, `loadHarvestTimeEntries`                                                                                                                                                                                                                                                                                          |
+| `src/integrations/clickup.php`          | `resolveClickUpUserId`, `loadClickUpTimeEntries`                                                                                                                                                                                                                                                                                          |
+| `src/integrations/clockify.php`         | `resolveClockifyUserInfo`, `loadClockifyTimeEntries`                                                                                                                                                                                                                                                                                      |
+| `src/integrations/clockify-catalog.php` | `clockifyFetchProjectNames`                                                                                                                                                                                                                                                                                                               |
+| `src/integrations/github.php`           | `loadGitHubActivity`, `githubActorLogins`, `githubPaginatedGet`, `githubDateInRange`, `githubGetJson`, `githubReposByProject`, `githubRepoFromRemoteUrl`                                                                                                                                                                                  |
+| `src/classifiers.php`                   | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `projectForExternal`, `isAfkAt`, `activeInputSecondsDuring`, `classifyAndAggregate`                                                                                                                                                                                |
+| `src/renderers.php`                     | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv`                                                                                                                                                                                                                                                                         |
 
 `PROJECT_ROOT` is defined as `__DIR__` in `activity-report.php`. Cache functions in `src/cache.php` use `PROJECT_ROOT` so `reports/` always resolves to the project root regardless of include depth.
 
@@ -171,7 +177,7 @@ Passing `rebuild=true` bypasses **and overwrites** the per-day source caches. Th
 
 **`backfillChromeUrls`** fills in missing URLs on Chrome ActivityWatch events by correlating window-focus times with the Chrome history SQLite within `chrome_correlation_window_seconds`.
 
-**`classifyAndAggregate`** returns `[$bucket, $unmatched, $timeline]`. `$bucket` is indexed `[date][project]` with `seconds`, `active_seconds`, `activity_ratio`, `detail` (broken down by kind: vscode/browser/slack/ssh/app/harvest/clickup/github), `external` (per-source entry/activity/discussion counts), and `commits`. `$unmatched` records signals that didn't match any project rule. `$timeline` is a per-date list of `{s, e, p, g}` segments (seconds from local midnight) for the day-timeline SVG bar in the web UI; segments shorter than `timeline_min_seconds` (default 60 s) are dropped, and same-project segments separated by less than `timeline_merge_gap_seconds` (default 300 s) are merged before return.
+**`classifyAndAggregate`** returns `[$bucket, $unmatched, $timeline]`. `$bucket` is indexed `[date][project]` with `seconds`, `active_seconds`, `activity_ratio`, `detail` (broken down by kind: vscode/browser/slack/ssh/app/harvest/clickup/clockify/github), `external` (per-source entry/activity/discussion counts), and `commits`. `$unmatched` records signals that didn't match any project rule. `$timeline` is a per-date list of `{s, e, p, g}` segments (seconds from local midnight) for the day-timeline SVG bar in the web UI; segments shorter than `timeline_min_seconds` (default 60 s) are dropped, and same-project segments separated by less than `timeline_merge_gap_seconds` (default 300 s) are merged before return.
 
 ### Signal matching priority (inside `projectForSignals`)
 
@@ -183,7 +189,7 @@ Passing `rebuild=true` bypasses **and overwrites** the per-day source caches. Th
 
 Git commits bypass `projectForSignals` entirely — they are pre-attributed at load time by `loadGitCommits` walking `projects[*].repos`.
 
-External integration rows (Harvest, ClickUp) are matched by `projectForExternal` using `harvest_projects` and `clickup_tasks` globs. GitHub rows are attributed via `repo_remotes`/`repos` lookups at fetch time.
+External integration rows (Harvest, ClickUp, Clockify) are matched by `projectForExternal` using `harvest_projects`, `clickup_tasks`, and `clockify_projects` globs. GitHub rows are attributed via `repo_remotes`/`repos` lookups at fetch time.
 
 ### Integration warnings
 
@@ -289,6 +295,7 @@ Defined and validated by `config.schema.json`. Key fields:
     "integrations": {
         "harvest": [{ "name": "Main", "account_id": "...", "token": "...", "user_id": "..." }],
         "clickup": [{ "name": "Main", "team_id": "...", "token": "...", "assignee": "123456" }],
+        "clockify": [{ "name": "Main", "api_key": "...", "workspace_id": "...", "user_id": "..." }],
         "github": [{ "name": "GitHub via gh", "authors": ["you@example.com"] }],
         "llm": [
             {
@@ -303,9 +310,9 @@ Defined and validated by `config.schema.json`. Key fields:
 }
 ```
 
-`user_id` (Harvest) and `assignee` (ClickUp) are auto-resolved from `/v2/users/me` / `/api/v2/user` on first run and written back to `config.json` automatically.
+`user_id` (Harvest) and `assignee` (ClickUp) are auto-resolved from `/v2/users/me` / `/api/v2/user` on first run and written back to `config.json` automatically. Clockify `user_id` and `workspace_id` are likewise auto-resolved from `GET /v1/user` and persisted on first run.
 
-All project keys are optional — list only the signals that apply. Glob `*` is supported in `domains`, `slack[*].channel_glob`, `ssh_hosts`, `harvest_projects`, `clickup_tasks`, and `apps`.
+All project keys are optional — list only the signals that apply. Glob `*` is supported in `domains`, `slack[*].channel_glob`, `ssh_hosts`, `harvest_projects`, `clickup_tasks`, `clockify_projects`, and `apps`.
 
 ---
 
@@ -333,6 +340,7 @@ All project keys are optional — list only the signals that apply. Glob `*` is 
                 "external": {
                     "harvest": { "entries": 1, "activity": 1, "discussion": 0 },
                     "clickup": { "entries": 0, "activity": 0, "discussion": 0 },
+                    "clockify": { "entries": 1, "activity": 1, "discussion": 1 },
                     "github": { "entries": 2, "activity": 1, "discussion": 3 },
                 },
                 "commits": [
