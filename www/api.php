@@ -155,8 +155,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     echo json_encode(['error' => 'Correlated attribution is only supported for apps signals']);
                     exit(1);
                 }
-                $app = str_starts_with($value, 'ssh:') ? substr($value, 4) : $value;
-                addUniqueValue($config, 'correlated_apps', $app);
+                if (str_starts_with($value, 'ssh:')) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Correlated attribution does not support ssh: signals']);
+                    exit(1);
+                }
+                addUniqueValue($config, 'correlated_apps', $value);
                 saveConfigWithBackup($config, $configFile, 'api');
                 echo json_encode(['ok' => true]);
                 exit;

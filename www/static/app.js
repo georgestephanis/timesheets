@@ -340,7 +340,7 @@ function renderReport(data, projectFilter = "") {
     return blocks.join("\n");
 }
 
-function projectOptions(selected = "", kind = "") {
+function projectOptions(selected = "", kind = "", signalValue = "") {
     const opts = SITE.projects
         .map((p) => `<option value="${esc(p.name)}"${p.name === selected ? " selected" : ""}>${esc(p.name)}</option>`)
         .join("");
@@ -351,7 +351,7 @@ function projectOptions(selected = "", kind = "") {
             : "";
 
     const correlatedOpt =
-        kind === "apps"
+        kind === "apps" && !signalValue.startsWith("ssh:")
             ? `<option value="__correlated__"${selected === "__correlated__" ? " selected" : ""}>Correlated (attribute to active project)</option>`
             : "";
 
@@ -803,6 +803,40 @@ function setNestedValue(obj, parts, value) {
     cur[last] = value;
 }
 
+function encodePathSegment(segment) {
+    return String(segment).replace(/\\/g, "\\\\").replace(/\./g, "\\.");
+}
+
+function joinPath(parts) {
+    return parts.map((part) => encodePathSegment(part)).join(".");
+}
+
+function splitPath(path) {
+    const parts = [];
+    let current = "";
+    let escaping = false;
+    for (const ch of path) {
+        if (escaping) {
+            current += ch;
+            escaping = false;
+            continue;
+        }
+        if (ch === "\\") {
+            escaping = true;
+            continue;
+        }
+        if (ch === ".") {
+            parts.push(current);
+            current = "";
+            continue;
+        }
+        current += ch;
+    }
+    if (escaping) current += "\\";
+    parts.push(current);
+    return parts;
+}
+
 function syncSiteFromConfig(cfg) {
     SITE.projects = Object.entries(cfg.projects || {}).map(([name, p]) => ({ name, grouping: p.grouping ?? null }));
     SITE.groupings = cfg.groupings || {};
@@ -935,19 +969,20 @@ function renderField(label, path, value, opts = {}) {
         min = null,
     } = opts;
 
+    const fieldId = `cfg_${path.replace(/\W/g, "_")}`;
     const fieldAttr = `data-config-field="${esc(path)}"`;
     const readonlyAttr = readonly ? " readonly" : "";
     let control;
 
     if (isCheckbox) {
-        control = `<input type="checkbox" class="config-input" ${fieldAttr} ${value ? "checked" : ""}${readonlyAttr}>`;
+        control = `<input type="checkbox" class="config-input" id="${fieldId}" ${fieldAttr} ${value ? "checked" : ""}${readonlyAttr}>`;
     } else if (isSelect) {
         const optsHtml = selectOptions
             .map(([v, l]) => `<option value="${esc(v)}"${v === (value ?? "") ? " selected" : ""}>${esc(l)}</option>`)
             .join("");
-        control = `<select class="config-input" ${fieldAttr}${readonlyAttr}>${optsHtml}</select>`;
+        control = `<select class="config-input" id="${fieldId}" ${fieldAttr}${readonlyAttr}>${optsHtml}</select>`;
     } else if (isPassword) {
-        const pwId = `pw_${path.replace(/\W/g, "_")}`;
+        const pwId = fieldId;
         control = `<div class="pw-wrap">
             <input type="password" class="config-input" id="${pwId}" ${fieldAttr} value="${esc(value ?? "")}"${readonlyAttr}>
             <button type="button" class="btn" data-pw-toggle="${pwId}">Show</button>
@@ -955,20 +990,20 @@ function renderField(label, path, value, opts = {}) {
     } else if (isTextarea || isJson) {
         const jsonClass = isJson ? " config-json-field" : "";
         const jsonAttr = isJson ? " data-json-field" : "";
-        control = `<textarea class="config-input${jsonClass}" ${fieldAttr}${readonlyAttr}${jsonAttr} placeholder="${esc(placeholder)}">${esc(isJson ? JSON.stringify(value ?? {}, null, 2) : Array.isArray(value) ? value.join("\n") : (value ?? ""))}</textarea>`;
+        control = `<textarea class="config-input${jsonClass}" id="${fieldId}" ${fieldAttr}${readonlyAttr}${jsonAttr} placeholder="${esc(placeholder)}">${esc(isJson ? JSON.stringify(value ?? {}, null, 2) : Array.isArray(value) ? value.join("\n") : (value ?? ""))}</textarea>`;
     } else if (isNumber) {
         const minAttr = min !== null ? ` min="${min}"` : "";
-        control = `<input type="number" class="config-input" step="1"${minAttr} ${fieldAttr} value="${esc(value ?? "")}"${readonlyAttr}>`;
+        control = `<input type="number" class="config-input" id="${fieldId}" step="1"${minAttr} ${fieldAttr} value="${esc(value ?? "")}"${readonlyAttr}>`;
     } else if (isUrl) {
-        control = `<input type="url" class="config-input" ${fieldAttr} value="${esc(value ?? "")}" placeholder="${esc(placeholder)}"${readonlyAttr}>`;
+        control = `<input type="url" class="config-input" id="${fieldId}" ${fieldAttr} value="${esc(value ?? "")}" placeholder="${esc(placeholder)}"${readonlyAttr}>`;
     } else {
         const inputType = isPassword ? "password" : type;
-        control = `<input type="${inputType}" class="config-input" ${fieldAttr} value="${esc(value ?? "")}" placeholder="${esc(placeholder)}"${readonlyAttr}>`;
+        control = `<input type="${inputType}" class="config-input" id="${fieldId}" ${fieldAttr} value="${esc(value ?? "")}" placeholder="${esc(placeholder)}"${readonlyAttr}>`;
     }
 
     const helpHtml = help ? `<p class="config-help">${esc(help)}</p>` : "";
     return `<div class="config-field">
-        <label class="config-label">${esc(label)}</label>
+        <label class="config-label" for="${fieldId}">${esc(label)}</label>
         <div class="config-field-wrap">${control}${helpHtml}</div>
     </div>`;
 }
@@ -1098,14 +1133,15 @@ function renderProjectDrawer(name, p, isIgnored) {
     const groupings = Object.keys(cfg.groupings || {});
     const groupingOpts = [["", "(no grouping)"], ...groupings.map((g) => [g, g])];
     const slackRows = (p.slack || [])
-        .map(
-            (r, i) =>
-                `<div class="config-subform-row">
-            <input type="text" class="config-input" placeholder="Workspace" data-config-field="projects.${esc(name)}.slack.${i}.workspace" value="${esc(r.workspace || "")}">
-            <input type="text" class="config-input" placeholder="Channel glob (optional)" data-config-field="projects.${esc(name)}.slack.${i}.channel_glob" value="${esc(r.channel_glob || "")}">
+        .map((r, i) => {
+            const workspacePath = joinPath(["projects", name, "slack", String(i), "workspace"]);
+            const channelPath = joinPath(["projects", name, "slack", String(i), "channel_glob"]);
+            return `<div class="config-subform-row">
+            <input type="text" class="config-input" placeholder="Workspace" data-config-field="${esc(workspacePath)}" value="${esc(r.workspace || "")}">
+            <input type="text" class="config-input" placeholder="Channel glob (optional)" data-config-field="${esc(channelPath)}" value="${esc(r.channel_glob || "")}">
             <button type="button" class="btn btn--danger" data-remove-slack="${esc(name)}" data-slack-idx="${i}">✕</button>
-        </div>`,
-        )
+        </div>`;
+        })
         .join("");
 
     return `<div class="project-drawer-inner">
@@ -1113,10 +1149,10 @@ function renderProjectDrawer(name, p, isIgnored) {
             <label class="config-label">Project name</label>
             <input type="text" class="config-input" data-project-rename="${esc(name)}" value="${esc(name)}">
         </div>
-        ${renderField("Grouping", `projects.${name}.grouping`, p.grouping ?? "", { isSelect: true, selectOptions: groupingOpts })}
-        ${renderField("Repos", `projects.${name}.repos`, p.repos, { isTextarea: true, help: "Absolute paths to git repos, one per line." })}
-        ${renderField("VSCode dirs", `projects.${name}.vscode_dirs`, p.vscode_dirs, { isTextarea: true, help: "VSCode workspace folder names, one per line." })}
-        ${renderField("Domains", `projects.${name}.domains`, p.domains, { isTextarea: true, help: "Browser hostnames, one per line." })}
+        ${renderField("Grouping", joinPath(["projects", name, "grouping"]), p.grouping ?? "", { isSelect: true, selectOptions: groupingOpts })}
+        ${renderField("Repos", joinPath(["projects", name, "repos"]), p.repos, { isTextarea: true, help: "Absolute paths to git repos, one per line." })}
+        ${renderField("VSCode dirs", joinPath(["projects", name, "vscode_dirs"]), p.vscode_dirs, { isTextarea: true, help: "VSCode workspace folder names, one per line." })}
+        ${renderField("Domains", joinPath(["projects", name, "domains"]), p.domains, { isTextarea: true, help: "Browser hostnames, one per line." })}
         <div class="config-field">
             <label class="config-label">Slack rules</label>
             <div class="config-field-wrap">
@@ -1124,12 +1160,12 @@ function renderProjectDrawer(name, p, isIgnored) {
                 <button type="button" class="btn config-add-btn" data-add-slack="${esc(name)}">+ Add Slack rule</button>
             </div>
         </div>
-        ${renderField("SSH hosts", `projects.${name}.ssh_hosts`, p.ssh_hosts, { isTextarea: true, help: "SSH hostnames, one per line." })}
-        ${renderField("Apps", `projects.${name}.apps`, p.apps, { isTextarea: true, help: "Application names or globs, one per line." })}
-        ${renderField("Harvest projects", `projects.${name}.harvest_projects`, p.harvest_projects, { isTextarea: true, help: "Harvest project-name globs, one per line." })}
-        ${renderField("Harvest client", `projects.${name}.harvest_client`, p.harvest_client ?? "", { help: "Exact Harvest client name (case-insensitive)." })}
-        ${renderField("ClickUp tasks", `projects.${name}.clickup_tasks`, p.clickup_tasks, { isTextarea: true, help: "ClickUp task-name globs, one per line." })}
-        ${renderField("Repo remotes (advanced)", `projects.${name}.repo_remotes`, p.repo_remotes, { isJson: true, help: "Snapshot of git remote names/URLs keyed by repo path." })}
+        ${renderField("SSH hosts", joinPath(["projects", name, "ssh_hosts"]), p.ssh_hosts, { isTextarea: true, help: "SSH hostnames, one per line." })}
+        ${renderField("Apps", joinPath(["projects", name, "apps"]), p.apps, { isTextarea: true, help: "Application names or globs, one per line." })}
+        ${renderField("Harvest projects", joinPath(["projects", name, "harvest_projects"]), p.harvest_projects, { isTextarea: true, help: "Harvest project-name globs, one per line." })}
+        ${renderField("Harvest client", joinPath(["projects", name, "harvest_client"]), p.harvest_client ?? "", { help: "Exact Harvest client name (case-insensitive)." })}
+        ${renderField("ClickUp tasks", joinPath(["projects", name, "clickup_tasks"]), p.clickup_tasks, { isTextarea: true, help: "ClickUp task-name globs, one per line." })}
+        ${renderField("Repo remotes (advanced)", joinPath(["projects", name, "repo_remotes"]), p.repo_remotes, { isJson: true, help: "Snapshot of git remote names/URLs keyed by repo path." })}
         <div style="margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
             <button type="button" class="btn" data-toggle-ignored="${esc(name)}" data-is-ignored="${isIgnored ? "1" : "0"}">
                 ${isIgnored ? "Remove from ignored" : "Mark as ignored"}
@@ -1161,13 +1197,13 @@ function renderGroupingsTab() {
                 <label class="config-label">Name</label>
                 <input type="text" class="config-input" data-grouping-rename="${esc(name)}" value="${esc(name)}">
             </div>
-            ${renderField("Color", `groupings.${name}.color`, g.color ?? "#6366f1", { type: "color", isCheckbox: false })}
-            ${renderField("Logo URL", `groupings.${name}.logo`, g.logo ?? "", { isUrl: true })}
-            ${renderField("Aliases", `groupings.${name}.aliases`, g.aliases, { isTextarea: true, help: "Alternate spellings, one per line." })}
-            ${renderField("Time tracking", `groupings.${name}.time_tracking`, g.time_tracking ?? "", { isSelect: true, selectOptions: ttOpts })}
+            ${renderField("Color", joinPath(["groupings", name, "color"]), g.color ?? "#6366f1", { type: "color", isCheckbox: false })}
+            ${renderField("Logo URL", joinPath(["groupings", name, "logo"]), g.logo ?? "", { isUrl: true })}
+            ${renderField("Aliases", joinPath(["groupings", name, "aliases"]), g.aliases, { isTextarea: true, help: "Alternate spellings, one per line." })}
+            ${renderField("Time tracking", joinPath(["groupings", name, "time_tracking"]), g.time_tracking ?? "", { isSelect: true, selectOptions: ttOpts })}
             <div class="config-field harvest-conn-field${harvConnVisible ? " visible" : ""}" data-harvest-conn-field="${esc(name)}">
                 <label class="config-label">Harvest connection</label>
-                <input type="text" class="config-input" data-config-field="groupings.${esc(name)}.harvest_connection" value="${esc(g.harvest_connection ?? "")}">
+                <input type="text" class="config-input" data-config-field="${esc(joinPath(["groupings", name, "harvest_connection"]))}" value="${esc(g.harvest_connection ?? "")}">
             </div>
             <p class="config-soft-note">Renaming a grouping will not auto-update project grouping fields.</p>
         </div>`;
@@ -1281,7 +1317,7 @@ function renderSignalsTab() {
                 const enc = encodeURIComponent(value);
                 return `<div class="admin-row">
                 <span class="sig"><code>${esc(value)}</code> <span class="muted">(${count})</span></span>
-                <select aria-label="Assign to project" data-reassign-project>${projectOptions("", kind)}</select>
+                <select aria-label="Assign to project" data-reassign-project>${projectOptions("", kind, value)}</select>
                 <button class="btn" data-reassign data-kind="${esc(kind)}" data-value="${enc}">Assign</button>
             </div>`;
             })
@@ -1330,7 +1366,7 @@ function handleConfigFieldChange(e) {
     const path = el.dataset.configField;
     if (!path) return;
 
-    const parts = path.split(".");
+    const parts = splitPath(path);
     let value;
 
     if (el.type === "checkbox") {
@@ -1343,6 +1379,8 @@ function handleConfigFieldChange(e) {
         try {
             value = JSON.parse(el.value);
         } catch {
+            configDirty = true;
+            renderConfigNav();
             return;
         }
     } else if (el.tagName === "TEXTAREA") {
@@ -1702,7 +1740,7 @@ function bindConfigPageEvents(container) {
         const ttSelect = e.target.closest("[data-config-field$='.time_tracking']");
         if (!ttSelect) return;
         const path = ttSelect.dataset.configField;
-        const groupingName = path.split(".")[1];
+        const groupingName = splitPath(path)[1];
         const card = container.querySelector(`[data-grouping-card="${CSS.escape(groupingName)}"]`);
         const harvField = card?.querySelector(`[data-harvest-conn-field="${CSS.escape(groupingName)}"]`);
         if (harvField) harvField.classList.toggle("visible", ttSelect.value === "harvest");
