@@ -1,7 +1,6 @@
 // TypeScript engine for timesheets application
 // This will replace the PHP core functionality
 
-// Import required modules
 import { promises as fs } from "fs";
 import path from "path";
 
@@ -10,50 +9,41 @@ import path from "path";
  */
 class TimesheetsEngine {
     constructor(configPath = "./config.json") {
-        this.configPath = configPath;
+        this.configPath = path.resolve(configPath);
         this.config = null;
-        this.cacheDir = "./reports";
+        this.cacheDir = path.join(path.dirname(this.configPath), "reports");
     }
 
     /**
      * Load configuration from file
-     * @returns {Promise<Object>} Loaded configuration
+     * @returns {Promise<import('@timesheets/contracts').Config>}
      */
     async loadConfig() {
-        try {
-            const configData = await fs.readFile(this.configPath, "utf8");
-            this.config = JSON.parse(configData);
-            return this.config;
-        } catch (error) {
-            console.error("Failed to load config:", error);
-            throw error;
-        }
+        const configData = await fs.readFile(this.configPath, "utf8");
+        this.config = JSON.parse(configData);
+        return this.config;
     }
 
     /**
      * Resolve date range for report generation
-     * @param {string} fromDate - Start date
-     * @param {string} toDate - End date
-     * @returns {Object} Date range object
+     * @param {string} fromDate - Start date (YYYY-MM-DD)
+     * @param {string} toDate - End date (YYYY-MM-DD)
+     * @returns {import('@timesheets/contracts').DateRange}
      */
     resolveDateRange(fromDate, toDate) {
-        // This would implement the date range logic from PHP
-        // For now, returning basic structure
-        return {
-            from: fromDate,
-            to: toDate,
-        };
+        return { from: fromDate, to: toDate };
     }
 
     /**
      * Generate report for a date range
-     * @param {Object} range - Date range object
-     * @param {Object} options - Generation options
-     * @returns {Promise<Object>} Generated report
+     * @param {import('@timesheets/contracts').DateRange} range
+     * @param {Object} [options]
+     * @returns {Promise<import('@timesheets/contracts').Report>}
      */
     async generateReport(range, options = {}) {
-        // This would replace the PHP report generation logic
-        // For now, returning mock data structure
+        if (!this.config) {
+            await this.loadConfig();
+        }
         return {
             from: range.from,
             to: range.to,
@@ -66,14 +56,12 @@ class TimesheetsEngine {
     }
 
     /**
-     * Load sources for a date range (placeholder for actual implementation)
-     * @param {Object} config - Configuration object
-     * @param {Object} range - Date range
-     * @returns {Promise<Object>} Sources data
+     * Load sources for a date range (placeholder for Phase 2 implementation)
+     * @param {import('@timesheets/contracts').Config} config
+     * @param {import('@timesheets/contracts').DateRange} range
+     * @returns {Promise<Object>}
      */
     async loadSourcesForRange(config, range) {
-        // This would replace the PHP source loading logic
-        // Placeholder implementation
         return {
             activitywatch: [],
             chrome: [],
@@ -83,51 +71,43 @@ class TimesheetsEngine {
     }
 
     /**
-     * Load fresh source slice (placeholder)
-     * @param {Object} config - Configuration object
-     * @param {string} date - Date string
-     * @returns {Promise<Object>} Fresh source data
+     * Load fresh source slice (placeholder for Phase 2 implementation)
+     * @param {import('@timesheets/contracts').Config} config
+     * @param {string} date - YYYY-MM-DD
+     * @returns {Promise<Object>}
      */
     async loadFreshSourceSlice(config, date) {
-        // Placeholder implementation
         return {};
     }
 
     /**
-     * Classify and aggregate data (placeholder)
-     * @param {Object} sources - Source data
-     * @returns {Promise<Object>} Classified and aggregated data
+     * Classify and aggregate data (placeholder for Phase 2 implementation)
+     * @param {Object} sources
+     * @returns {Promise<Object>}
      */
     async classifyAndAggregate(sources) {
-        // Placeholder implementation
         return {
             bucket: {},
             unmatched: {},
-            timeline: [],
+            timelines: {},
         };
     }
 
     /**
-     * Save configuration with backup
-     * @param {Object} newConfig - New configuration
+     * Save configuration with backup to reports/config/ following project convention.
+     * Backup path: reports/config/config.engine.<ISO-timestamp>.json
+     * @param {import('@timesheets/contracts').Config} newConfig
      * @returns {Promise<void>}
      */
     async saveConfigWithBackup(newConfig) {
-        try {
-            // Create backup first
-            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-            const backupPath = `${this.configPath}.backup-${timestamp}`;
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const backupDir = path.join(this.cacheDir, "config");
+        const backupPath = path.join(backupDir, `config.engine.${timestamp}.json`);
 
-            // Read current config
-            const currentConfig = await fs.readFile(this.configPath, "utf8");
-            await fs.writeFile(backupPath, currentConfig);
-
-            // Write new config
-            await fs.writeFile(this.configPath, JSON.stringify(newConfig, null, 2));
-        } catch (error) {
-            console.error("Failed to save config with backup:", error);
-            throw error;
-        }
+        await fs.mkdir(backupDir, { recursive: true });
+        const currentConfig = await fs.readFile(this.configPath, "utf8");
+        await fs.writeFile(backupPath, currentConfig);
+        await fs.writeFile(this.configPath, JSON.stringify(newConfig, null, 2));
     }
 }
 

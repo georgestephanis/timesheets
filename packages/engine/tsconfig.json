@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "allowJs": true,
+        "checkJs": true,
+        "strict": true,
+        "noEmit": true,
+        "paths": {
+            "@timesheets/contracts": ["../contracts/index.js"]
+        }
+    },
+    "include": ["index.js"]
+}
