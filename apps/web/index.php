@@ -15,7 +15,7 @@ $file = __DIR__ . $path;
 if ($path === '/api.php') {
     require __DIR__ . '/api.php';
 } elseif ($path !== '/' && file_exists($file) && !is_dir($file)) {
-    // Serve static assets directly so the correct www/ directory is always used,
+    // Serve static assets directly so the correct apps/web/ directory is always used,
     // regardless of which directory the `php -S` process was started from.
     $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
     header('Content-Type: ' . match ($ext) {

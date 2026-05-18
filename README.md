@@ -5,7 +5,7 @@ A local-first activity reporting tool with multiple UI surfaces sharing a common
 **Current UI surfaces:**
 
 - **PHP CLI** (`activity-report.php`) — primary interface; backfills daily reports, generates Markdown/JSON/TSV output, LLM-assisted signal tuning
-- **PHP web UI** (`www/`) — local browser interface; report browsing, Harvest sidebar, rebuild, config panel
+- **PHP web UI** (`apps/web/`) — local browser interface; report browsing, Harvest sidebar, rebuild, config panel
 - **React Native macOS desktop** (`apps/desktop/`) — in progress; see [NATIVE.md](NATIVE.md)
 
 The desktop app is built on a TypeScript engine (`packages/engine/`) that will eventually replace the PHP core while keeping the same `config.json` shape and `reports/` cache layout. Switching between the PHP and native interfaces does not require any data migration.
@@ -21,7 +21,7 @@ All UI surfaces converge on the same local data stores:
 ```
 ┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────────┐
 │   PHP CLI           │   │   PHP Web UI         │   │   React Native Desktop  │
-│   activity-report   │   │   www/ + api.php     │   │   apps/desktop/         │
+│   activity-report   │   │   apps/web/ + api.php     │   │   apps/desktop/         │
 │   .php              │   │                      │   │   (in progress)         │
 └──────────┬──────────┘   └──────────┬───────────┘   └────────────┬────────────┘
            │                         │                             │
@@ -58,7 +58,7 @@ composer install
 npm install
 
 # Start the web UI
-php -S localhost:8000 www/index.php
+php -S localhost:8000 apps/web/index.php
 ```
 
 Then open [http://localhost:8000](http://localhost:8000). The UI loads today's activity, lets you page through previous days, rebuild stale data, and cross-reference what you've logged in Harvest for each day.
@@ -334,10 +334,10 @@ chmod +x activity-report.php
 ## Web UI
 
 ```bash
-php -S localhost:8000 www/index.php
+php -S localhost:8000 apps/web/index.php
 ```
 
-The web UI is a single-page app that fetches JSON from `www/api.php` and renders it client-side. Features:
+The web UI is a single-page app that fetches JSON from `apps/web/api.php` and renders it client-side. Features:
 
 - **Navigation** — page through days or date ranges; jump to any date with the date picker; `←`/`→` keyboard shortcuts for Prev/Next
 - **Project filter** — filter to a single project or group; filtering is client-side (no re-fetch)
@@ -418,7 +418,7 @@ composer check       # lint + analyze + test + Prettier format check in one shot
 ### JavaScript
 
 ```bash
-npm run lint:js       # ESLint on www/static/app.js
+npm run lint:js       # ESLint on apps/web/static/app.js
 npm run format        # reformat JSON/Markdown files with Prettier
 npm run format:check  # dry-run check (used in CI)
 ```
@@ -457,7 +457,7 @@ src/
     clockify-catalog.php  — clockifyFetchProjectNames() (for future sync tooling)
     github.php            — CLI-only; githubFetchCommits/PullRequests/Issues/Comments
     llm.php               — llmSuggestAssignments(), llmDailySummary()
-www/
+apps/web/
   index.php               — router for php -S
   api.php                 — JSON endpoint: report generation + config mutations + generate_summary
   report_renderer.php     — HTML shell + static asset references; non-HTML formats served here

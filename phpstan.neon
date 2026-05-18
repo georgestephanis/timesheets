@@ -3,7 +3,7 @@ parameters:
     paths:
         - activity-report.php
         - src/
-        - www/
+        - apps/web/
     # PHPDoc return types (e.g. list<array<string,mixed>>) cause false positives
     # in defensive guards like `?? []` and `instanceof`. Treat them as hints only.
     treatPhpDocTypesAsCertain: false

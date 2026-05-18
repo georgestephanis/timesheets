@@ -9,7 +9,7 @@ Context file for AI agents and future contributors. Keep this up to date when th
 A local-first activity reporting tool with **multiple UI surfaces that share a common data store**:
 
 - **PHP CLI** (`activity-report.php`) — the primary, stable interface
-- **PHP web UI** (`www/`) — browser-based report viewer served by `php -S`
+- **PHP web UI** (`apps/web/`) — browser-based report viewer served by `php -S`
 - **React Native macOS desktop** (`apps/desktop/`) — in progress; built on `packages/engine/`
 
 All surfaces read the same local data, write to the same `reports/` cache directory, and use the same `config.json`. The PHP implementation is the behavior oracle during migration; the TypeScript engine is developed in parallel with compatibility as a hard constraint.
@@ -72,8 +72,8 @@ src/
   renderers.php                  — renderProjectEntry(), renderMarkdown(),
                                    renderJson(bucket, unmatched, from, to, tz, warnings=[], timeline=[]),
                                    renderTsv()
-www/
-  index.php                      — router for `php -S localhost:8000 www/index.php`
+apps/web/
+  index.php                      — router for `php -S localhost:8000 apps/web/index.php`
   api.php                        — JSON data endpoint; GET = fetch/rebuild report,
                                    POST = config mutations (flag_projects_personal,
                                    reassign_signal, set_project_grouping)
@@ -144,7 +144,7 @@ Logic is split across `src/` includes with no classes. All code is plain functio
                         └─────────────────────────────┬───────────────────────────┘
                                                        │
                         ┌─ Web path ──────────────────┐│
-                        │  www/index.php → api.php     ││
+                        │  apps/web/index.php → api.php     ││
                         └─────────────────────────────┬┘
                                                        │
                               loadSourcesForRange()    │
@@ -406,9 +406,9 @@ No args               Backfill prior 7 completed days (skips days already curren
 
 ## Web UI
 
-Served by `php -S localhost:8000 www/index.php`. `www/index.php` routes all requests to `www/report_renderer.php`.
+Served by `php -S localhost:8000 apps/web/index.php`. `apps/web/index.php` routes all requests to `apps/web/report_renderer.php`.
 
-- **HTML requests** (`?format=html`, the default): `report_renderer.php` returns a static HTML shell with an inline `SITE` config object and `<link>`/`<script>` tags pointing to `www/static/app.css` and `www/static/app.js`. Data is fetched async from `api.php`.
+- **HTML requests** (`?format=html`, the default): `report_renderer.php` returns a static HTML shell with an inline `SITE` config object and `<link>`/`<script>` tags pointing to `apps/web/static/app.css` and `apps/web/static/app.js`. Data is fetched async from `api.php`.
 - **Non-HTML requests** (`?format=json|md|tsv`): the full PHP pipeline runs server-side and streams the result directly.
 - **`api.php` GET**: accepts `from`, `to`, `days`, `project`, `rebuild`. Serves cached JSON with `X-Report-Source: cached` when available; generates fresh data with `X-Report-Source: generated` otherwise. `rebuild=1` bypasses both the report cache and per-day source caches.
 - **`api.php` POST**: `action` field dispatches to `flag_projects_personal`, `reassign_signal`, or `set_project_grouping`, all of which mutate `config.json` with a backup.
@@ -441,7 +441,7 @@ const SITE = {
 ### PHP linting + analysis
 
 ```bash
-composer lint        # phpcs — PSR-12 across src/, www/, tools/
+composer lint        # phpcs — PSR-12 across src/, apps/web/, tools/
 composer lint:fix    # phpcbf auto-fix
 composer analyze     # phpstan level 5 (phpstan.neon + phpstan-baseline.neon)
 composer check       # lint + analyze together

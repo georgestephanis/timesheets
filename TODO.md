@@ -9,8 +9,8 @@ Remaining work as of May 2026. Severity: **P0** ship-blocking, **P1** significan
 
 The codebase is in good shape. The big structural work is done:
 
-- **`www/report_renderer.php`** is now 159 lines (down from ~920) — JS/CSS fully
-  extracted to `www/static/app.js` (1 022 lines) and `www/static/app.css`.
+- **`apps/web/report_renderer.php`** is now 159 lines (down from ~920) — JS/CSS fully
+  extracted to `apps/web/static/app.js` (1 022 lines) and `apps/web/static/app.css`.
 - **`src/config.php`** centralizes `saveConfigWithBackup`, `applySignalToProject`,
   `parseSlackSignal`, `addUniqueValue`. All 6 tools and both `api.php` / `cli.php`
   use it.
@@ -29,7 +29,7 @@ The codebase is in good shape. The big structural work is done:
   GitHub Desktop discovery (50+ repos), the web UI's 8 s budget is exhausted
   every time; fresh GitHub activity only arrives via CLI. Cache TTL is now
   config-driven, but the underlying loop is unchanged.
-- **`www/static/app.js` has 8 scattered module-level mutable globals.** Works
+- **`apps/web/static/app.js` has 8 scattered module-level mutable globals.** Works
   today, but makes change-tracking and testing harder.
 - **Magic strings split between PHP and JS** (`__personal__`, `__new__`, signal
   kinds, `group:` prefix) must be kept in sync manually.
@@ -61,7 +61,7 @@ The codebase is in good shape. The big structural work is done:
 - [ ] **(P3, m)** Frontend re-renders the entire page on project-filter change. Split
       `renderCurrentView()` into `renderReportOnly()` so the nav, sidebar, admin
       panel, and warnings banner are not redrawn when only the filter changes.
-- [ ] **(P3, s)** `renderHarvestSidebar` in `www/static/app.js` does two passes over
+- [ ] **(P3, s)** `renderHarvestSidebar` in `apps/web/static/app.js` does two passes over
       the data. One suffices.
 - [ ] **(P3, s)** `Intl.DateTimeFormat` for day-of-week is constructed per-day
       inside `renderDay`. Cache it at module scope.

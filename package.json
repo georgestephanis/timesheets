@@ -9,8 +9,8 @@
     "scripts": {
         "format": "prettier --write .",
         "format:check": "prettier --check .",
-        "lint:js": "eslint www/static/app.js",
-        "lint:js:fix": "eslint --fix www/static/app.js"
+        "lint:js": "eslint apps/web/static/app.js",
+        "lint:js:fix": "eslint --fix apps/web/static/app.js"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",

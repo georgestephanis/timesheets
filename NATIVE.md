@@ -10,9 +10,9 @@ interface to the same local data store.
 The broader multi-UI architecture:
 
 ```
-PHP CLI (activity-report.php)  ─┐
-PHP Web UI (www/)               ├── config.json + reports/ + local data sources
-React Native Desktop (apps/)   ─┘
+PHP CLI (activity-report.php)    ─┐
+PHP Web UI (apps/web/)           ─┤── config.json + reports/ + local data sources
+React Native Desktop (apps/desktop/) ─┘
 ```
 
 The desktop app brings:
@@ -77,25 +77,28 @@ around all of these existing behaviors:
 - config mutations such as reassigning signals, marking projects ignored, and changing
   grouping
 
-Those features currently live across `README.md`, `www/static/app.js`, `www/api.php`,
+Those features currently live across `README.md`, `apps/web/static/app.js`, `apps/web/api.php`,
 `src/cli.php`, `src/classifiers.php`, and `src/cache.php`.
 
 ## Repository Shape
 
-The workspace separates UI and engine explicitly:
+The workspace separates UI surfaces and the shared engine:
 
 ```
+activity-report.php           PHP CLI entry point
+src/                          PHP core (behavior oracle during migration)
 apps/
-  desktop/              React Native macOS app (entry point + native shell)
+  web/                        PHP web UI (formerly www/)
+  desktop/                    React Native macOS app (entry point + native shell)
 packages/
-  contracts/            @timesheets/contracts — shared JS/TS type definitions
-  engine/               @timesheets/engine — data loading, classification, caching
-  ui/                   @timesheets/ui — shared presentational components
-  test-fixtures/        @timesheets/test-fixtures — golden report JSON and config fixtures
+  contracts/                  @timesheets/contracts — shared JS/TS type definitions
+  engine/                     @timesheets/engine — data loading, classification, caching
+  ui/                         @timesheets/ui — shared presentational components
+  test-fixtures/              @timesheets/test-fixtures — golden report JSON and config fixtures
 ```
 
-The PHP tree remains during migration as the behavior oracle. Remove it only after parity
-checks pass.
+The PHP tree (`activity-report.php`, `src/`, `apps/web/`) remains during migration as the
+behavior oracle. Remove it only after parity checks pass.
 
 ## IPC Surface
 
@@ -138,7 +141,7 @@ Before rewriting anything, treat the current PHP app as the behavior oracle.
 Deliverables:
 
 - document the current JSON report contract from `renderJson()`
-- document config mutation actions currently exposed in `www/api.php`
+- document config mutation actions currently exposed in `apps/web/api.php`
 - capture golden fixtures for a handful of real or synthetic days
 - list which behaviors are required for the first desktop release and which can wait
 

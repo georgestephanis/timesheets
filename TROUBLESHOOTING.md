@@ -157,7 +157,7 @@ chmod 600 config.json   # owner read/write only
 
 1. Start the server if it isn't running:
     ```bash
-    php -S localhost:8000 www/index.php
+    php -S localhost:8000 apps/web/index.php
     ```
 2. Open the browser console (F12) to see the underlying error.
 3. Check the terminal where `php -S` is running for PHP error output.
