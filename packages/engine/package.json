@@ -5,6 +5,10 @@
     "exports": {
         ".": "./index.js"
     },
+    "scripts": {
+        "test": "node --test index.test.js",
+        "typecheck": "tsc --noEmit"
+    },
     "devDependencies": {
         "typescript": "^5.0.0"
     }

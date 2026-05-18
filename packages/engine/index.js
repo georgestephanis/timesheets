@@ -109,7 +109,7 @@ class TimesheetsEngine {
             const currentConfig = await fs.readFile(this.configPath, "utf8");
             await fs.writeFile(backupPath, currentConfig);
         } catch (error) {
-            if (error?.code !== "ENOENT") {
+            if (!(typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT")) {
                 throw error;
             }
         }

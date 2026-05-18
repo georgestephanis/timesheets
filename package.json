@@ -14,6 +14,8 @@
         "desktop:start": "npm run start -w @timesheets/desktop",
         "desktop:macos": "npm run macos -w @timesheets/desktop",
         "desktop:dev": "bash tools/desktop-dev.sh",
+        "test": "npm run test -w @timesheets/engine -w @timesheets/test-fixtures",
+        "typecheck": "npm run typecheck -w @timesheets/engine",
         "check": "composer check"
     },
     "devDependencies": {
