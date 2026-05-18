@@ -23,7 +23,7 @@ set_error_handler(function (int $errno, string $errstr): never {
     throw new \ErrorException($errstr, $errno);
 });
 
-define('PROJECT_ROOT', dirname(__DIR__));
+define('PROJECT_ROOT', dirname(__DIR__, 2));
 
 require_once PROJECT_ROOT . '/src/config.php';
 

@@ -7,7 +7,7 @@
 
 $format = $_GET['format'] ?? 'html';
 
-define('PROJECT_ROOT', dirname(__DIR__));
+define('PROJECT_ROOT', dirname(__DIR__, 2));
 
 $configFile = PROJECT_ROOT . '/config.json';
 if (!file_exists($configFile)) {
