@@ -1,15 +1,36 @@
-# React Native Desktop Implementation Plan
+# Native Desktop Plan
 
-This document outlines the plan for implementing a React Native Desktop version of the timesheets application based on the existing PHP implementation.
+## Goal
 
-## Overview
+Replace the current PHP CLI + PHP web UI with a native desktop application built in
+React Native for Desktop, while preserving the current product behavior:
 
-The goal is to create a cross-platform desktop application using React Native that replicates the functionality of the existing timesheets tool. The application will:
+- local-only data processing
+- project-attributed daily reports
+- config editing
+- cache-backed report generation
+- optional Harvest, ClickUp, Clockify, GitHub, and LLM features
 
-1. Aggregate activity data from multiple sources (ActivityWatch, Chrome, Git, external APIs)
-2. Classify and attribute events to projects
-3. Display reports in a user-friendly interface
-4. Support desktop platforms (macOS, Windows, Linux)
+The end state is a desktop app that owns both the UI and the reporting engine. PHP is not
+part of the shipped product.
+
+## Hard Recommendation
+
+Use React Native for Desktop for the UI layer, but do not try to make React Native itself
+directly own filesystem, SQLite, shell, and cache orchestration.
+
+This app reads local ActivityWatch databases, Chrome history, Git repositories, GitHub
+Desktop metadata, and config files. That is a local systems application, not just a view
+layer. A pure React Native Desktop app will become awkward quickly.
+
+Recommended architecture:
+
+- React Native macOS **first** for the desktop UI
+- React Native Windows later, once the macOS app is stable
+- a local TypeScript data engine packaged with the app and invoked through a narrow IPC
+  boundary
+
+That keeps the UI native while still replacing PHP completely.
 
 ## Architecture
 
@@ -19,159 +40,237 @@ The goal is to create a cross-platform desktop application using React Native th
 │                 │    │                 │    │                 │
 │  React Native   │───▶│  TypeScript     │───▶│  ActivityWatch  │
 │  Components     │    │  Engine         │    │  Chrome         │
-│                 │    │                 │    │  Git            │
-│                 │    │                 │    │  Integrations   │
+│  (macOS first)  │    │  (@timesheets/  │    │  Git            │
+│                 │    │   engine)       │    │  Integrations   │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## Packages Structure
+## What Exists Today
 
-### 1. Contracts (`@timesheets/contracts`)
+The current product surface is larger than a report viewer. The native app must plan
+around all of these existing behaviors:
 
-Defines types and interfaces for data structures used throughout the application.
+- report navigation by day and date range
+- project filtering, including filtering by grouping
+- grouped project display with colors and optional logos
+- per-day timeline bars
+- warning banners for failing integrations
+- rebuild-from-source flow and cache-age awareness
+- Harvest sidebar with logged-time totals
+- LLM-backed day summaries
+- LLM-backed unlogged-time suggestions
+- config editing across general settings, projects, groupings, integrations, and signals
+- config mutations such as reassigning signals, marking projects ignored, and changing
+  grouping
 
-### 2. Engine (`@timesheets/engine`)
+Those features currently live across `README.md`, `www/static/app.js`, `www/api.php`,
+`src/cli.php`, `src/classifiers.php`, and `src/cache.php`.
 
-Core business logic implemented in TypeScript, replacing the PHP functionality:
+## Repository Shape
 
-- Data loading and caching
-- Report generation
-- Configuration management
-- Source processing (ActivityWatch, Chrome, Git, external APIs)
+The workspace separates UI and engine explicitly:
 
-### 3. UI (`@timesheets/ui`)
+```
+apps/
+  desktop/              React Native macOS app (entry point + native shell)
+packages/
+  contracts/            @timesheets/contracts — shared JS/TS type definitions
+  engine/               @timesheets/engine — data loading, classification, caching
+  ui/                   @timesheets/ui — shared presentational components
+  test-fixtures/        @timesheets/test-fixtures — golden report JSON and config fixtures
+```
 
-React Native components for the desktop application interface:
+The PHP tree remains during migration as the behavior oracle. Remove it only after parity
+checks pass.
 
-- Report display components
-- Configuration panels
-- Timeline visualization
-- Menubar/taskbar integration
+## IPC Surface
 
-### 4. Test Fixtures (`@timesheets/test-fixtures`)
+The engine exposes a narrow command surface. The desktop app calls these; it does not
+reach into engine internals.
 
-Test data and fixtures for unit/integration testing
+```ts
+getReport(range: DateRange, options?: ReportOptions): Promise<Report>
+rebuildReport(range: DateRange, options?: ReportOptions): Promise<Report>
+getConfig(): Promise<Config>
+saveConfig(config: Config): Promise<void>
+reassignSignal(payload: ReassignSignalPayload): Promise<void>
+setProjectGrouping(payload: SetGroupingPayload): Promise<void>
+flagProjectsIgnored(payload: FlagIgnoredPayload): Promise<void>
+generateDaySummary(date: string): Promise<string>
+suggestTimeLogging(date: string): Promise<Suggestion[]>
+```
 
-## Implementation Plan
+Keep these APIs close to the current PHP JSON shapes so migration is incremental and
+testable.
 
-### Phase 1: Package Structure Setup
+## Storage and Compatibility
 
-- [x] Create monorepo structure with packages
-- [x] Define contracts for data structures
-- [x] Set up engine package with core functionality
+Start by keeping compatibility where it buys leverage:
 
-### Phase 2: UI Development
+- keep `config.json` shape compatible with the existing JSON Schema
+- keep `reports/` cache structure compatible initially
+- keep report JSON close to the current `renderJson()` output
+- keep config backups under `reports/config/`
 
-- [x] Create React Native components for report display
-- [x] Implement timeline visualization
-- [x] Add project cards and details view
+That lets the desktop app reuse existing user data and makes parity testing
+straightforward. Format changes are a phase-2 cleanup, not a phase-1 blocker.
 
-### Phase 3: Data Processing Implementation
+## Migration Plan
 
-- [ ] Implement ActivityWatch data loading
-- [ ] Implement Chrome history data loading
-- [ ] Implement Git commit data loading
-- [ ] Implement external API integrations
-- [ ] Implement data classification and aggregation
+### Phase 0: Freeze the Contract _(not started)_
 
-### Phase 4: Desktop Features
+Before rewriting anything, treat the current PHP app as the behavior oracle.
 
-- [ ] Implement menubar/taskbar integration
-- [ ] Add system tray functionality
-- [ ] Implement background processing
-- [ ] Add notification support
+Deliverables:
 
-### Phase 5: Testing and Optimization
+- document the current JSON report contract from `renderJson()`
+- document config mutation actions currently exposed in `www/api.php`
+- capture golden fixtures for a handful of real or synthetic days
+- list which behaviors are required for the first desktop release and which can wait
 
-- [ ] Unit testing for core engine logic
-- [ ] Integration testing for data flows
-- [ ] Performance optimization
-- [ ] Cross-platform compatibility testing
+Acceptance criteria:
+
+- one sample day, one multi-day range, one filtered report, and one config round-trip are
+  captured as fixtures in `packages/test-fixtures/`
+- `packages/contracts/` types match the captured fixture shapes exactly
+
+### Phase 1: Bootstrap the Desktop Workspace _(in progress)_
+
+Set up the new JS/TS foundation without removing PHP yet.
+
+Deliverables:
+
+- [x] create the workspace structure under `apps/` and `packages/`
+- [x] initialize package scaffolding for contracts, engine, ui, test-fixtures
+- [ ] wire `workspaces` in root `package.json`
+- [ ] initialize React Native macOS app shell in `apps/desktop/`
+- [ ] define shared `Report`, `DayReport`, `ProjectReport`, `Config`, and mutation payload
+      types in `packages/contracts/`
+- [ ] set up linting, formatting, unit tests, and fixture tests for the new TS packages
+
+Acceptance criteria:
+
+- the desktop shell launches locally on macOS
+- the app can render mocked fixture data without any PHP dependency
+
+### Phase 2: Port the Engine Core _(not started)_
+
+Rewrite the PHP core in TypeScript in the safest order: pure logic first, data adapters
+second.
+
+Port in this order:
+
+1. config load/save/backup logic
+2. date-range resolution
+3. cache key and cache read/write logic
+4. classifiers and aggregation
+5. JSON report generation contract
+6. source loaders
+
+Acceptance criteria:
+
+- fixture-based parity tests pass for classification and JSON output
+- source cache and generated report cache can be read and written by the new engine
+
+### Phase 3: Native Report UI _(not started)_
+
+Replace the current browser UI with native screens, using the same reporting model.
+
+Initial report-view scope:
+
+- report list grouped by day
+- previous/next day navigation and date-range selection
+- project and grouping filters
+- grouped project cards with durations, detail rows, and commits
+- warning banner
+- rebuild action with cache status
+- timeline visualization
+
+Acceptance criteria:
+
+- a user can do everything in the current report view without opening a browser
+- report rendering works against the local TypeScript engine
+
+### Phase 4: Native Config UI _(not started)_
+
+Port the config page as a first-class desktop workflow.
+
+Required tabs for parity: General, Projects, Groupings, Integrations, Signals.
+
+Required behaviors:
+
+- dirty-state tracking, save and discard
+- add, edit, rename, and delete projects
+- add and remove Slack rules
+- edit groupings, colors, logos, aliases, and time-tracking settings
+- edit integration credentials and metadata
+- reassign signals and ignore projects
+
+### Phase 5: Advanced Features _(not started)_
+
+After report and config parity:
+
+1. LLM day summary generation
+2. unlogged-time suggestions
+3. GitHub integration activity
+4. GitHub Desktop repo discovery surfaced in-app
+
+### Phase 6: Packaging and Cutover _(not started)_
+
+- signed macOS desktop build
+- packaged engine process or embedded runtime
+- migration path for existing `config.json` and `reports/`
+- remove PHP server entrypoints once the native engine has test parity
 
 ## Technology Stack
 
-- **Framework**: React Native (with react-native-macos, react-native-windows)
+- **UI Framework**: React Native macOS (react-native-macos)
 - **Language**: TypeScript
 - **Build Tools**: Metro bundler, React Native CLI
-- **State Management**: React hooks and context
-- **UI Components**: React Native primitives
-- **Testing**: Jest, React Testing Library
+- **State Management**: React hooks; Zustand or Redux Toolkit for app-level state
+- **Forms/Validation**: react-hook-form + zod for config editing
+- **Timelines**: react-native-svg
+- **Testing**: Jest + React Testing Library; fixture-based parity tests
 
-## Key Features Implementation
+## Testing Strategy
 
-### 1. Data Sources Integration
+The migration must be driven by parity tests, not visual confidence.
 
-#### ActivityWatch
+Test layers:
 
-- Connect to ActivityWatch SQLite database
-- Parse window focus events
-- Handle AFK status detection
-- Process input slices (mouse/keyboard activity)
+- unit tests for classifiers, date math, cache logic, and config mutation helpers
+- fixture tests that compare engine output to known-good report JSON
+- integration tests against sample SQLite and git fixtures where practical
+- UI tests for report navigation, rebuild flow, and config save/discard behavior
 
-#### Chrome History
+Generate golden fixtures from the current PHP implementation **before** deleting it, then
+use those fixtures to prove the TypeScript engine matches behavior exactly.
 
-- Access Chrome SQLite database
-- Parse browsing events
-- Handle URL resolution
-- Correlate with window focus data
+## Risks
 
-#### Git
+### React Native Desktop Is Not the Hard Part
 
-- Read Git repositories from configured paths
-- Parse commit history
-- Attribute commits to projects based on repository mapping
+The UI rewrite is manageable. The expensive work is replacing local data access and report
+generation. The migration will fail if it is scoped as only a frontend rewrite.
 
-#### External APIs
+### Cross-Platform Desktop Needs a Real Decision
 
-- Harvest integration
-- ClickUp integration
-- Clockify integration
-- GitHub integration (CLI-based)
+ActivityWatch paths, Chrome paths, GitHub Desktop data locations, shell behavior, and
+packaging differ by OS. **Do not start simultaneous macOS and Windows support** unless
+that requirement is real today. macOS first.
 
-### 2. Reporting Engine
+### Config and Cache Churn Can Break Trust
 
-- Date range selection (7 days, 30 days, custom)
-- Project attribution logic
-- Activity ratio calculation
-- Timeline visualization
-- Export functionality (JSON, TSV, Markdown)
+This tool is valuable because it is inspectable and local. Sudden format changes to config
+and cache will make debugging harder and increase migration risk. Prefer compatibility
+first, cleanup second.
 
-### 3. Desktop Features
+## Definition of Done
 
-- Menubar/taskbar integration (macOS)
-- System tray icons (Windows/Linux)
-- Background processing
-- Notification support
-- Auto-update capability
+The PHP app can be considered replaced when all of the following are true:
 
-## Migration Approach
-
-Since the existing application is written in PHP, we'll need to:
-
-1. Translate PHP logic to TypeScript/JavaScript
-2. Replace database interactions with native Node.js libraries
-3. Adapt file I/O operations for cross-platform compatibility
-4. Maintain the same data models and APIs
-5. Preserve existing configuration format
-
-## Challenges and Solutions
-
-### Challenge: Platform Differences
-
-**Solution**: Use React Native with platform-specific components and libraries (react-native-macos, react-native-windows)
-
-### Challenge: Native System Integration
-
-**Solution**: Use platform-specific APIs for menubar/taskbar integration, system notifications, and background processes
-
-### Challenge: Database Access
-
-**Solution**: Use Node.js libraries for SQLite access and implement platform-appropriate file paths
-
-## Next Steps
-
-1. Complete data source implementation in engine
-2. Implement desktop-specific features
-3. Add testing and validation
-4. Optimize for performance across platforms
-5. Document the API and development process
+- the desktop app covers report viewing and config editing for normal daily use
+- the TypeScript engine can generate reports without calling PHP
+- config backups and report caches are still reliable
+- core classification behavior matches fixture expectations
+- the supported user workflow no longer requires `php -S` or `php activity-report.php`
