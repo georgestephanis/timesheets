@@ -512,6 +512,11 @@ function renderCurrentView() {
     document.body.classList.remove("config-mode");
     const elReport = document.getElementById("report");
     const elNav = document.getElementById("nav");
+    const elAdmin = document.getElementById("admin");
+
+    if (elAdmin) {
+        elAdmin.innerHTML = "";
+    }
 
     elNav.innerHTML = renderNav(currentParams || {}, currentData.from, currentData.to);
     elReport.innerHTML = renderReport(currentData, currentParams?.project || "");
