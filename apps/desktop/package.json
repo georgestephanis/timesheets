@@ -9,6 +9,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native-macos/virtualized-lists": "^0.81.7",
     "@timesheets/contracts": "*",
     "@timesheets/engine": "*",
     "@timesheets/ui": "*",
