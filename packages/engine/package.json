@@ -5,7 +5,7 @@
     "exports": {
         ".": "./index.js"
     },
-    "dependencies": {
+    "devDependencies": {
         "typescript": "^5.0.0"
     }
 }

@@ -2,6 +2,10 @@
     "name": "timesheets",
     "private": true,
     "type": "module",
+    "workspaces": [
+        "packages/*",
+        "apps/*"
+    ],
     "scripts": {
         "format": "prettier --write .",
         "format:check": "prettier --check .",
