@@ -21,13 +21,17 @@ if [[ $CLEAN -eq 1 ]]; then
     fi
 fi
 
-# Kill Metro on exit so it doesn't linger after Ctrl-C.
+# Kill Metro and log stream on exit so they don't linger after Ctrl-C.
 cleanup() {
-    if [[ -n "$METRO_PID" ]]; then
-        kill "$METRO_PID" 2>/dev/null || true
-    fi
+    [[ -n "$LOG_PID"   ]] && kill "$LOG_PID"   2>/dev/null || true
+    [[ -n "$METRO_PID" ]] && kill "$METRO_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
+
+# Stream app logs to this terminal so NSLog output is visible.
+echo "--- app log stream (process: TimesheetsDesktop-macOS) ---"
+log stream --predicate 'process == "TimesheetsDesktop-macOS"' --level debug 2>/dev/null &
+LOG_PID=$!
 
 echo "Starting Metro bundler..."
 npm run desktop:start --prefix "$ROOT" &
