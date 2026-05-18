@@ -8,7 +8,7 @@ Context file for AI agents and future contributors. Keep this up to date when th
 
 A local-first activity reporting tool with **multiple UI surfaces that share a common data store**:
 
-- **PHP CLI** (`activity-report.php`) — the primary, stable interface
+- **PHP CLI** (`apps/cli/activity-report.php`) — the primary, stable interface
 - **PHP web UI** (`apps/web/`) — browser-based report viewer served by `php -S`
 - **React Native macOS desktop** (`apps/desktop/`) — in progress; built on `packages/engine/`
 
@@ -30,7 +30,21 @@ Events are classified into named **projects** by matching signals (VSCode window
 ## File map
 
 ```
-activity-report.php              — entry point: config load, PROJECT_ROOT, require_once, main()
+activity-report.php              — root wrapper; delegates to apps/cli/activity-report.php
+apps/
+  cli/
+    activity-report.php          — CLI entry point: defines PROJECT_ROOT, loads config, requires src/, calls main()
+  web/
+    index.php                    — router for `php -S localhost:8000 apps/web/index.php`
+    api.php                      — JSON data endpoint; GET = fetch/rebuild report,
+                                   POST = config mutations (flag_projects_personal,
+                                   reassign_signal, set_project_grouping)
+    report_renderer.php          — HTML shell + static asset references;
+                                   non-HTML formats also served here via full PHP pipeline
+    static/
+      app.css                    — all styles
+      app.js                     — client-side report renderer, admin panel, nav
+  desktop/                       — @timesheets/desktop: React Native macOS app shell (Phase 1 scaffolding)
 src/
   cli.php                        — main(), parseArgs(), printHelp(), printProjects(),
                                    resolveDateRange(), generateReport(),
@@ -72,16 +86,6 @@ src/
   renderers.php                  — renderProjectEntry(), renderMarkdown(),
                                    renderJson(bucket, unmatched, from, to, tz, warnings=[], timeline=[]),
                                    renderTsv()
-apps/web/
-  index.php                      — router for `php -S localhost:8000 apps/web/index.php`
-  api.php                        — JSON data endpoint; GET = fetch/rebuild report,
-                                   POST = config mutations (flag_projects_personal,
-                                   reassign_signal, set_project_grouping)
-  report_renderer.php            — HTML shell + static asset references;
-                                   non-HTML formats also served here via full PHP pipeline
-  static/
-    app.css                      — all styles
-    app.js                       — client-side report renderer, admin panel, nav
 tools/
   list-github-desktop-repos.php  — lists GitHub Desktop repos sorted by last commit;
                                    --apply adds unconfigured ones to config.json with backup
@@ -95,8 +99,6 @@ packages/                        — TypeScript workspace; shared data layer for
   engine/                        — @timesheets/engine: TypeScript engine (same config.json + reports/ layout as PHP)
   ui/                            — @timesheets/ui: React Native macOS components (peerDep)
   test-fixtures/                 — @timesheets/test-fixtures: golden fixtures for PHP–TypeScript parity tests
-apps/
-  desktop/                       — @timesheets/desktop: React Native macOS app shell (Phase 1 scaffolding)
 config.json                      — local config, gitignored, never committed
 config.example.json              — safe-to-commit template with dummy data
 config.schema.json               — JSON Schema (draft 2020-12) for both config files
@@ -112,7 +114,7 @@ NATIVE.md                        — native desktop migration plan and phased ro
 
 ## Architecture
 
-Logic is split across `src/` includes with no classes. All code is plain functions grouped by concern. `activity-report.php` is a thin entry point that loads config, defines `PROJECT_ROOT`, requires all includes, and calls `main()`.
+Logic is split across `src/` includes with no classes. All code is plain functions grouped by concern. `apps/cli/activity-report.php` is a thin entry point that loads config, defines `PROJECT_ROOT`, requires all includes, and calls `main()`.
 
 | File                                    | Key functions                                                                                                                                                                                                                                                                                                                             |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -134,7 +136,7 @@ Logic is split across `src/` includes with no classes. All code is plain functio
 | `src/classifiers.php`                   | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `projectForExternal`, `isAfkAt`, `activeInputSecondsDuring`, `classifyAndAggregate`                                                                                                                                                                                |
 | `src/renderers.php`                     | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv`                                                                                                                                                                                                                                                                         |
 
-`PROJECT_ROOT` is defined as `__DIR__` in `activity-report.php`. Cache functions in `src/cache.php` use `PROJECT_ROOT` so `reports/` always resolves to the project root regardless of include depth.
+`PROJECT_ROOT` is defined as `dirname(__DIR__, 2)` in `apps/cli/activity-report.php` — two levels up from `apps/cli/` to reach the project root. Cache functions in `src/cache.php` use `PROJECT_ROOT` so `reports/` always resolves to the project root regardless of include depth.
 
 ### Data flow
 
@@ -516,7 +518,7 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 ## Conventions
 
 - **No classes.** Plain functions only. Introduce a class only if complexity genuinely demands it after discussion.
-- **No autoloader.** Runtime is dependency-free (`vendor/` contains only dev tools). New modules go in `src/` with a `require_once` in `activity-report.php`.
+- **No autoloader.** Runtime is dependency-free (`vendor/` contains only dev tools). New modules go in `src/` with a `require_once` in `apps/cli/activity-report.php`.
 - **Schema stays in sync.** Whenever a config key is added or its shape changes, update `config.schema.json` and `config.example.json` in the same commit.
 - **Run linters before committing.** `composer lint` must exit 0. `npm run format:check` must exit 0.
 - **`config.json` is never committed.** It contains real email addresses, tokens, repo paths, and workspace names. It is in `.gitignore`.

@@ -10,7 +10,7 @@ interface to the same local data store.
 The broader multi-UI architecture:
 
 ```
-PHP CLI (activity-report.php)    ─┐
+PHP CLI (apps/cli/)              ─┐
 PHP Web UI (apps/web/)           ─┤── config.json + reports/ + local data sources
 React Native Desktop (apps/desktop/) ─┘
 ```
@@ -85,11 +85,12 @@ Those features currently live across `README.md`, `apps/web/static/app.js`, `app
 The workspace separates UI surfaces and the shared engine:
 
 ```
-activity-report.php           PHP CLI entry point
-src/                          PHP core (behavior oracle during migration)
+activity-report.php           root wrapper → apps/cli/activity-report.php
 apps/
-  web/                        PHP web UI (formerly www/)
+  cli/                        PHP CLI entry point
+  web/                        PHP web UI
   desktop/                    React Native macOS app (entry point + native shell)
+src/                          PHP core (shared by apps/cli/ and apps/web/; behavior oracle during migration)
 packages/
   contracts/                  @timesheets/contracts — shared JS/TS type definitions
   engine/                     @timesheets/engine — data loading, classification, caching

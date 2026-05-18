@@ -1,7 +1,7 @@
 parameters:
     level: 5
     paths:
-        - activity-report.php
+        - apps/cli/activity-report.php
         - src/
         - apps/web/
     # PHPDoc return types (e.g. list<array<string,mixed>>) cause false positives

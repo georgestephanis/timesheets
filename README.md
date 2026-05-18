@@ -434,7 +434,18 @@ A pre-commit hook (`.githooks/pre-commit`) runs the same checks locally. It is i
 ## Project structure
 
 ```
-activity-report.php       — CLI entry point
+activity-report.php       — root wrapper (delegates to apps/cli/activity-report.php)
+apps/
+  cli/
+    activity-report.php   — CLI entry point: defines PROJECT_ROOT, loads config, calls main()
+  web/
+    index.php             — router for php -S
+    api.php               — JSON endpoint: report generation + config mutations + generate_summary
+    report_renderer.php   — HTML shell + static asset references; non-HTML formats served here
+    static/
+      app.css             — all styles
+      app.js              — client-side renderer, admin panel, timeline, day summary
+  desktop/                — @timesheets/desktop: React Native macOS app shell (Phase 1 scaffolding)
 src/
   config.php              — saveConfigWithBackup(), applySignalToProject(), parseSlackSignal()
   helpers.php             — expandPath(), fmtDur(), appLog(), warning()
@@ -457,13 +468,6 @@ src/
     clockify-catalog.php  — clockifyFetchProjectNames() (for future sync tooling)
     github.php            — CLI-only; githubFetchCommits/PullRequests/Issues/Comments
     llm.php               — llmSuggestAssignments(), llmDailySummary()
-apps/web/
-  index.php               — router for php -S
-  api.php                 — JSON endpoint: report generation + config mutations + generate_summary
-  report_renderer.php     — HTML shell + static asset references; non-HTML formats served here
-  static/
-    app.css               — all styles
-    app.js                — client-side renderer, admin panel, timeline, day summary
 tools/
   list-github-desktop-repos.php
   sync-integration-projects.php
@@ -477,8 +481,6 @@ packages/                 — TypeScript monorepo workspace; shared by all non-P
   engine/                 — @timesheets/engine: TypeScript engine (replaces PHP core; same config.json + reports/ layout)
   ui/                     — @timesheets/ui: React Native components (peerDep on react-native-macos)
   test-fixtures/          — @timesheets/test-fixtures: golden fixture data for PHP–TypeScript parity tests
-apps/
-  desktop/                — @timesheets/desktop: React Native macOS app shell (Phase 1 scaffolding)
 reports/                  — gitignored; all generated data lives here
   app.jsonl               — structured application log (all subsystems)
   cache-data.jsonl        — index of per-day source cache files
