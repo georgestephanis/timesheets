@@ -19,6 +19,7 @@ This is a **local-only tool**. The web UI is served by `php -S localhost:8000` a
 | ----------------------------------------- | -------------------------------------- |
 | `integrations.harvest[*].token`           | Read/write access to Harvest account   |
 | `integrations.clickup[*].token`           | Read/write access to ClickUp workspace |
+| `integrations.clockify[*].api_key`        | Read access to Clockify workspace      |
 | `integrations.github[*]` (uses `gh` auth) | Read access to GitHub repos/activity   |
 | `integrations.llm[*].api_key`             | Access to configured LLM endpoint      |
 
