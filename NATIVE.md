@@ -240,6 +240,12 @@ After report and config parity:
 - migration path for existing `config.json` and `reports/`
 - remove PHP server entrypoints once the native engine has test parity
 
+> **Signing note:** When setting up code signing, move `DEVELOPMENT_TEAM` and any
+> provisioning profile settings out of `project.pbxproj` and into a local
+> `apps/desktop/macos/TimesheetsDesktop.xcodeproj/signing.xcconfig` (gitignored).
+> The `.pbxproj` should reference the xcconfig via `#include` so the project file
+> itself stays credential-free and committable.
+
 ## Technology Stack
 
 - **UI Framework**: React Native macOS (react-native-macos)

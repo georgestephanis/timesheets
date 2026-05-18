@@ -4,3 +4,11 @@ node_modules/
 reports/
 .clinerules
 .phpunit.result.cache
+
+# React Native macOS build artifacts
+apps/desktop/macos/build/
+apps/desktop/macos/Pods/
+apps/desktop/macos/*.xcworkspace
+# Signing credentials — if/when code signing is set up, keep them here, not in project.pbxproj
+apps/desktop/macos/**/*.xcconfig
+.DS_Store

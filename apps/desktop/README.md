@@ -4,14 +4,26 @@ React Native macOS desktop application for timesheets.
 
 ## Status
 
-Phase 1 — bootstrapping. The app shell is scaffolded but not yet runnable. The React
-Native macOS project and native build configuration have not been initialized yet.
+Phase 1 — macOS shell initialized and building. Shows the default React Native
+welcome screen. Phase 2 will wire in `@timesheets/engine` and `@timesheets/ui`
+for real report data.
 
-## Setup (once Phase 1 is complete)
+## Running
 
 ```bash
-npm install
-npm run macos
+# From the repo root — start Metro bundler and build+launch in one command:
+npm run desktop:dev
+
+# Or two terminals:
+npm run desktop:start   # Terminal 1 — Metro bundler
+npm run desktop:macos   # Terminal 2 — build and launch
+```
+
+## Re-installing pods (after dependency changes)
+
+```bash
+cd apps/desktop
+LANG=en_US.UTF-8 pod install --project-directory=macos
 ```
 
 ## Architecture
