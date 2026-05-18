@@ -220,6 +220,11 @@
                         "$ref": "#/$defs/llm_connection"
                     },
                     "default": []
+                },
+                "clockify": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/clockify_connection" },
+                    "default": []
                 }
             },
             "default": {}
@@ -312,6 +317,12 @@
                     "items": {
                         "type": "string"
                     },
+                    "minItems": 1
+                },
+                "clockify_projects": {
+                    "description": "Clockify project name globs that map to this local project.",
+                    "type": "array",
+                    "items": { "type": "string" },
                     "minItems": 1
                 }
             }

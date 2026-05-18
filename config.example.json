@@ -129,6 +129,13 @@
                 "model": "llama3"
             }
         ],
-        "clockify": []
+        "clockify": [
+            {
+                "name": "Main",
+                "api_key": "YOUR_API_KEY_HERE",
+                "workspace_id": "auto-resolved",
+                "user_id": "auto-resolved"
+            }
+        ]
     }
 }
