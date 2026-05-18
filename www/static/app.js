@@ -1606,10 +1606,14 @@ function bindConfigPageEvents(container) {
             postApi({ action: "flag_projects_personal", projects })
                 .then(async () => {
                     personalProjectQueue = new Set();
-                    loadedConfig = null; // force re-fetch
                     const res = await fetch("api.php?action=config");
-                    loadedConfig = JSON.parse(await res.text());
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const parsed = await res.json();
+                    if (parsed?.error) throw new Error(parsed.error);
+                    loadedConfig = parsed;
                     configDraft = deepClone(loadedConfig);
+                    configDirty = false;
+                    renderConfigNav();
                     renderConfigPageContent();
                 })
                 .catch((err) => showConfigToast(`Failed: ${err.message}`, "error"))
@@ -1645,9 +1649,13 @@ function bindConfigPageEvents(container) {
                 .then(async () => {
                     // Re-sync configDraft from server so General tab reflects the change.
                     const res = await fetch("api.php?action=config");
-                    loadedConfig = JSON.parse(await res.text());
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    const parsed = await res.json();
+                    if (parsed?.error) throw new Error(parsed.error);
+                    loadedConfig = parsed;
                     configDraft = deepClone(loadedConfig);
                     configDirty = false;
+                    renderConfigNav();
                     if (currentParams) return fetchAndRender(currentParams, true);
                 })
                 .then(() => renderConfigPageContent())
