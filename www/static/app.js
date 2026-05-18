@@ -1597,6 +1597,11 @@ function bindConfigPageEvents(container) {
         if (applyPersonalBtn) {
             const projects = Array.from(personalProjectQueue.values());
             if (!projects.length) return;
+            if (
+                configDirty &&
+                !confirm("This action will reload the config and discard your unsaved changes. Continue?")
+            )
+                return;
             applyPersonalBtn.setAttribute("disabled", "disabled");
             postApi({ action: "flag_projects_personal", projects })
                 .then(async () => {
@@ -1630,6 +1635,11 @@ function bindConfigPageEvents(container) {
             }
             const kind = reassignBtn.dataset.kind || "";
             const value = decodeURIComponent(reassignBtn.dataset.value || "");
+            if (
+                configDirty &&
+                !confirm("This action will reload the config and discard your unsaved changes. Continue?")
+            )
+                return;
             reassignBtn.setAttribute("disabled", "disabled");
             postApi({ action: "reassign_signal", project, kind, value, new_project_name: newProjectName })
                 .then(async () => {
@@ -1637,6 +1647,7 @@ function bindConfigPageEvents(container) {
                     const res = await fetch("api.php?action=config");
                     loadedConfig = JSON.parse(await res.text());
                     configDraft = deepClone(loadedConfig);
+                    configDirty = false;
                     if (currentParams) return fetchAndRender(currentParams, true);
                 })
                 .then(() => renderConfigPageContent())
