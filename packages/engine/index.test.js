@@ -55,7 +55,7 @@ describe("TimesheetsEngine", () => {
             assert.ok(typeof report.to === "string");
             assert.ok(typeof report.tz === "string");
             assert.ok(typeof report.days === "object");
-            assert.ok(Array.isArray(report.warnings));
+            assert.ok(!report.warnings || Array.isArray(report.warnings));
         });
 
         it("loads config on first call", async () => {

@@ -7,6 +7,7 @@
         "checkJs": true,
         "strict": true,
         "noEmit": true,
+        "types": ["node"],
         "paths": {
             "@timesheets/contracts": ["../contracts/index.js"]
         }

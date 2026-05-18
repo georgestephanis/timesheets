@@ -13,6 +13,8 @@ import path from "path";
 import { loadConfig, saveConfigWithBackup, applySignalToProject } from "./lib/config.js";
 import { clearWarnings, getWarnings } from "./lib/helpers.js";
 import { loadSourcesForRange, loadCachedLlmSummary } from "./lib/cache.js";
+import { classifyAndAggregate } from "./lib/classifiers.js";
+import { buildReport } from "./lib/renderer.js";
 
 // ─── Re-exports (lib surface available to callers) ────────────────────────────
 
@@ -62,6 +64,7 @@ export {
     activeInputSecondsDuring,
     classifyAndAggregate,
 } from "./lib/classifiers.js";
+export { buildReport } from "./lib/renderer.js";
 
 // ─── Engine class ─────────────────────────────────────────────────────────────
 
@@ -112,14 +115,22 @@ class TimesheetsEngine {
         const from = new Date(range.from + "T00:00:00");
         const to = new Date(range.to + "T23:59:59");
 
-        // Source loading is stubbed until Phase 2 step 6 (loaders).
-        await loadSourcesForRange(
+        // Source loading: loaders are stubs until Phase 2 step 6.
+        const { bundle } = await loadSourcesForRange(
             this.projectRoot,
             tz,
             from,
             to,
             async () => ({ events: { window: [], afk: [], input: [] }, chrome: [], commits: [], external: [] }),
             options.rebuild ?? false,
+        );
+
+        const { bucket, unmatched, timeline } = classifyAndAggregate(
+            /** @type {any} */ (bundle.events),
+            bundle.commits,
+            bundle.external,
+            cfg,
+            tz,
         );
 
         // Collect LLM summaries from cache.
@@ -132,26 +143,7 @@ class TimesheetsEngine {
             if (s) summaries[new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(day)] = s;
         }
 
-        /** @type {import('@timesheets/contracts').Report} */
-        const report = {
-            from: from.toISOString(),
-            to: to.toISOString(),
-            tz,
-            days: {},
-            unmatched: {
-                vscode: {},
-                browser: {},
-                slack: {},
-                apps: {},
-                harvest: {},
-                clickup: {},
-                clockify: {},
-                github: {},
-            },
-            warnings: getWarnings(),
-        };
-        if (Object.keys(summaries).length) report.summaries = summaries;
-        return report;
+        return buildReport(bucket, unmatched, from, to, tz, timeline, getWarnings(), summaries);
     }
 
     /**
