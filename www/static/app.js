@@ -1369,7 +1369,15 @@ function handleConfigFieldChange(e) {
                 .map((s) => s.trim())
                 .filter(Boolean);
             // special: paths.chrome_profiles can be null
-            if (path === "paths.chrome_profiles" && value.length === 0) value = null;
+            if (path === "paths.chrome_profiles" && value.length === 0) {
+                value = null;
+                // Sync the auto-detect checkbox so the UI reflects the null state.
+                const cbAuto = document.getElementById("chrome_profiles_auto");
+                if (cbAuto && !cbAuto.checked) {
+                    cbAuto.checked = true;
+                    el.disabled = true;
+                }
+            }
         } else {
             value = el.value;
         }
