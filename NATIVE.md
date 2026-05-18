@@ -171,7 +171,7 @@ Acceptance criteria:
 - the desktop shell launches locally on macOS
 - the app can render mocked fixture data without any PHP dependency
 
-### Phase 2: Port the Engine Core _(not started)_
+### Phase 2: Port the Engine Core _(complete)_
 
 Rewrite the PHP core in TypeScript in the safest order: pure logic first, data adapters
 second.
