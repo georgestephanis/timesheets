@@ -36,6 +36,17 @@ target 'TimesheetsDesktop-macOS' do
   post_install do |installer|
     react_native_post_install(installer)
 
+    # react-native-macos does not install a `react-native` alias in node_modules,
+    # but the hermes-engine pod hardcodes REACT_NATIVE_PATH to ../node_modules/react-native.
+    # Patch the project-level build configurations to point to react-native-macos instead.
+    installer.pods_project.build_configurations.each do |config|
+      val = config.build_settings['REACT_NATIVE_PATH']
+      if val.is_a?(String) && val.include?('node_modules/react-native') && !val.include?('react-native-macos')
+        config.build_settings['REACT_NATIVE_PATH'] = val.gsub('node_modules/react-native', 'node_modules/react-native-macos')
+      end
+    end
+    installer.pods_project.save
+
     # fmt 11.0.2: Apple Clang 21+ (Xcode 26+) rejects consteval with non-type
     # template args. Patch fmt/base.h to treat Clang 21+ like Clang < 14
     # (broken consteval) rather than relying on -D flags, which source #defines
