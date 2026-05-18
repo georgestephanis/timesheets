@@ -10,6 +10,7 @@
 		38B0983EAD2B0EB44C813C5C /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C48625CF63C4F9538FF4C21F /* PrivacyInfo.xcprivacy */; };
 		46EE7BF852F223B4986FD8E6 /* libPods-TimesheetsDesktop-macOS.a in Frameworks */ = {isa = PBXBuildFile; fileRef = B6665FA3F95CEF4999D1DF66 /* libPods-TimesheetsDesktop-macOS.a */; };
 		5142014D2437B4B30078DB4F /* AppDelegate.mm in Sources */ = {isa = PBXBuildFile; fileRef = 5142014C2437B4B30078DB4F /* AppDelegate.mm */; };
+		AA0000010000000000000001 /* TimesheetsEngineModule.mm in Sources */ = {isa = PBXBuildFile; fileRef = AA0000010000000000000002 /* TimesheetsEngineModule.mm */; };
 		514201522437B4B40078DB4F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 514201512437B4B40078DB4F /* Assets.xcassets */; };
 		514201552437B4B40078DB4F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 514201532437B4B40078DB4F /* Main.storyboard */; };
 		514201582437B4B40078DB4F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 514201572437B4B40078DB4F /* main.m */; };
@@ -22,6 +23,8 @@
 		514201492437B4B30078DB4F /* TimesheetsDesktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TimesheetsDesktop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5142014B2437B4B30078DB4F /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		5142014C2437B4B30078DB4F /* AppDelegate.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = AppDelegate.mm; sourceTree = "<group>"; };
+		AA0000010000000000000003 /* TimesheetsEngineModule.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TimesheetsEngineModule.h; sourceTree = "<group>"; };
+		AA0000010000000000000002 /* TimesheetsEngineModule.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = TimesheetsEngineModule.mm; sourceTree = "<group>"; };
 		514201512437B4B40078DB4F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		514201542437B4B40078DB4F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		514201562437B4B40078DB4F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -66,6 +69,8 @@
 			children = (
 				5142014B2437B4B30078DB4F /* AppDelegate.h */,
 				5142014C2437B4B30078DB4F /* AppDelegate.mm */,
+				AA0000010000000000000003 /* TimesheetsEngineModule.h */,
+				AA0000010000000000000002 /* TimesheetsEngineModule.mm */,
 				514201512437B4B40078DB4F /* Assets.xcassets */,
 				514201532437B4B40078DB4F /* Main.storyboard */,
 				514201562437B4B40078DB4F /* Info.plist */,
@@ -330,6 +335,7 @@
 			files = (
 				514201582437B4B40078DB4F /* main.m in Sources */,
 				5142014D2437B4B30078DB4F /* AppDelegate.mm in Sources */,
+				AA0000010000000000000001 /* TimesheetsEngineModule.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
