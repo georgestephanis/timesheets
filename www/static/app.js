@@ -1875,8 +1875,16 @@ document.addEventListener("mouseout", (e) => {
     }
 });
 
+window.addEventListener("beforeunload", (e) => {
+    if (configDirty) {
+        e.preventDefault();
+    }
+});
+
 window.addEventListener("popstate", (e) => {
-    if (e.state?.view === "config") {
+    const isConfigView =
+        e.state?.view === "config" || (!e.state && new URLSearchParams(location.search).get("view") === "config");
+    if (isConfigView) {
         renderConfigView();
     } else {
         currentParams = e.state || paramsFromUrl();
@@ -2002,6 +2010,7 @@ document.addEventListener("click", (e) => {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 if (new URLSearchParams(location.search).get("view") === "config") {
+    history.replaceState({ view: "config" }, "", "?view=config");
     renderConfigView();
 } else {
     currentParams = paramsFromUrl();
