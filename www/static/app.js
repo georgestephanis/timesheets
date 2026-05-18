@@ -1678,13 +1678,10 @@ function bindConfigPageEvents(container) {
             const oldName = renameInput.dataset.projectRename;
             const newName = renameInput.value.trim();
             if (!newName || newName === oldName || configDraft.projects[newName]) return;
-            const proj = configDraft.projects[oldName];
-            delete configDraft.projects[oldName];
             const reordered = {};
             for (const [k, v] of Object.entries(configDraft.projects)) {
-                reordered[k !== oldName ? k : newName] = v;
+                reordered[k === oldName ? newName : k] = v;
             }
-            reordered[newName] = proj;
             configDraft.projects = reordered;
             configDraft.ignored_projects = (configDraft.ignored_projects || []).map((n) =>
                 n === oldName ? newName : n,
