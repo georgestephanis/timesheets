@@ -13,6 +13,7 @@ require_once __DIR__ . '/integrations/clickup.php';
 require_once __DIR__ . '/integrations/clickup-catalog.php';
 require_once __DIR__ . '/integrations/github.php';
 require_once __DIR__ . '/integrations/clockify.php';
+require_once __DIR__ . '/integrations/clockify-catalog.php';
 
 /**
  * Loads external integration activity rows from configured providers.
@@ -99,6 +100,17 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
             continue;
         }
         $label = (string)($conn['name'] ?? "clockify[$idx]");
+        // Auto-resolve user_id and workspace_id from /v1/user when absent/non-standard, then persist.
+        if (!idLooksStandard($conn['user_id'] ?? null) || !idLooksStandard($conn['workspace_id'] ?? null)) {
+            $resolved = resolveClockifyUserInfo($conn, $httpTimeout);
+            if ($resolved !== null) {
+                $conn['user_id']                                          = $resolved['user_id'];
+                $conn['workspace_id']                                     = $resolved['workspace_id'];
+                $config['integrations']['clockify'][$idx]['user_id']      = $resolved['user_id'];
+                $config['integrations']['clockify'][$idx]['workspace_id'] = $resolved['workspace_id'];
+                $configDirty = true;
+            }
+        }
         try {
             foreach (loadClockifyTimeEntries($conn, $from, $to, $httpTimeout) as $row) {
                 $rows[] = $row;
@@ -132,6 +144,19 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
             foreach (($existing['integrations']['clickup'] ?? []) as &$existingConn) {
                 if (is_array($existingConn) && ($existingConn['name'] ?? null) === $conn['name']) {
                     $existingConn['assignee'] = (string)$conn['assignee'];
+                    break;
+                }
+            }
+            unset($existingConn);
+        }
+        foreach (($config['integrations']['clockify'] ?? []) as $conn) {
+            if (!isset($conn['user_id'], $conn['workspace_id'], $conn['name'])) {
+                continue;
+            }
+            foreach (($existing['integrations']['clockify'] ?? []) as &$existingConn) {
+                if (is_array($existingConn) && ($existingConn['name'] ?? null) === $conn['name']) {
+                    $existingConn['user_id']      = (string)$conn['user_id'];
+                    $existingConn['workspace_id'] = (string)$conn['workspace_id'];
                     break;
                 }
             }

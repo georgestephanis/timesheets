@@ -50,13 +50,32 @@ function loadClockifyTimeEntries(array $conn, DateTimeImmutable $from, DateTimeI
         return [];
     }
 
-    // Memoize project names for the duration of this call
+    // Fetch all project names upfront as a single bulk request (ID → name map).
     $projectNames = [];
+    $projPage = 1;
+    $projPageSize = 50;
+    do {
+        try {
+            $projJson = httpGetJson(
+                "https://api.clockify.me/api/v1/workspaces/{$workspaceId}/projects?page={$projPage}&pageSize={$projPageSize}",
+                ['X-Api-Key: ' . $apiKey, 'Accept: application/json'],
+                $timeout
+            );
+            foreach ($projJson as $p) {
+                if (isset($p['id'], $p['name'])) {
+                    $projectNames[(string)$p['id']] = (string)$p['name'];
+                }
+            }
+            $projPage++;
+        } catch (RuntimeException) {
+            break;
+        }
+    } while (count($projJson) === $projPageSize);
 
     $rows = [];
     $page = 1;
     $pageSize = 50;
-    $maxPages = 100; // Prevent infinite loops
+    $maxPages = 100;
 
     do {
         $url = "https://api.clockify.me/api/v1/workspaces/{$workspaceId}/user/{$userId}/time-entries?" .
@@ -92,31 +111,23 @@ function loadClockifyTimeEntries(array $conn, DateTimeImmutable $from, DateTimeI
             $start = new DateTimeImmutable($startStr);
             $end = new DateTimeImmutable($endStr);
 
-            // Calculate duration
-            $duration = $end->getTimestamp() - $start->getTimestamp();
-
-            // Get project name (if available)
-            $projectHint = '';
-            $projectId = $entry['projectId'] ?? null;
-
-            if ($projectId !== null) {
-                // Fetch project names if not already cached
-                if (!isset($projectNames[$projectId])) {
-                    try {
-                        $projectUrl = "https://api.clockify.me/api/v1/workspaces/{$workspaceId}/projects/{$projectId}";
-                        $projectJson = httpGetJson($projectUrl, [
-                            'X-Api-Key: ' . $apiKey,
-                            'Accept: application/json',
-                        ], $timeout);
-
-                        $projectNames[$projectId] = (string)($projectJson['name'] ?? '');
-                    } catch (RuntimeException) {
-                        $projectNames[$projectId] = '';
-                    }
+            // Parse ISO 8601 duration (e.g. PT1H30M); fall back to end - start.
+            $durationStr = (string)($entry['timeInterval']['duration'] ?? '');
+            if ($durationStr !== '') {
+                try {
+                    $iv = new DateInterval($durationStr);
+                    $duration = ($iv->y * 31536000) + ($iv->m * 2592000) + ($iv->d * 86400)
+                              + ($iv->h * 3600) + ($iv->i * 60) + $iv->s;
+                } catch (Exception) {
+                    $duration = $end->getTimestamp() - $start->getTimestamp();
                 }
-
-                $projectHint = $projectNames[$projectId];
+            } else {
+                $duration = $end->getTimestamp() - $start->getTimestamp();
             }
+
+            // Resolve project name from the pre-fetched map.
+            $projectId   = (string)($entry['projectId'] ?? '');
+            $projectHint = $projectId !== '' ? ($projectNames[$projectId] ?? '') : '';
 
             // Format label
             $label = $projectHint;
