@@ -1699,13 +1699,10 @@ function bindConfigPageEvents(container) {
             const oldName = groupingRename.dataset.groupingRename;
             const newName = groupingRename.value.trim();
             if (!newName || newName === oldName || configDraft.groupings[newName]) return;
-            const def = configDraft.groupings[oldName];
-            delete configDraft.groupings[oldName];
             const reordered = {};
-            Object.entries(configDraft.groupings).forEach(([k, v]) => {
-                reordered[k] = v;
-            });
-            reordered[newName] = def;
+            for (const [k, v] of Object.entries(configDraft.groupings)) {
+                reordered[k === oldName ? newName : k] = v;
+            }
             configDraft.groupings = reordered;
             configDirty = true;
             renderConfigPageContent();
