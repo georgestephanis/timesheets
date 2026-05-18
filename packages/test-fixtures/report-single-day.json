@@ -1,0 +1,79 @@
+{
+    "from": "2024-01-15T00:00:00-05:00",
+    "to": "2024-01-15T23:59:59-05:00",
+    "tz": "America/New_York",
+    "days": {
+        "2024-01-15": {
+            "Acme Corp": {
+                "grouping": "Acme",
+                "seconds": 14400,
+                "active_seconds": 12600,
+                "activity_ratio": 0.875,
+                "external": {
+                    "harvest": {
+                        "entries": 2,
+                        "seconds": 14400,
+                        "discussion": 0
+                    }
+                },
+                "detail": {
+                    "vscode": {
+                        "acme-api": 7200,
+                        "acme-frontend": 3600
+                    },
+                    "browser": {
+                        "app.acmecorp.com": 1800,
+                        "github.com": 1800
+                    }
+                },
+                "commits": [
+                    {
+                        "time": "2024-01-15T10:23:00-05:00",
+                        "sha": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+                        "subj": "Add user authentication endpoint",
+                        "repo": "~/code/acme-api"
+                    },
+                    {
+                        "time": "2024-01-15T14:05:00-05:00",
+                        "sha": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+                        "subj": "Fix token refresh race condition",
+                        "repo": "~/code/acme-api"
+                    }
+                ]
+            },
+            "Personal browsing": {
+                "grouping": null,
+                "seconds": 1800,
+                "active_seconds": 1200,
+                "activity_ratio": 0.6667,
+                "external": [],
+                "detail": {
+                    "browser": {
+                        "www.reddit.com": 1200,
+                        "news.ycombinator.com": 600
+                    }
+                },
+                "commits": []
+            }
+        }
+    },
+    "unmatched": {
+        "vscode": {},
+        "browser": {
+            "www.google.com": 300
+        },
+        "slack": {},
+        "apps": {},
+        "harvest": {},
+        "clickup": {},
+        "clockify": {},
+        "github": {}
+    },
+    "timelines": {
+        "2024-01-15": [
+            { "s": 28800, "e": 32400, "p": "Acme Corp", "g": "Acme" },
+            { "s": 32400, "e": 33600, "p": "Personal browsing", "g": null },
+            { "s": 33600, "e": 46800, "p": "Acme Corp", "g": "Acme" }
+        ]
+    }
+}
