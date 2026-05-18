@@ -1749,7 +1749,9 @@ function bindConfigPageEvents(container) {
             } else {
                 ta.disabled = false;
                 configDraft.paths = configDraft.paths || {};
-                configDraft.paths.chrome_profiles = [];
+                // Keep null until the user types at least one profile: [] violates the
+                // schema (minItems: 1) and null (auto-detect) is a safer interim state.
+                configDraft.paths.chrome_profiles = null;
             }
             configDirty = true;
             renderConfigNav();
