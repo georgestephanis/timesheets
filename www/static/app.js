@@ -866,8 +866,10 @@ async function renderConfigView() {
     if (loadedConfig === null) {
         try {
             const res = await fetch("api.php?action=config");
-            const text = await res.text();
-            loadedConfig = JSON.parse(text);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const parsed = await res.json();
+            if (parsed?.error) throw new Error(parsed.error);
+            loadedConfig = parsed;
             configDraft = deepClone(loadedConfig);
         } catch (err) {
             elAdmin.innerHTML = `<div class="config-page"><p class="error">Failed to load config: ${esc(err.message)}</p></div>`;
