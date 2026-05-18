@@ -1,10 +1,25 @@
 #!/bin/bash
 # Start Metro bundler, wait for it to be ready, then build and launch the macOS app.
-# Usage: npm run desktop:dev (from repo root)
+# Usage: npm run desktop:dev [-- --clean]  (from repo root)
+#   --clean  wipe Xcode DerivedData for TimesheetsDesktop before building
 
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Parse flags
+CLEAN=0
+for arg in "$@"; do
+    [[ "$arg" == "--clean" ]] && CLEAN=1
+done
+
+if [[ $CLEAN -eq 1 ]]; then
+    DERIVED=$(find "$HOME/Library/Developer/Xcode/DerivedData" -maxdepth 1 -name "TimesheetsDesktop-*" 2>/dev/null)
+    if [[ -n "$DERIVED" ]]; then
+        echo "Clearing DerivedData: $DERIVED"
+        rm -rf "$DERIVED"
+    fi
+fi
 
 # Kill Metro on exit so it doesn't linger after Ctrl-C.
 cleanup() {
