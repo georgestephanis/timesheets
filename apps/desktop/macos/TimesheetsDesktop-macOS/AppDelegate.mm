@@ -24,6 +24,9 @@
 - (NSURL *)bundleURL
 {
 #if DEBUG
+  // On macOS, RCTBundleURLProvider does not auto-detect localhost from NSUserDefaults
+  // on the first launch, so jsBundleURLForBundleRoot: returns nil. Seed the host explicitly.
+  [RCTBundleURLProvider sharedSettings].jsLocation = @"localhost";
   return [[RCTBundleURLProvider sharedSettings] jsBundleURLForBundleRoot:@"index"];
 #else
   return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
