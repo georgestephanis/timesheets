@@ -15,6 +15,7 @@ import { clearWarnings, getWarnings } from "./lib/helpers.js";
 import { loadSourcesForRange, loadCachedLlmSummary } from "./lib/cache.js";
 import { classifyAndAggregate } from "./lib/classifiers.js";
 import { buildReport } from "./lib/renderer.js";
+import { makeLoadFreshFn } from "./lib/loaders.js";
 
 // ─── Re-exports (lib surface available to callers) ────────────────────────────
 
@@ -65,6 +66,11 @@ export {
     classifyAndAggregate,
 } from "./lib/classifiers.js";
 export { buildReport } from "./lib/renderer.js";
+export { makeLoadFreshFn } from "./lib/loaders.js";
+export { loadActivityWatch } from "./lib/loader-activitywatch.js";
+export { loadChromeHistory, backfillChromeUrls } from "./lib/loader-chrome.js";
+export { loadGitCommits } from "./lib/loader-git.js";
+export { discoverGitHubDesktopRepos } from "./lib/loader-github-desktop.js";
 
 // ─── Engine class ─────────────────────────────────────────────────────────────
 
@@ -115,13 +121,12 @@ class TimesheetsEngine {
         const from = new Date(range.from + "T00:00:00");
         const to = new Date(range.to + "T23:59:59");
 
-        // Source loading: loaders are stubs until Phase 2 step 6.
         const { bundle } = await loadSourcesForRange(
             this.projectRoot,
             tz,
             from,
             to,
-            async () => ({ events: { window: [], afk: [], input: [] }, chrome: [], commits: [], external: [] }),
+            makeLoadFreshFn(cfg),
             options.rebuild ?? false,
         );
 
