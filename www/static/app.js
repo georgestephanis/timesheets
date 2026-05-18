@@ -1331,6 +1331,7 @@ function handleConfigFieldChange(e) {
     if (el.type === "checkbox") {
         value = el.checked;
     } else if (el.type === "number") {
+        if (el.value === "") return;
         value = Number(el.value);
     } else if (el.tagName === "TEXTAREA" && el.hasAttribute("data-json-field")) {
         // validated on save
