@@ -29,8 +29,8 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Stream app logs to this terminal so NSLog output is visible.
-echo "--- app log stream (process: TimesheetsDesktop-macOS) ---"
-log stream --predicate 'process == "TimesheetsDesktop-macOS"' --level debug 2>/dev/null &
+echo "--- app log stream (process: TimesheetsDesktop) ---"
+log stream --predicate 'process == "TimesheetsDesktop" AND NOT subsystem BEGINSWITH "com.apple.network" AND NOT subsystem BEGINSWITH "com.apple.launchservices" AND NOT subsystem BEGINSWITH "com.apple.CFNetwork" AND NOT subsystem BEGINSWITH "com.apple.defaults"' --level default 2>/dev/null &
 LOG_PID=$!
 
 echo "Starting Metro bundler..."
@@ -41,6 +41,14 @@ echo "Waiting for Metro to be ready..."
 until curl -s http://localhost:8081/status > /dev/null 2>&1; do
     sleep 0.5
 done
-echo "Metro ready — launching app."
+echo "Metro ready — pre-warming bundle (first compilation may take ~30s)..."
+curl -s --max-time 120 \
+  "http://localhost:8081/index.bundle?platform=macos&dev=true&lazy=true&minify=false" \
+  -o /dev/null \
+  && echo "Bundle warm — launching app." \
+  || echo "Bundle pre-warm timed out — launching anyway."
 
 npm -w @timesheets/desktop run macos -- --no-packager
+
+echo "App launched. Metro is still running — press Ctrl-C to stop."
+wait $METRO_PID

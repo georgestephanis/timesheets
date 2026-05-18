@@ -24,19 +24,11 @@
 - (NSURL *)bundleURL
 {
 #if DEBUG
-  RCTBundleURLProvider *provider = [RCTBundleURLProvider sharedSettings];
-  NSLog(@"[AppDelegate] bundleURL DEBUG=1");
-  NSLog(@"[AppDelegate] jsLocation before: %@", provider.jsLocation ?: @"(nil)");
-  NSLog(@"[AppDelegate] packagerServerHost before: %@", [provider packagerServerHost] ?: @"(nil)");
-  NSLog(@"[AppDelegate] enableDev: %d", provider.enableDev);
-
-  provider.jsLocation = @"localhost";
-  NSLog(@"[AppDelegate] jsLocation after: %@", provider.jsLocation ?: @"(nil)");
-  NSLog(@"[AppDelegate] packagerServerHost after: %@", [provider packagerServerHost] ?: @"(nil)");
-
-  NSURL *url = [provider jsBundleURLForBundleRoot:@"index"];
-  NSLog(@"[AppDelegate] jsBundleURLForBundleRoot result: %@", url ?: @"(nil — will crash)");
-  return url;
+  return [RCTBundleURLProvider jsBundleURLForBundleRoot:@"index"
+                                           packagerHost:@"localhost:8081"
+                                              enableDev:YES
+                                     enableMinification:NO
+                                        inlineSourceMap:NO];
 #else
   return [[NSBundle mainBundle] URLForResource:@"main" withExtension:@"jsbundle"];
 #endif

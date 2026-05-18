@@ -12,6 +12,11 @@ const config = {
       path.resolve(appRoot, 'node_modules'),
       path.resolve(workspaceRoot, 'node_modules'),
     ],
+    blockList: [
+      // Don't watch node_modules trees — only source packages need watching.
+      new RegExp(`${workspaceRoot}/node_modules/.*`),
+      new RegExp(`${appRoot}/node_modules/.*`),
+    ],
   },
 };
 
