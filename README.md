@@ -1,10 +1,54 @@
 # activity-report
 
-A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp/Clockify/GitHub APIs into a project-attributed time report — with optional LLM-generated daily accomplishment summaries.
+A local-first activity reporting tool with multiple UI surfaces sharing a common data store. All surfaces read the same [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional integration data; produce the same `config.json`-driven project report; and write to the same `reports/` cache directory.
+
+**Current UI surfaces:**
+
+- **PHP CLI** (`activity-report.php`) — primary interface; backfills daily reports, generates Markdown/JSON/TSV output, LLM-assisted signal tuning
+- **PHP web UI** (`www/`) — local browser interface; report browsing, Harvest sidebar, rebuild, config panel
+- **React Native macOS desktop** (`apps/desktop/`) — in progress; see [NATIVE.md](NATIVE.md)
+
+The desktop app is built on a TypeScript engine (`packages/engine/`) that will eventually replace the PHP core while keeping the same `config.json` shape and `reports/` cache layout. Switching between the PHP and native interfaces does not require any data migration.
 
 ## A Recommendation on Building your `config.json`
 
 The config is a somewhat long and detailed JSON object. Both a `config.example.json` and `config.schema.json` are provided to describe how it should look, but writing it manually is tedious. It is recommended to work with an LLM / AI provider to have it populate the `config.json` for you, describing what you'd like to configure and what credentials you'd like to add.
+
+## Architecture
+
+All UI surfaces converge on the same local data stores:
+
+```
+┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────────┐
+│   PHP CLI           │   │   PHP Web UI         │   │   React Native Desktop  │
+│   activity-report   │   │   www/ + api.php     │   │   apps/desktop/         │
+│   .php              │   │                      │   │   (in progress)         │
+└──────────┬──────────┘   └──────────┬───────────┘   └────────────┬────────────┘
+           │                         │                             │
+           │              ┌──────────┴───────────┐                │
+           └──────────────►   PHP core (src/)    │   ┌────────────▼────────────┐
+                          │   config, cache,      │   │  TypeScript engine      │
+                          │   loaders, classifiers│   │  packages/engine/       │
+                          └──────────┬────────────┘   └────────────┬────────────┘
+                                     │                              │
+                          ┌──────────▼──────────────────────────────▼────────────┐
+                          │                  Shared data stores                   │
+                          │                                                        │
+                          │  config.json  ·  reports/YYYY-MM/DD/  ·  ActivityWatch │
+                          │  Chrome history  ·  Git repos  ·  External APIs        │
+                          └────────────────────────────────────────────────────────┘
+```
+
+The shared contract between all surfaces:
+
+| Artifact              | Role                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `config.json`         | Single source of truth for projects, signals, and integration credentials                 |
+| `reports/YYYY-MM/DD/` | Per-day source caches (activitywatch, chrome, commits, integrations)                      |
+| Report JSON shape     | All outputs conform to the same structure (`from`, `to`, `days`, `timelines`, `warnings`) |
+| `reports/config/`     | Timestamped config backups — written by every surface that mutates `config.json`          |
+
+The TypeScript engine (`packages/engine/`) is being developed in parallel as the data layer for the native desktop app. It keeps `config.json` and `reports/` layout compatible with the PHP app so both can run against the same local data without conflict.
 
 ## Quick start
 
@@ -428,11 +472,13 @@ tools/
   ensure-github-integration.php
   prune-config-backups.php
   reset-cache.php
-packages/                 — native desktop app workspace (in progress; see NATIVE.md)
-  contracts/              — @timesheets/contracts: shared JS type definitions
-  engine/                 — @timesheets/engine: TypeScript data engine (replaces PHP core)
-  ui/                     — @timesheets/ui: React Native macOS/Windows UI
-  test-fixtures/          — @timesheets/test-fixtures: golden fixture data for parity tests
+packages/                 — TypeScript monorepo workspace; shared by all non-PHP surfaces (see NATIVE.md)
+  contracts/              — @timesheets/contracts: JS type definitions matching PHP JSON output shape
+  engine/                 — @timesheets/engine: TypeScript engine (replaces PHP core; same config.json + reports/ layout)
+  ui/                     — @timesheets/ui: React Native components (peerDep on react-native-macos)
+  test-fixtures/          — @timesheets/test-fixtures: golden fixture data for PHP–TypeScript parity tests
+apps/
+  desktop/                — @timesheets/desktop: React Native macOS app shell (Phase 1 scaffolding)
 reports/                  — gitignored; all generated data lives here
   app.jsonl               — structured application log (all subsystems)
   cache-data.jsonl        — index of per-day source cache files

@@ -6,7 +6,15 @@ Context file for AI agents and future contributors. Keep this up to date when th
 
 ## What this project is
 
-A PHP CLI tool + local web UI that aggregates local activity data from four source categories and produces a project-attributed time report:
+A local-first activity reporting tool with **multiple UI surfaces that share a common data store**:
+
+- **PHP CLI** (`activity-report.php`) — the primary, stable interface
+- **PHP web UI** (`www/`) — browser-based report viewer served by `php -S`
+- **React Native macOS desktop** (`apps/desktop/`) — in progress; built on `packages/engine/`
+
+All surfaces read the same local data, write to the same `reports/` cache directory, and use the same `config.json`. The PHP implementation is the behavior oracle during migration; the TypeScript engine is developed in parallel with compatibility as a hard constraint.
+
+The reporting engine aggregates data from four source categories:
 
 | Source                   | Data                                                                              | Location                                                                                                                |
 | ------------------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -82,11 +90,13 @@ tools/
   cleanup-integration-projects.php — merges high-confidence integration stubs into existing projects
   sync-repo-remotes.php          — snapshots git remote URLs into projects[*].repo_remotes
   ensure-github-integration.php  — adds default integrations.github entry (gh-auth) if absent
-packages/                        — native desktop workspace (Phase 1 scaffolding; see NATIVE.md)
-  contracts/                     — @timesheets/contracts: shared JS type definitions (Report, Config, ProjectConfig, etc.)
-  engine/                        — @timesheets/engine: TypeScript data engine stub (replaces PHP core)
-  ui/                            — @timesheets/ui: React Native macOS + Windows UI stub
-  test-fixtures/                 — @timesheets/test-fixtures: golden fixture data for parity tests
+packages/                        — TypeScript workspace; shared data layer for non-PHP surfaces (see NATIVE.md)
+  contracts/                     — @timesheets/contracts: JS type definitions mirroring PHP JSON output + config schema
+  engine/                        — @timesheets/engine: TypeScript engine (same config.json + reports/ layout as PHP)
+  ui/                            — @timesheets/ui: React Native macOS components (peerDep)
+  test-fixtures/                 — @timesheets/test-fixtures: golden fixtures for PHP–TypeScript parity tests
+apps/
+  desktop/                       — @timesheets/desktop: React Native macOS app shell (Phase 1 scaffolding)
 config.json                      — local config, gitignored, never committed
 config.example.json              — safe-to-commit template with dummy data
 config.schema.json               — JSON Schema (draft 2020-12) for both config files
@@ -96,7 +106,7 @@ package.json                     — dev dep: prettier ^3.0
 NATIVE.md                        — native desktop migration plan and phased roadmap
 ```
 
-`vendor/` and `node_modules/` are installed locally but not committed. The `packages/` workspace is scaffolded but not yet linked into the root `package.json`.
+`vendor/` and `node_modules/` are installed locally but not committed. The root `package.json` declares `"workspaces": ["packages/*", "apps/*"]` — run `npm install` from the repo root to link the packages to each other.
 
 ---
 
@@ -518,24 +528,32 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 
 ---
 
-## Native desktop migration
+## Multi-UI architecture and native desktop migration
 
-See `NATIVE.md` for the full plan. The current state is **Phase 1: workspace scaffolded**.
+The long-term goal is a common data layer shared by all UIs: PHP CLI, PHP web, and native desktop. The TypeScript engine (`packages/engine/`) is the shared foundation for non-PHP surfaces. See `NATIVE.md` for the full migration plan; current state is **Phase 1: workspace scaffolded**.
+
+### Shared data contract (all UIs must respect this)
+
+| Artifact              | How all UIs use it                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `config.json`         | Single config for all surfaces; same JSON Schema; same backup convention (`reports/config/config.<source>.<ts>.json`)            |
+| `reports/YYYY-MM/DD/` | Per-day source caches (activitywatch, chrome, commits, integrations) — read and written by PHP and TypeScript engine alike       |
+| Report JSON shape     | `{from, to, tz, days: {date: {project: ProjectReport}}, timelines, unmatched, warnings}` — all surfaces produce and consume this |
 
 ### What exists in `packages/`
 
-| Package                   | npm name                    | Status | Purpose                                                                                                                                                                                                            |
-| ------------------------- | --------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `packages/contracts/`     | `@timesheets/contracts`     | Stub   | Shared JS type definitions mirroring the PHP JSON output shape (`Report`, `Config`, `ProjectConfig`, `GroupingConfig`, `MutationPayload`)                                                                          |
-| `packages/engine/`        | `@timesheets/engine`        | Stub   | TypeScript data engine that will replace the PHP core; exposes `TimesheetsEngine` with placeholder methods (`loadConfig`, `generateReport`, `loadSourcesForRange`, `classifyAndAggregate`, `saveConfigWithBackup`) |
-| `packages/ui/`            | `@timesheets/ui`            | Stub   | React Native macOS + Windows UI; exports `TimesheetsApp` component with mocked data rendering                                                                                                                      |
-| `packages/test-fixtures/` | `@timesheets/test-fixtures` | Empty  | Will hold golden report JSON and config fixtures for parity tests against the PHP implementation                                                                                                                   |
+| Package                   | npm name                    | Status | Purpose                                                                                                                                                                                   |
+| ------------------------- | --------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contracts/`     | `@timesheets/contracts`     | Active | JS type definitions mirroring the PHP JSON output shape and config schema (`Report`, `Config`, `ProjectConfig`, all connection types, IPC payload types)                                  |
+| `packages/engine/`        | `@timesheets/engine`        | Stub   | TypeScript engine — same `config.json` + `reports/` layout as PHP; placeholder implementations of `generateReport`, `loadSourcesForRange`, `classifyAndAggregate`, `saveConfigWithBackup` |
+| `packages/ui/`            | `@timesheets/ui`            | Stub   | React Native macOS UI; exports `TimesheetsApp` with day navigation and mocked data; `peerDependencies` on `react` and `react-native-macos`                                                |
+| `packages/test-fixtures/` | `@timesheets/test-fixtures` | Empty  | Will hold golden report JSON and config fixtures for PHP–TypeScript parity tests (Phase 0 capture)                                                                                        |
+| `apps/desktop/`           | `@timesheets/desktop`       | Shell  | React Native macOS app scaffold; not yet runnable (React Native project not yet initialized)                                                                                              |
 
-The root `package.json` does not yet declare a `"workspaces"` field — packages are not linked to each other. That is a Phase 1 deliverable, not a current blocker.
-
-### Guiding constraints for native work
+### Guiding constraints for all UI work
 
 - **PHP remains the behavior oracle** until parity tests pass. Do not remove PHP entrypoints.
-- **Keep `config.json` and `reports/` layout compatible** with the existing PHP app so users can switch between implementations.
-- **The engine boundary is narrow.** Expose report generation via the IPC surface in NATIVE.md; don't let UI components reach into engine internals.
-- **macOS first.** `react-native-macos` is the initial target. Windows support (`react-native-windows`) comes after macOS is stable.
+- **Keep `config.json` and `reports/` layout compatible** with the existing PHP app so users can run PHP and native interfaces against the same local data simultaneously.
+- **The engine boundary is narrow.** Expose report generation via the IPC surface in NATIVE.md; don't let UI components read databases or config files directly.
+- **macOS first.** `react-native-macos` is the initial target. `react-native-windows` is deferred until macOS is stable.
+- **Format changes are phase-2.** Do not change `config.json` shape or `reports/` layout in phase-1 work — compatibility first, cleanup later.

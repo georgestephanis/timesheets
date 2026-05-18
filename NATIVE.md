@@ -2,8 +2,20 @@
 
 ## Goal
 
-Replace the current PHP CLI + PHP web UI with a native desktop application built in
-React Native for Desktop, while preserving the current product behavior:
+Add a native desktop UI surface to a tool that already has a PHP CLI and a PHP web UI —
+all three sharing the same `config.json`, `reports/` cache directory, and JSON report
+shape. The desktop app is not a replacement that removes the others; it is an additional
+interface to the same local data store.
+
+The broader multi-UI architecture:
+
+```
+PHP CLI (activity-report.php)  ─┐
+PHP Web UI (www/)               ├── config.json + reports/ + local data sources
+React Native Desktop (apps/)   ─┘
+```
+
+The desktop app brings:
 
 - local-only data processing
 - project-attributed daily reports
@@ -11,8 +23,10 @@ React Native for Desktop, while preserving the current product behavior:
 - cache-backed report generation
 - optional Harvest, ClickUp, Clockify, GitHub, and LLM features
 
-The end state is a desktop app that owns both the UI and the reporting engine. PHP is not
-part of the shipped product.
+The TypeScript engine (`packages/engine/`) is the shared data layer for the desktop app.
+It is developed with compatibility as a hard constraint — the same `config.json` shape and
+`reports/` cache layout as the PHP implementation, so users can run any surface against
+the same local data without migration.
 
 ## Hard Recommendation
 
