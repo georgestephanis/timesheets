@@ -52,6 +52,16 @@ export {
     saveGeneratedReport,
     appendToIndex,
 } from "./lib/cache.js";
+export {
+    classifyVscode,
+    classifySlack,
+    classifySsh,
+    projectForSignals,
+    projectForExternal,
+    isAfkAt,
+    activeInputSecondsDuring,
+    classifyAndAggregate,
+} from "./lib/classifiers.js";
 
 // ─── Engine class ─────────────────────────────────────────────────────────────
 
