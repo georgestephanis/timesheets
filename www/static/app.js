@@ -1892,6 +1892,15 @@ window.addEventListener("beforeunload", (e) => {
 window.addEventListener("popstate", (e) => {
     const isConfigView =
         e.state?.view === "config" || (!e.state && new URLSearchParams(location.search).get("view") === "config");
+    const leavingConfig = !isConfigView && document.body.classList.contains("config-mode");
+    if (leavingConfig && configDirty) {
+        if (!confirm("You have unsaved changes. Leave the config page anyway?")) {
+            // Cancel: push config state back so the URL/history stays on ?view=config.
+            history.pushState({ view: "config" }, "", "?view=config");
+            return;
+        }
+        configDirty = false;
+    }
     if (isConfigView) {
         renderConfigView();
     } else {
