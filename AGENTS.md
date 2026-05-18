@@ -82,15 +82,21 @@ tools/
   cleanup-integration-projects.php — merges high-confidence integration stubs into existing projects
   sync-repo-remotes.php          — snapshots git remote URLs into projects[*].repo_remotes
   ensure-github-integration.php  — adds default integrations.github entry (gh-auth) if absent
+packages/                        — native desktop workspace (Phase 1 scaffolding; see NATIVE.md)
+  contracts/                     — @timesheets/contracts: shared JS type definitions (Report, Config, ProjectConfig, etc.)
+  engine/                        — @timesheets/engine: TypeScript data engine stub (replaces PHP core)
+  ui/                            — @timesheets/ui: React Native macOS + Windows UI stub
+  test-fixtures/                 — @timesheets/test-fixtures: golden fixture data for parity tests
 config.json                      — local config, gitignored, never committed
 config.example.json              — safe-to-commit template with dummy data
 config.schema.json               — JSON Schema (draft 2020-12) for both config files
 phpcs.xml.dist                   — PHP_CodeSniffer ruleset (PSR-12 + CLI exceptions)
 composer.json                    — dev dep: squizlabs/php_codesniffer ^3.9
 package.json                     — dev dep: prettier ^3.0
+NATIVE.md                        — native desktop migration plan and phased roadmap
 ```
 
-`vendor/` and `node_modules/` are installed locally but not committed.
+`vendor/` and `node_modules/` are installed locally but not committed. The `packages/` workspace is scaffolded but not yet linked into the root `package.json`.
 
 ---
 
@@ -509,3 +515,27 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 - **Rebuild clears source caches.** Pass `rebuild=true` to `loadSourcesForRange` whenever the caller intends a full refresh. This ensures per-day source caches can't silently persist stale or empty data indefinitely.
 - **Cache stays flat JSON, not SQLite.** Raw source caches are per-day JSON files under `reports/YYYY-MM/DD/`. Wider date ranges compose daily buckets rather than writing range-wide source caches. Files are transparent, trivially inspectable, and selectively invalidated with `rm -rf reports/YYYY-MM/DD/`. If cross-range aggregate queries become a priority, build a thin read layer over existing report files rather than introducing SQLite for raw event storage.
 - **GitHub integration is CLI-only.** `loadGitHubActivity` is skipped when `PHP_SAPI !== 'cli'` to avoid blocking web page loads. Rely on the daily cron job or direct CLI invocation to populate GitHub data into per-day source caches.
+
+---
+
+## Native desktop migration
+
+See `NATIVE.md` for the full plan. The current state is **Phase 1: workspace scaffolded**.
+
+### What exists in `packages/`
+
+| Package                   | npm name                    | Status | Purpose                                                                                                                                                                                                            |
+| ------------------------- | --------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/contracts/`     | `@timesheets/contracts`     | Stub   | Shared JS type definitions mirroring the PHP JSON output shape (`Report`, `Config`, `ProjectConfig`, `GroupingConfig`, `MutationPayload`)                                                                          |
+| `packages/engine/`        | `@timesheets/engine`        | Stub   | TypeScript data engine that will replace the PHP core; exposes `TimesheetsEngine` with placeholder methods (`loadConfig`, `generateReport`, `loadSourcesForRange`, `classifyAndAggregate`, `saveConfigWithBackup`) |
+| `packages/ui/`            | `@timesheets/ui`            | Stub   | React Native macOS + Windows UI; exports `TimesheetsApp` component with mocked data rendering                                                                                                                      |
+| `packages/test-fixtures/` | `@timesheets/test-fixtures` | Empty  | Will hold golden report JSON and config fixtures for parity tests against the PHP implementation                                                                                                                   |
+
+The root `package.json` does not yet declare a `"workspaces"` field — packages are not linked to each other. That is a Phase 1 deliverable, not a current blocker.
+
+### Guiding constraints for native work
+
+- **PHP remains the behavior oracle** until parity tests pass. Do not remove PHP entrypoints.
+- **Keep `config.json` and `reports/` layout compatible** with the existing PHP app so users can switch between implementations.
+- **The engine boundary is narrow.** Expose report generation via the IPC surface in NATIVE.md; don't let UI components reach into engine internals.
+- **macOS first.** `react-native-macos` is the initial target. Windows support (`react-native-windows`) comes after macOS is stable.

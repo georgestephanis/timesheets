@@ -1,0 +1,11 @@
+{
+    "name": "@timesheets/engine",
+    "version": "1.0.0",
+    "type": "module",
+    "exports": {
+        ".": "./index.js"
+    },
+    "dependencies": {
+        "typescript": "^5.0.0"
+    }
+}

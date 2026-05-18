@@ -428,6 +428,11 @@ tools/
   ensure-github-integration.php
   prune-config-backups.php
   reset-cache.php
+packages/                 — native desktop app workspace (in progress; see NATIVE.md)
+  contracts/              — @timesheets/contracts: shared JS type definitions
+  engine/                 — @timesheets/engine: TypeScript data engine (replaces PHP core)
+  ui/                     — @timesheets/ui: React Native macOS/Windows UI
+  test-fixtures/          — @timesheets/test-fixtures: golden fixture data for parity tests
 reports/                  — gitignored; all generated data lives here
   app.jsonl               — structured application log (all subsystems)
   cache-data.jsonl        — index of per-day source cache files
@@ -438,6 +443,7 @@ config.json               — your local config (gitignored)
 config.example.json       — safe-to-commit template
 config.schema.json        — JSON Schema for editor validation
 AGENTS.md                 — architecture guide for contributors and AI agents
+NATIVE.md                 — native desktop migration plan (React Native + TypeScript engine)
 SECURITY.md               — local threat model and token-handling notes
 TROUBLESHOOTING.md        — common failures and fixes
 ```
