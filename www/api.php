@@ -41,6 +41,15 @@ if (!is_array($config)) {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'config') {
+    // Require a localhost Host header to prevent DNS-rebinding reads of secrets.
+    // Browsers always send Host; an attacker-controlled DNS entry pointing at
+    // 127.0.0.1 would carry a non-localhost Host value, which we reject here.
+    $host = strtolower((string)(parse_url('http://' . ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST) ?? ''));
+    if ($host !== 'localhost' && $host !== '127.0.0.1') {
+        http_response_code(403);
+        echo json_encode(['error' => 'Forbidden: config endpoint only available from localhost']);
+        exit(1);
+    }
     header('Content-Type: application/json; charset=UTF-8');
     readfile($configFile);
     exit;
