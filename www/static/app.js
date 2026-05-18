@@ -1886,6 +1886,7 @@ document.addEventListener("mouseout", (e) => {
 window.addEventListener("beforeunload", (e) => {
     if (configDirty) {
         e.preventDefault();
+        e.returnValue = ""; // Required by some browsers to trigger the native dialog.
     }
 });
 
