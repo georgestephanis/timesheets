@@ -796,21 +796,6 @@ textarea.config-json-field {
 .grouping-card .config-field {
     grid-template-columns: 150px 1fr;
 }
-/* Save/Discard footer */
-.config-actions-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: #fff;
-    border-top: 1px solid #e5e7eb;
-    padding: 0.65rem 1.5rem;
-    display: flex;
-    gap: 0.6rem;
-    align-items: center;
-    z-index: 100;
-    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
-}
 /* Toast notifications */
 .config-toast {
     position: fixed;
