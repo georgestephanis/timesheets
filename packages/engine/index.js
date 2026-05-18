@@ -105,9 +105,16 @@ class TimesheetsEngine {
         const backupPath = path.join(backupDir, `config.engine.${timestamp}.json`);
 
         await fs.mkdir(backupDir, { recursive: true });
-        const currentConfig = await fs.readFile(this.configPath, "utf8");
-        await fs.writeFile(backupPath, currentConfig);
+        try {
+            const currentConfig = await fs.readFile(this.configPath, "utf8");
+            await fs.writeFile(backupPath, currentConfig);
+        } catch (error) {
+            if (error?.code !== "ENOENT") {
+                throw error;
+            }
+        }
         await fs.writeFile(this.configPath, JSON.stringify(newConfig, null, 2));
+        this.config = newConfig;
     }
 }
 

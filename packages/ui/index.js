@@ -2,7 +2,7 @@
 // Based on the existing web UI structure
 
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, FlatList, Pressable } from "react-native";
+import { View, Text, StyleSheet, FlatList, Pressable } from "react-native";
 
 // Mock data for demonstration
 const mockReportData = {
@@ -98,10 +98,10 @@ const TimesheetsApp = () => {
     }
 
     return (
-        <ScrollView style={styles.container}>
-            <ReportHeader from={reportData.from} to={reportData.to} timezone={reportData.tz} />
-            <ReportContent data={reportData} />
-        </ScrollView>
+        <ReportContent
+            data={reportData}
+            header={<ReportHeader from={reportData.from} to={reportData.to} timezone={reportData.tz} />}
+        />
     );
 };
 
@@ -120,41 +120,60 @@ const ReportHeader = ({ from, to, timezone }) => (
 /**
  * Main report content component — shows one day at a time with prev/next navigation
  */
-const ReportContent = ({ data }) => {
+const ReportContent = ({ data, header }) => {
     const dates = Object.keys(data.days).sort();
-    const [dayIndex, setDayIndex] = useState(dates.length - 1);
+    const lastDayIndex = Math.max(0, dates.length - 1);
+    const [dayIndex, setDayIndex] = useState(lastDayIndex);
 
-    const currentDate = dates[dayIndex];
-    const projects = Object.entries(data.days[currentDate] || {});
+    useEffect(() => {
+        setDayIndex(lastDayIndex);
+    }, [lastDayIndex, dates.join("|")]);
+
+    const hasDates = dates.length > 0;
+    const currentDate = hasDates ? dates[dayIndex] : null;
+    const projects = currentDate ? Object.entries(data.days[currentDate] || {}) : [];
 
     return (
-        <View style={styles.content}>
-            <View style={styles.dayNav}>
-                <Pressable
-                    onPress={() => setDayIndex((i) => Math.max(0, i - 1))}
-                    disabled={dayIndex === 0}
-                    style={[styles.navButton, dayIndex === 0 && styles.navButtonDisabled]}
-                >
-                    <Text style={styles.navButtonText}>← Prev</Text>
-                </Pressable>
-                <Text style={styles.dayLabel}>{currentDate}</Text>
-                <Pressable
-                    onPress={() => setDayIndex((i) => Math.min(dates.length - 1, i + 1))}
-                    disabled={dayIndex === dates.length - 1}
-                    style={[styles.navButton, dayIndex === dates.length - 1 && styles.navButtonDisabled]}
-                >
-                    <Text style={styles.navButtonText}>Next →</Text>
-                </Pressable>
-            </View>
-            <FlatList
-                data={projects}
-                keyExtractor={([key]) => key}
-                renderItem={({ item }) => {
-                    const [projectName, projectData] = item;
-                    return <ProjectCard projectName={projectName} projectData={projectData} />;
-                }}
-            />
-        </View>
+        <FlatList
+            style={styles.container}
+            contentContainerStyle={styles.content}
+            data={projects}
+            keyExtractor={([key]) => key}
+            renderItem={({ item }) => {
+                const [projectName, projectData] = item;
+                return <ProjectCard projectName={projectName} projectData={projectData} />;
+            }}
+            ListHeaderComponent={
+                <View>
+                    {header}
+                    <View style={styles.dayNav}>
+                        <Pressable
+                            onPress={() => setDayIndex((i) => Math.max(0, i - 1))}
+                            disabled={!hasDates || dayIndex === 0}
+                            style={[styles.navButton, (!hasDates || dayIndex === 0) && styles.navButtonDisabled]}
+                        >
+                            <Text style={styles.navButtonText}>← Prev</Text>
+                        </Pressable>
+                        <Text style={styles.dayLabel}>{currentDate || "No report data"}</Text>
+                        <Pressable
+                            onPress={() => setDayIndex((i) => Math.min(lastDayIndex, i + 1))}
+                            disabled={!hasDates || dayIndex === lastDayIndex}
+                            style={[
+                                styles.navButton,
+                                (!hasDates || dayIndex === lastDayIndex) && styles.navButtonDisabled,
+                            ]}
+                        >
+                            <Text style={styles.navButtonText}>Next →</Text>
+                        </Pressable>
+                    </View>
+                </View>
+            }
+            ListEmptyComponent={
+                <Text style={styles.emptyState}>
+                    {currentDate ? "No projects for this date." : "No report data available."}
+                </Text>
+            }
+        />
     );
 };
 
@@ -191,12 +210,14 @@ const styles = StyleSheet.create({
         marginTop: 5,
     },
     content: {
-        padding: 20,
+        paddingBottom: 20,
     },
     dayNav: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
+        paddingHorizontal: 20,
+        paddingTop: 20,
         marginBottom: 12,
     },
     dayLabel: {
@@ -213,8 +234,13 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: "#007AFF",
     },
+    emptyState: {
+        paddingHorizontal: 20,
+        color: "#666",
+    },
     projectCard: {
         padding: 15,
+        marginHorizontal: 20,
         marginVertical: 5,
         borderWidth: 1,
         borderColor: "#ddd",
