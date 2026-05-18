@@ -244,6 +244,9 @@ function projectForExternal(array $row, array $config): ?string
         if ($source === 'clickup' && !empty($p['clickup_tasks']) && fnmatchAny($hint, $p['clickup_tasks'])) {
             return $name;
         }
+        if ($source === 'clockify' && !empty($p['clockify_projects']) && fnmatchAny($hint, $p['clockify_projects'])) {
+            return $name;
+        }
     }
 
     return null;

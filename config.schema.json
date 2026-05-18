@@ -481,6 +481,17 @@
                     "default": 30
                 }
             }
+        },
+        "clockify_connection": {
+            "type": "object",
+            "required": ["name", "api_key"],
+            "additionalProperties": false,
+            "properties": {
+                "name": { "type": "string", "description": "Display name for this connection." },
+                "api_key": { "type": "string", "description": "Clockify API key from Profile → API." },
+                "workspace_id": { "type": "string", "description": "Auto-resolved from /v1/user on first run." },
+                "user_id": { "type": "string", "description": "Auto-resolved from /v1/user on first run." }
+            }
         }
     }
 }

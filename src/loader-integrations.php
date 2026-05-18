@@ -12,6 +12,7 @@ require_once __DIR__ . '/integrations/harvest-catalog.php';
 require_once __DIR__ . '/integrations/clickup.php';
 require_once __DIR__ . '/integrations/clickup-catalog.php';
 require_once __DIR__ . '/integrations/github.php';
+require_once __DIR__ . '/integrations/clockify.php';
 
 /**
  * Loads external integration activity rows from configured providers.
@@ -85,6 +86,21 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
         }
         try {
             foreach (loadGitHubActivity($conn, $config, $from, $to) as $row) {
+                $rows[] = $row;
+            }
+        } catch (RuntimeException $e) {
+            warning('integrations', "[$label] " . $e->getMessage());
+        }
+    }
+
+    // Clockify integration
+    foreach (($integrations['clockify'] ?? []) as $idx => $conn) {
+        if (!is_array($conn)) {
+            continue;
+        }
+        $label = (string)($conn['name'] ?? "clockify[$idx]");
+        try {
+            foreach (loadClockifyTimeEntries($conn, $from, $to, $httpTimeout) as $row) {
                 $rows[] = $row;
             }
         } catch (RuntimeException $e) {
