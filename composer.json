@@ -14,7 +14,10 @@
         "phpunit/phpunit": "^13.1"
     },
     "scripts": {
-        "serve": "php -S localhost:8000 apps/web/index.php",
+        "serve": [
+            "@putenv COMPOSER_PROCESS_TIMEOUT=0",
+            "@php tools/serve.php"
+        ],
         "report": "@php apps/cli/activity-report.php",
         "lint": "phpcs",
         "lint:json": "npm run format:check",
