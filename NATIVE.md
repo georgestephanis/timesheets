@@ -7,11 +7,9 @@ all three sharing the same `config.json`, `reports/` cache directory, and JSON r
 shape. The desktop app is not a replacement that removes the others; it is an additional
 interface to the same local data store.
 
-The broader multi-UI architecture:
-
 ```
-PHP CLI (apps/cli/)              ─┐
-PHP Web UI (apps/web/)           ─┤── config.json + reports/ + local data sources
+PHP CLI (apps/cli/)                  ─┐
+PHP Web UI (apps/web/)               ─┤── config.json + reports/ + local data sources
 React Native Desktop (apps/desktop/) ─┘
 ```
 
@@ -23,278 +21,345 @@ The desktop app brings:
 - cache-backed report generation
 - optional Harvest, ClickUp, Clockify, GitHub, and LLM features
 
-The TypeScript engine (`packages/engine/`) is the shared data layer for the desktop app.
-It is developed with compatibility as a hard constraint — the same `config.json` shape and
-`reports/` cache layout as the PHP implementation, so users can run any surface against
-the same local data without migration.
+The TypeScript engine (`packages/engine/`) is the shared data layer. It is developed with
+compatibility as a hard constraint — the same `config.json` shape and `reports/` cache
+layout as the PHP implementation.
 
-## Hard Recommendation
+## Repository Shape
 
-Use React Native for Desktop for the UI layer, but do not try to make React Native itself
-directly own filesystem, SQLite, shell, and cache orchestration.
+```
+apps/
+  cli/          PHP CLI entry point
+  web/          PHP web UI (vanilla JS + PHP; behavior oracle during migration)
+  desktop/      React Native macOS app (entry point + native shell + native modules)
+src/            PHP core (shared by cli/ and web/)
+packages/
+  contracts/    @timesheets/contracts — JSDoc typedefs for Report, Config, and all payloads
+  engine/       @timesheets/engine — data loading, classification, caching (Node.js)
+  ui/           @timesheets/ui — shared React Native components and hooks
+  test-fixtures/ @timesheets/test-fixtures — golden report JSON and config fixtures
+tools/
+  desktop-dev.sh  dev workflow: start Metro, pre-warm bundle, launch app, stream logs
+```
 
-This app reads local ActivityWatch databases, Chrome history, Git repositories, GitHub
-Desktop metadata, and config files. That is a local systems application, not just a view
-layer. A pure React Native Desktop app will become awkward quickly.
-
-Recommended architecture:
-
-- React Native macOS **first** for the desktop UI
-- React Native Windows later, once the macOS app is stable
-- a local TypeScript data engine packaged with the app and invoked through a narrow IPC
-  boundary
-
-That keeps the UI native while still replacing PHP completely.
+The PHP tree remains during migration as the behavior oracle. Remove it only after parity
+checks pass.
 
 ## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   UI Layer      │    │   Engine Layer  │    │   Data Sources  │
-│                 │    │                 │    │                 │
-│  React Native   │───▶│  TypeScript     │───▶│  ActivityWatch  │
-│  Components     │    │  Engine         │    │  Chrome         │
-│  (macOS first)  │    │  (@timesheets/  │    │  Git            │
-│                 │    │   engine)       │    │  Integrations   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  apps/desktop (React Native macOS)                                   │
+│                                                                      │
+│  ┌─────────────────┐   JS calls    ┌──────────────────────────────┐ │
+│  │  UI screens      │──────────────▶│  Native Module bridge        │ │
+│  │  (packages/ui   │               │  (TimesheetsEngineModule.mm) │ │
+│  │   components)   │◀──────────────│                              │ │
+│  └─────────────────┘   callbacks   └──────────┬───────────────────┘ │
+│                                               │ file I/O / IPC      │
+└───────────────────────────────────────────────┼─────────────────────┘
+                                                │
+              ┌─────────────────────────────────┼──────────────────┐
+              │  IPC boundary                   │                  │
+              │                                 ▼                  │
+              │  ┌──────────────────────────────────────────────┐  │
+              │  │  Tier 1: Native file I/O (Phase 4)           │  │
+              │  │  NSFileManager reads/writes config.json       │  │
+              │  │  Returns parsed JSON dict to RN JS            │  │
+              │  └──────────────────────────────────────────────┘  │
+              │                                                      │
+              │  ┌──────────────────────────────────────────────┐  │
+              │  │  Tier 2: Node.js sidecar (Phase 3)           │  │
+              │  │  packages/engine runs in a bundled Node proc  │  │
+              │  │  RN calls it via local HTTP (fetch to :PORT)  │  │
+              │  │  Handles SQLite, Chrome history, git, reports │  │
+              │  └──────────────────────────────────────────────┘  │
+              └──────────────────────────────────────────────────────┘
 ```
 
-## What Exists Today
+## IPC Layer Design
 
-The current product surface is larger than a report viewer. The native app must plan
-around all of these existing behaviors:
+React Native's Hermes JS engine cannot directly call Node.js APIs (`fs`, `better-sqlite3`,
+`child_process`). The engine package requires these. Two tiers bridge the gap:
 
-- report navigation by day and date range
-- project filtering, including filtering by grouping
-- grouped project display with colors and optional logos
-- per-day timeline bars
-- warning banners for failing integrations
-- rebuild-from-source flow and cache-age awareness
-- Harvest sidebar with logged-time totals
-- LLM-backed day summaries
-- LLM-backed unlogged-time suggestions
-- config editing across general settings, projects, groupings, integrations, and signals
-- config mutations such as reassigning signals, marking projects ignored, and changing
-  grouping
+### Tier 1 — Native ObjC module (config operations only)
 
-Those features currently live across `README.md`, `apps/web/static/app.js`, `apps/web/api.php`,
-`src/cli.php`, `src/classifiers.php`, and `src/cache.php`.
+`apps/desktop/macos/TimesheetsDesktop-macOS/TimesheetsEngineModule.{h,mm}`
 
-## Repository Shape
+Exposes to RN JS:
 
-The workspace separates UI surfaces and the shared engine:
-
-```
-activity-report.php           root wrapper → apps/cli/activity-report.php
-apps/
-  cli/                        PHP CLI entry point
-  web/                        PHP web UI
-  desktop/                    React Native macOS app (entry point + native shell)
-src/                          PHP core (shared by apps/cli/ and apps/web/; behavior oracle during migration)
-packages/
-  contracts/                  @timesheets/contracts — shared JS/TS type definitions
-  engine/                     @timesheets/engine — data loading, classification, caching
-  ui/                         @timesheets/ui — shared presentational components
-  test-fixtures/              @timesheets/test-fixtures — golden report JSON and config fixtures
+```objc
+RCT_EXPORT_METHOD(getConfig:(RCTPromiseResolveBlock)resolve reject:(RCTPromiseRejectBlock)reject)
+RCT_EXPORT_METHOD(saveConfig:(NSDictionary *)config resolve:... reject:...)
+RCT_EXPORT_METHOD(getConfigPath:(RCTPromiseResolveBlock)resolve reject:...)
 ```
 
-The PHP tree (`activity-report.php`, `src/`, `apps/web/`) remains during migration as the
-behavior oracle. Remove it only after parity checks pass.
+The native module locates `config.json` using the same search order the PHP app uses:
+the directory stored in `NSUserDefaults` under `TimesheetsConfigDir`, falling back to
+`~/.config/timesheets/config.json`. The path is user-configurable on first launch.
+
+This is enough for Phase 4 (config UI). No Node.js sidecar needed for read/write of JSON.
+
+### Tier 2 — Node.js sidecar (reports, SQLite, integrations)
+
+For Phase 3 (report UI) and beyond, the engine needs `better-sqlite3` and `child_process`.
+The sidecar approach:
+
+1. Bundle a Node.js binary with the app (via `pkg` or as a framework)
+2. On launch, start `engine-server.js` as a child process on a random port
+3. React Native calls it via `fetch('http://localhost:PORT/...')`
+4. The sidecar exposes a minimal HTTP API matching the IPC surface below
+5. On app quit, kill the sidecar
+
+The sidecar is not needed until Phase 3. For Phase 4, the native module is sufficient.
 
 ## IPC Surface
 
-The engine exposes a narrow command surface. The desktop app calls these; it does not
-reach into engine internals.
+The full API the desktop app calls. Tier 1 covers config operations; Tier 2 covers
+everything that needs the engine's data pipeline.
 
-```ts
-getReport(range: DateRange, options?: ReportOptions): Promise<Report>
-rebuildReport(range: DateRange, options?: ReportOptions): Promise<Report>
-getConfig(): Promise<Config>
-saveConfig(config: Config): Promise<void>
-reassignSignal(payload: ReassignSignalPayload): Promise<void>
-setProjectGrouping(payload: SetGroupingPayload): Promise<void>
-flagProjectsIgnored(payload: FlagIgnoredPayload): Promise<void>
-generateDaySummary(date: string): Promise<string>
-suggestTimeLogging(date: string): Promise<Suggestion[]>
+```
+Tier 1 (native module, Phase 4):
+  getConfig()                              → Config
+  saveConfig(config: Config)               → void
+  getConfigPath()                          → string
+
+Tier 2 (sidecar HTTP, Phase 3+):
+  GET  /report?from=YYYY-MM-DD&to=YYYY-MM-DD[&rebuild=1]   → Report
+  POST /reassign-signal   { type, key, project }           → void
+  POST /set-grouping      { project, grouping }            → void
+  POST /flag-ignored      { projects[], ignored }          → void
+  POST /generate-summary  { date }                         → { summary: string }
+  POST /suggest-logging   { date }                         → { suggestions[] }
 ```
 
-Keep these APIs close to the current PHP JSON shapes so migration is incremental and
-testable.
+## Shared UI Architecture
 
-## Storage and Compatibility
+### packages/ui
 
-Start by keeping compatibility where it buys leverage:
+Contains everything that is shared between the desktop app and (eventually) a React-based
+web UI. Split into two layers:
 
-- keep `config.json` shape compatible with the existing JSON Schema
-- keep `reports/` cache structure compatible initially
-- keep report JSON close to the current `renderJson()` output
-- keep config backups under `reports/config/`
+**Logic layer** — framework-agnostic, importable from any JS context:
 
-That lets the desktop app reuse existing user data and makes parity testing
-straightforward. Format changes are a phase-2 cleanup, not a phase-1 blocker.
+- `useConfigDraft(initial: Config)` — draft state, dirty tracking, field path mutation,
+  discard/reset
+- `useFieldPath(draft, path)` — reads and writes a value at a dotted path like
+  `"projects.MyProject.repos"`, handling array ↔ textarea conversions
+- `configSchema` — zod schema for `Config` (validates before save)
+- `projectSchema`, `groupingSchema`, `integrationSchema` — per-section zod schemas
+
+**Component layer** — React Native components (work in the desktop app via RN renderer;
+can be adapted for web later via react-native-web when that work is prioritised):
+
+- `ConfigScreen` — top-level navigator with tab bar
+- `GeneralTab`, `ProjectsTab`, `GroupingsTab`, `IntegrationsTab`, `SignalsTab`
+- `ProjectDrawer` — expandable per-project editor
+- `FieldRow` — label + control row (text, number, checkbox, select, textarea, color, URL,
+  password, JSON blob)
+- `ConnectionCard` — repeatable integration connection card
+- `SectionHeader` — styled section title
+
+### Web UI retool (deferred, not Phase 4)
+
+The web UI (`apps/web/static/app.js`) is vanilla JS with HTML string templating. It is
+not React. The plan for eventual convergence:
+
+1. The logic layer in `packages/ui` (hooks, schemas) is already usable by any bundled
+   JS, including a future React web app.
+2. When the desktop config UI is solid, replace `apps/web/static/app.js` with a React
+   web app that imports `packages/ui` logic hooks and renders its own HTML views.
+3. If full component sharing is wanted, add `react-native-web` as a dependency of the
+   web app so that the same `packages/ui` components render in the browser.
+
+**Do not** add react-native-web or build a React web app until the desktop UI is proven.
+Keep `apps/web/static/app.js` as the web reference implementation.
+
+## Config File Location
+
+The desktop app stores `config.json` at a user-chosen path, defaulting to the path the
+PHP web server would use (the directory passed to `php -S` or `activity-report.php`).
+
+Resolution order on first launch:
+
+1. `NSUserDefaults` key `TimesheetsConfigDir` (persists across launches once set)
+2. `~/.config/timesheets/config.json` (conventional XDG-style default)
+3. User prompted to locate or create a config file
+
+The native module exposes `getConfigPath()` so the UI can show the active path and
+offer a "Change…" button that triggers a file-picker.
 
 ## Migration Plan
 
-### Phase 0: Freeze the Contract _(not started)_
+### Phase 0: Freeze the Contract _(partially complete)_
 
-Before rewriting anything, treat the current PHP app as the behavior oracle.
+Contracts are captured in `packages/contracts/index.js` (JSDoc typedefs for `Report`,
+`Config`, and all mutation payloads, verified against live PHP output). Golden fixtures
+exist in `packages/test-fixtures/`.
 
-Deliverables:
+Remaining:
 
-- document the current JSON report contract from `renderJson()`
-- document config mutation actions currently exposed in `apps/web/api.php`
-- capture golden fixtures for a handful of real or synthetic days
-- list which behaviors are required for the first desktop release and which can wait
+- [ ] ensure `packages/contracts/` types cover every field the config UI edits
+- [ ] verify fixture shapes against a real `config.json` round-trip
 
-Acceptance criteria:
+### Phase 1: Bootstrap the Desktop Workspace _(complete)_
 
-- one sample day, one multi-day range, one filtered report, and one config round-trip are
-  captured as fixtures in `packages/test-fixtures/`
-- `packages/contracts/` types match the captured fixture shapes exactly
-
-### Phase 1: Bootstrap the Desktop Workspace _(in progress)_
-
-Set up the new JS/TS foundation without removing PHP yet.
-
-Deliverables:
-
-- [x] create the workspace structure under `apps/` and `packages/`
-- [x] initialize package scaffolding for contracts, engine, ui, test-fixtures
-- [ ] wire `workspaces` in root `package.json`
-- [ ] initialize React Native macOS app shell in `apps/desktop/`
-- [ ] define shared `Report`, `DayReport`, `ProjectReport`, `Config`, and mutation payload
-      types in `packages/contracts/`
-- [ ] set up linting, formatting, unit tests, and fixture tests for the new TS packages
-
-Acceptance criteria:
-
-- the desktop shell launches locally on macOS
-- the app can render mocked fixture data without any PHP dependency
+- [x] workspace structure under `apps/` and `packages/`
+- [x] package scaffolding for contracts, engine, ui, test-fixtures
+- [x] workspaces wired in root `package.json`
+- [x] React Native macOS app shell initialised and launching in `apps/desktop/`
+- [x] Metro bundler dev workflow (`npm run desktop:dev`) with pre-warm and log streaming
+- [x] Watchman blockList tuned to avoid inode-overflow recrawl warnings
 
 ### Phase 2: Port the Engine Core _(complete)_
 
-Rewrite the PHP core in TypeScript in the safest order: pure logic first, data adapters
-second.
-
-Port in this order:
-
-1. config load/save/backup logic
-2. date-range resolution
-3. cache key and cache read/write logic
-4. classifiers and aggregation
-5. JSON report generation contract
-6. source loaders
-
-Acceptance criteria:
-
-- fixture-based parity tests pass for classification and JSON output
-- source cache and generated report cache can be read and written by the new engine
+- [x] config load/save/backup logic (`lib/config.js`)
+- [x] date-range resolution (`lib/date-utils.js`)
+- [x] cache key and cache read/write logic (`lib/cache.js`)
+- [x] classifiers and aggregation (`lib/classifiers.js`)
+- [x] JSON report generation (`lib/renderer.js`)
+- [x] source loaders — ActivityWatch, Chrome, Git, GitHub Desktop (`lib/loader-*.js`)
+- [x] 30+ unit tests pass; typecheck clean
 
 ### Phase 3: Native Report UI _(not started)_
 
-Replace the current browser UI with native screens, using the same reporting model.
+Depends on Tier 2 sidecar being in place.
 
-Initial report-view scope:
+**IPC work (do first):**
 
-- report list grouped by day
-- previous/next day navigation and date-range selection
-- project and grouping filters
-- grouped project cards with durations, detail rows, and commits
-- warning banner
-- rebuild action with cache status
-- timeline visualization
+- [ ] `apps/desktop/engine-server.js` — minimal Express server wrapping `packages/engine`
+- [ ] native Objective-C code to launch/kill the sidecar as an `NSTask`
+- [ ] `TimesheetsEngineModule` extended with `startSidecar`, `stopSidecar`, `getSidecarPort`
+- [ ] React Native `EngineClient.ts` — typed fetch wrapper for all Tier 2 endpoints
+
+**UI work:**
+
+- [ ] `ReportScreen` — date navigation, day/range toggle
+- [ ] `DayView` — project cards, grouped display, duration bars
+- [ ] `ProjectCard` — grouping color, duration, activity ratio, commit list, detail rows
+- [ ] `TimelineBar` — SVG-based (react-native-svg) per-day timeline
+- [ ] `WarningBanner` — integration error messages
+- [ ] `RebuildButton` — triggers rebuild, shows cache age
 
 Acceptance criteria:
 
-- a user can do everything in the current report view without opening a browser
-- report rendering works against the local TypeScript engine
+- user can navigate days and view project breakdowns without a browser
+- rebuild flow works end-to-end against the local engine
 
-### Phase 4: Native Config UI _(not started)_
+### Phase 4: Native Config UI _(next)_
 
-Port the config page as a first-class desktop workflow.
+Uses Tier 1 native module only (no sidecar needed).
 
-Required tabs for parity: General, Projects, Groupings, Integrations, Signals.
+**Native module (do first):**
 
-Required behaviors:
+- [ ] `TimesheetsEngineModule.h` / `.mm` — ObjC RCT module with `getConfig`,
+      `saveConfig`, `getConfigPath`
+- [ ] First-launch config path resolution (NSUserDefaults + default + file picker)
+- [ ] Register module in `AppDelegate.mm`
 
-- dirty-state tracking, save and discard
-- add, edit, rename, and delete projects
-- add and remove Slack rules
-- edit groupings, colors, logos, aliases, and time-tracking settings
-- edit integration credentials and metadata
-- reassign signals and ignore projects
+**Shared logic (`packages/ui/src/config/`):**
+
+- [ ] `useConfigDraft.ts` — draft state, dirty flag, discard, field mutation
+- [ ] `useFieldPath.ts` — dotted-path accessor/mutator; array ↔ newline-textarea coercion
+- [ ] `configSchema.ts` — zod schema validating the full `Config` shape before save
+- [ ] `ianaTimezones.ts` — IANA timezone list for the timezone autocomplete
+
+**Components (`packages/ui/src/config/components/`):**
+
+- [ ] `ConfigScreen.tsx` — tab navigator (General / Projects / Groupings / Integrations /
+      Signals), dirty-state header bar, Save / Discard buttons
+- [ ] `GeneralTab.tsx` — Core paths, Chrome profiles auto-detect toggle, Git authors,
+      timing fields, personal hosts/apps
+- [ ] `ProjectsTab.tsx` — project list with grouping badge and signal badges; Add project
+- [ ] `ProjectDrawer.tsx` — per-project editor: name, grouping, repos, VSCode dirs,
+      domains, Slack rules, SSH hosts, apps, Harvest, ClickUp; delete/ignore buttons
+- [ ] `GroupingsTab.tsx` — grouping cards: name, color picker, logo URL, aliases,
+      time-tracking type, Harvest connection
+- [ ] `IntegrationsTab.tsx` — repeatable connection cards for Harvest, ClickUp, GitHub,
+      LLM, Clockify
+- [ ] `SignalsTab.tsx` — unmatched signal reassignment (needs report data; show
+      placeholder when no report loaded yet)
+- [ ] `FieldRow.tsx` — universal label + control: text, number, checkbox, select,
+      textarea (newline-separated arrays), color, URL, password (with show/hide), JSON blob
+- [ ] `ConnectionCard.tsx` — labelled card with Remove button; used by IntegrationsTab
+
+**Desktop app wiring (`apps/desktop/`):**
+
+- [ ] Add `ConfigScreen` to app navigation (button from main placeholder screen)
+- [ ] Hook `getConfig` / `saveConfig` native module calls into `useConfigDraft`
+- [ ] Dirty-state warning on navigate-away (macOS `windowShouldClose:` equivalent)
+
+Acceptance criteria:
+
+- user can open config, edit any field across all five tabs, save, and discard
+- save writes a valid `config.json` that the PHP app can still parse
+- dirty-state is tracked correctly; navigating away with unsaved changes warns
 
 ### Phase 5: Advanced Features _(not started)_
 
-After report and config parity:
+After Phase 3 and 4 are complete:
 
-1. LLM day summary generation
-2. unlogged-time suggestions
-3. GitHub integration activity
-4. GitHub Desktop repo discovery surfaced in-app
+1. **LLM day summaries** — call sidecar `/generate-summary`, display in DayView
+2. **Unlogged-time suggestions** — call sidecar `/suggest-logging`, display in Signals tab
+3. **GitHub integration activity** — surface GitHub PR/commit counts alongside projects
+4. **GitHub Desktop repo discovery** — surface discovered repos in Projects tab
 
 ### Phase 6: Packaging and Cutover _(not started)_
 
-- signed macOS desktop build
-- packaged engine process or embedded runtime
-- migration path for existing `config.json` and `reports/`
-- remove PHP server entrypoints once the native engine has test parity
+- [ ] signed macOS `.app` build (ad-hoc or Developer ID)
+- [ ] bundle Node.js binary for the engine sidecar (`pkg` or `node` framework)
+- [ ] auto-start sidecar on launch, kill on quit
+- [ ] migration guide for existing `config.json` and `reports/` users
+- [ ] remove PHP server entrypoints once the native engine has full test parity
 
-> **Signing note:** When setting up code signing, move `DEVELOPMENT_TEAM` and any
-> provisioning profile settings out of `project.pbxproj` and into a local
-> `apps/desktop/macos/TimesheetsDesktop.xcodeproj/signing.xcconfig` (gitignored).
-> The `.pbxproj` should reference the xcconfig via `#include` so the project file
-> itself stays credential-free and committable.
+> **Signing note:** Move `DEVELOPMENT_TEAM` and provisioning profile settings out of
+> `project.pbxproj` and into a gitignored
+> `apps/desktop/macos/TimesheetsDesktop.xcodeproj/signing.xcconfig`. Reference it from
+> `.pbxproj` via `#include` so the project file stays credential-free.
 
 ## Technology Stack
 
-- **UI Framework**: React Native macOS (react-native-macos)
-- **Language**: TypeScript
-- **Build Tools**: Metro bundler, React Native CLI
-- **State Management**: React hooks; Zustand or Redux Toolkit for app-level state
-- **Forms/Validation**: react-hook-form + zod for config editing
-- **Timelines**: react-native-svg
-- **Testing**: Jest + React Testing Library; fixture-based parity tests
+| Layer        | Choice                                                      | Notes                                         |
+| ------------ | ----------------------------------------------------------- | --------------------------------------------- |
+| UI framework | React Native macOS (react-native-macos 0.81)                | macOS first; Windows later                    |
+| Language     | TypeScript (engine) + JSDoc-annotated JS (engine internals) | strict mode                                   |
+| Build        | Metro bundler + React Native CLI                            | `npm run desktop:dev`                         |
+| Navigation   | React Navigation or built-in tab view                       | TBD in Phase 4                                |
+| Form state   | Custom `useConfigDraft` hook                                | keeps logic in packages/ui, no RHF dependency |
+| Validation   | zod                                                         | `configSchema` in packages/ui                 |
+| Timelines    | react-native-svg                                            | Phase 3                                       |
+| Testing      | Jest + fixture-based parity tests                           | 30+ tests passing                             |
+| IPC tier 1   | ObjC `RCTBridgeModule` native module                        | config file I/O only                          |
+| IPC tier 2   | Node.js child process + local HTTP                          | reports, SQLite, integrations                 |
 
 ## Testing Strategy
 
-The migration must be driven by parity tests, not visual confidence.
-
-Test layers:
-
-- unit tests for classifiers, date math, cache logic, and config mutation helpers
-- fixture tests that compare engine output to known-good report JSON
-- integration tests against sample SQLite and git fixtures where practical
-- UI tests for report navigation, rebuild flow, and config save/discard behavior
-
-Generate golden fixtures from the current PHP implementation **before** deleting it, then
-use those fixtures to prove the TypeScript engine matches behavior exactly.
+- Unit tests for engine logic (classifiers, date math, cache, config mutations)
+- Fixture tests comparing engine output to known-good PHP report JSON
+- Schema validation tests (zod round-trip on golden `config.json`)
+- UI component tests for dirty-state tracking and field mutation logic
+- Manual smoke test: save from desktop → PHP app reads correctly; PHP app saves → desktop reads correctly
 
 ## Risks
 
-### React Native Desktop Is Not the Hard Part
+**React Native Desktop is not the hard part.** The UI is manageable. The expensive
+work is the sidecar IPC and replacing SQLite/shell access. The migration fails if
+scoped as only a frontend rewrite.
 
-The UI rewrite is manageable. The expensive work is replacing local data access and report
-generation. The migration will fail if it is scoped as only a frontend rewrite.
+**Config file location is a UX decision.** The PHP app uses whatever directory the
+server is started from. The desktop app needs a canonical, stable location. Decide
+this before Phase 4 ships so users aren't confused by two different `config.json` files.
 
-### Cross-Platform Desktop Needs a Real Decision
-
-ActivityWatch paths, Chrome paths, GitHub Desktop data locations, shell behavior, and
-packaging differ by OS. **Do not start simultaneous macOS and Windows support** unless
-that requirement is real today. macOS first.
-
-### Config and Cache Churn Can Break Trust
-
-This tool is valuable because it is inspectable and local. Sudden format changes to config
-and cache will make debugging harder and increase migration risk. Prefer compatibility
-first, cleanup second.
+**Node.js sidecar adds packaging complexity.** Bundling Node is non-trivial for a signed
+macOS app. Phase 3 depends on solving this. Evaluate `pkg`, Bun, or shipping a
+`node` framework before starting Phase 3.
 
 ## Definition of Done
 
-The PHP app can be considered replaced when all of the following are true:
+The PHP app can be considered replaced when:
 
 - the desktop app covers report viewing and config editing for normal daily use
-- the TypeScript engine can generate reports without calling PHP
-- config backups and report caches are still reliable
+- the TypeScript engine generates reports without calling PHP
+- config backups and report caches are reliable
 - core classification behavior matches fixture expectations
-- the supported user workflow no longer requires `php -S` or `php activity-report.php`
+- the supported workflow no longer requires `php -S` or `php activity-report.php`
