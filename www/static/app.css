@@ -287,7 +287,7 @@ select {
     align-items: center;
     gap: 0.4rem;
 }
-.date-form .is-hidden {
+.is-hidden {
     display: none;
 }
 .badge {
@@ -484,4 +484,369 @@ select {
 }
 .day-summary-list dd {
     margin: 0.1em 0 0 1.4em;
+}
+
+/* ── Config page ─────────────────────────────────────────────────────────────── */
+body.config-mode #content-wrap,
+body.config-mode #diff-banner,
+body.config-mode #warnings-banner {
+    display: none;
+}
+.config-page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding-bottom: 4rem;
+}
+.config-nav-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #111;
+}
+.config-unsaved-badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 99px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
+.btn--primary {
+    background: #2563eb;
+    color: #fff;
+    border-color: #1d4ed8;
+}
+.btn--primary:hover {
+    background: #1d4ed8;
+}
+.btn--danger {
+    background: #fee2e2;
+    color: #b91c1c;
+    border-color: #fca5a5;
+}
+.btn--danger:hover {
+    background: #fecaca;
+}
+/* Tab bar */
+.config-tabs-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e5e7eb;
+    margin: 1.2rem 0 0;
+}
+.config-tab {
+    padding: 0.45rem 1.1rem;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 0.92rem;
+    color: #555;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+}
+.config-tab:hover {
+    color: #111;
+    background: #f9fafb;
+}
+.config-tab.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    font-weight: 600;
+}
+.config-tab-panel {
+    padding: 1.5rem 0;
+}
+.config-tab-panel.is-hidden {
+    display: none;
+}
+/* Sections inside tabs */
+.config-section {
+    margin-bottom: 2rem;
+}
+.config-section-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #6b7280;
+    margin: 0 0 0.75rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid #f0f0f0;
+}
+/* Field rows */
+.config-field {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 0.3rem 1rem;
+    margin-bottom: 0.85rem;
+    align-items: start;
+}
+.config-label {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #374151;
+    padding-top: 0.32rem;
+    line-height: 1.4;
+}
+.config-input {
+    padding: 0.28rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.88rem;
+    background: #fff;
+    width: 100%;
+    box-sizing: border-box;
+}
+.config-input:focus {
+    outline: 2px solid #93c5fd;
+    border-color: #3b82f6;
+}
+textarea.config-input {
+    min-height: 2.5rem;
+    overflow: hidden;
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    resize: vertical;
+}
+textarea.config-json-field {
+    min-height: 6rem;
+}
+.config-input[type="color"] {
+    padding: 0.15rem 0.25rem;
+    height: 2rem;
+    cursor: pointer;
+}
+.config-input[type="checkbox"] {
+    width: auto;
+    margin-top: 0.4rem;
+}
+.config-help {
+    grid-column: 2;
+    font-size: 0.78rem;
+    color: #9ca3af;
+    margin: 0;
+    line-height: 1.4;
+}
+.config-field-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+/* Sub-form (slack rules, etc.) */
+.config-subform-row {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    margin-bottom: 0.35rem;
+}
+.config-subform-row .config-input {
+    flex: 1;
+}
+/* Projects table */
+.config-projects-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+.config-projects-table th {
+    text-align: left;
+    padding: 0.35rem 0.6rem;
+    border-bottom: 2px solid #e5e7eb;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7280;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.config-projects-table td {
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid #f3f4f6;
+    vertical-align: middle;
+}
+.project-row:hover > td {
+    background: #f9fafb;
+}
+.project-row--ignored {
+    opacity: 0.55;
+}
+.project-drawer > td {
+    padding: 0.75rem 1rem;
+    background: #f8fafc;
+    border-bottom: 2px solid #e5e7eb;
+}
+.project-drawer-inner {
+    max-width: 760px;
+}
+.project-drawer-inner .config-field {
+    grid-template-columns: 160px 1fr;
+}
+/* Signal badges */
+.signal-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+.signal-badge {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: #e5e7eb;
+    color: #374151;
+    letter-spacing: 0.03em;
+}
+.signal-badge--vs {
+    background: #dbeafe;
+    color: #1e40af;
+}
+.signal-badge--dom {
+    background: #dcfce7;
+    color: #14532d;
+}
+.signal-badge--git {
+    background: #fef3c7;
+    color: #78350f;
+}
+.signal-badge--slk {
+    background: #f3e8ff;
+    color: #6b21a8;
+}
+.signal-badge--ssh {
+    background: #ffedd5;
+    color: #7c2d12;
+}
+.signal-badge--app {
+    background: #e0f2fe;
+    color: #075985;
+}
+.signal-badge--h {
+    background: #ecfdf5;
+    color: #065f46;
+}
+.signal-badge--cu {
+    background: #fdf4ff;
+    color: #701a75;
+}
+/* Grouping pill */
+.grouping-badge {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 99px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+/* Integration cards */
+.integration-section {
+    margin-bottom: 2rem;
+}
+.integration-section-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.6rem;
+    color: #111;
+}
+.integration-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.75rem;
+    background: #fff;
+}
+.integration-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+.integration-card-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #374151;
+}
+.integration-card .config-field {
+    grid-template-columns: 130px 1fr;
+}
+.pw-wrap {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+.pw-wrap .config-input {
+    flex: 1;
+}
+/* Grouping cards */
+.grouping-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.75rem;
+    background: #fff;
+}
+.grouping-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.6rem;
+}
+.grouping-card .config-field {
+    grid-template-columns: 150px 1fr;
+}
+/* Toast notifications */
+.config-toast {
+    position: fixed;
+    bottom: 4rem;
+    right: 1.5rem;
+    padding: 0.6rem 1rem;
+    border-radius: 6px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    z-index: 200;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+    animation: toast-in 0.2s ease;
+}
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.config-toast--success {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    color: #15803d;
+}
+.config-toast--error {
+    background: #fef2f2;
+    border: 1px solid #fca5a5;
+    color: #b91c1c;
+}
+/* Inline confirm delete */
+.inline-confirm {
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+.config-soft-note {
+    font-size: 0.8rem;
+    color: #9ca3af;
+    margin: 0.25rem 0 0;
+    font-style: italic;
+}
+.config-add-btn {
+    margin-top: 0.5rem;
+}
+.harvest-conn-field {
+    display: none;
+}
+.harvest-conn-field.visible {
+    display: grid;
 }
