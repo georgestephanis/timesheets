@@ -61,7 +61,7 @@ npm install
 composer serve
 ```
 
-Then open [http://localhost:8000](http://localhost:8000). The UI loads today's activity, lets you page through previous days, rebuild stale data, and cross-reference what you've logged in Harvest for each day.
+The server picks the first free port starting at 8000, prints the URL, and opens it in your default browser. The UI loads today's activity, lets you page through previous days, rebuild stale data, and cross-reference what you've logged in Harvest for each day.
 
 ### Recommended cron job
 
@@ -337,7 +337,7 @@ chmod +x activity-report.php
 composer serve
 ```
 
-The web UI is a single-page app that fetches JSON from `apps/web/api.php` and renders it client-side. Features:
+`composer serve` finds the first available port starting at 8000, echoes the URL, and opens it in your default browser automatically. The web UI is a single-page app that fetches JSON from `apps/web/api.php` and renders it client-side. Features:
 
 - **Navigation** — page through days or date ranges; jump to any date with the date picker; `←`/`→` keyboard shortcuts for Prev/Next
 - **Project filter** — filter to a single project or group; filtering is client-side (no re-fetch)
@@ -363,6 +363,7 @@ All tools live in `tools/` and write a timestamped backup to `reports/config/` b
 
 | Tool                               | What it does                                                                                    |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `serve.php`                        | Called by `composer serve`; finds a free port (8000–8999) and opens the browser automatically   |
 | `list-github-desktop-repos.php`    | Lists repos from GitHub Desktop; `--apply` adds unconfigured ones to `config.json`              |
 | `sync-integration-projects.php`    | Pulls Harvest/ClickUp project catalogs and creates `harvest_projects`/`clickup_tasks` mappings  |
 | `set-integration-groupings.php`    | Assigns `grouping` to projects based on `groupings_map` rules in `config.json`                  |
@@ -408,12 +409,12 @@ tail -20 reports/app.jsonl | jq .
 ### Running the app
 
 ```bash
-composer serve                              # PHP web UI at http://localhost:8000
+composer serve                              # PHP web UI — picks a free port starting at 8000, opens browser
 composer report                             # PHP CLI (no args = backfill last 7 days)
 composer report -- --days 3                 # pass flags after --
 composer report -- --from 2026-05-08        # explicit date
-npm run desktop:start                       # React Native metro bundler
-npm run desktop:macos                       # build and run macOS desktop app
+npm run desktop:start                       # React Native metro bundler (Phase 1 — not yet runnable; see NATIVE.md)
+npm run desktop:macos                       # build and run macOS desktop app (Phase 1 — not yet runnable; see NATIVE.md)
 ```
 
 ### Linting and static analysis
@@ -481,6 +482,7 @@ src/
     github.php            — CLI-only; githubFetchCommits/PullRequests/Issues/Comments
     llm.php               — llmSuggestAssignments(), llmDailySummary()
 tools/
+  serve.php                 — used by `composer serve`; finds free port, opens browser
   list-github-desktop-repos.php
   sync-integration-projects.php
   cleanup-integration-projects.php

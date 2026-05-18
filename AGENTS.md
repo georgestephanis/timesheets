@@ -87,6 +87,8 @@ src/
                                    renderJson(bucket, unmatched, from, to, tz, warnings=[], timeline=[]),
                                    renderTsv()
 tools/
+  serve.php                      — invoked by `composer serve`; finds the first free port in 8000–8999,
+                                   echoes the URL, opens it in the default browser, then execs the PHP server
   list-github-desktop-repos.php  — lists GitHub Desktop repos sorted by last commit;
                                    --apply adds unconfigured ones to config.json with backup
   sync-integration-projects.php  — pulls Harvest/ClickUp catalogs → harvest_projects/clickup_tasks mappings
@@ -408,7 +410,7 @@ No args               Backfill prior 7 completed days (skips days already curren
 
 ## Web UI
 
-Served by `php -S localhost:8000 apps/web/index.php`. `apps/web/index.php` routes all requests to `apps/web/report_renderer.php`.
+Served by `composer serve` (`tools/serve.php` finds the first free port in 8000–8999, opens the browser, then execs `php -S localhost:<port> apps/web/index.php`). `apps/web/index.php` routes all requests to `apps/web/report_renderer.php`.
 
 - **HTML requests** (`?format=html`, the default): `report_renderer.php` returns a static HTML shell with an inline `SITE` config object and `<link>`/`<script>` tags pointing to `apps/web/static/app.css` and `apps/web/static/app.js`. Data is fetched async from `api.php`.
 - **Non-HTML requests** (`?format=json|md|tsv`): the full PHP pipeline runs server-side and streams the result directly.
@@ -550,7 +552,7 @@ The long-term goal is a common data layer shared by all UIs: PHP CLI, PHP web, a
 | `packages/engine/`        | `@timesheets/engine`        | Stub   | TypeScript engine — same `config.json` + `reports/` layout as PHP; placeholder implementations of `generateReport`, `loadSourcesForRange`, `classifyAndAggregate`, `saveConfigWithBackup` |
 | `packages/ui/`            | `@timesheets/ui`            | Stub   | React Native macOS UI; exports `TimesheetsApp` with day navigation and mocked data; `peerDependencies` on `react` and `react-native-macos`                                                |
 | `packages/test-fixtures/` | `@timesheets/test-fixtures` | Empty  | Will hold golden report JSON and config fixtures for PHP–TypeScript parity tests (Phase 0 capture)                                                                                        |
-| `apps/desktop/`           | `@timesheets/desktop`       | Shell  | React Native macOS app scaffold; not yet runnable (React Native project not yet initialized)                                                                                              |
+| `apps/desktop/`           | `@timesheets/desktop`       | Shell  | React Native macOS app scaffold — `package.json` + deps declared, but no React Native project initialized yet; `npm run desktop:macos` will not work until Phase 1 init is complete       |
 
 ### Guiding constraints for all UI work
 
