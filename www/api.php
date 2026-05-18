@@ -254,9 +254,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['error' => 'paths.activitywatch and paths.chrome are required']);
                 exit(1);
             }
+            if (!is_string($newConfig['timezone']) || $newConfig['timezone'] === '') {
+                http_response_code(400);
+                echo json_encode(['error' => 'timezone must be a non-empty string']);
+                exit(1);
+            }
+            if (!is_array($newConfig['git_authors']) || count($newConfig['git_authors']) === 0) {
+                http_response_code(400);
+                echo json_encode(['error' => 'git_authors must contain at least one entry']);
+                exit(1);
+            }
             if (!is_array($newConfig['projects'])) {
                 http_response_code(400);
                 echo json_encode(['error' => 'projects must be an object']);
+                exit(1);
+            }
+            $chromePr = $newConfig['paths']['chrome_profiles'] ?? null;
+            if ($chromePr !== null && (!is_array($chromePr) || count($chromePr) === 0)) {
+                http_response_code(400);
+                echo json_encode(['error' => 'paths.chrome_profiles must be null (auto-detect) or a non-empty array']);
                 exit(1);
             }
             // Validate that the data paths exist on this server.
