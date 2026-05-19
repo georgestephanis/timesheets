@@ -147,6 +147,81 @@ chmod 600 config.json   # owner read/write only
 
 ---
 
+## Desktop app: engine not starting / "Engine not configured"
+
+**Symptom:** The desktop app shows "Engine not configured" and no reports load.
+
+**Cause:** The app cannot find `engine-server.js`. This path is saved in macOS UserDefaults on
+first setup.
+
+**Fix:**
+
+1. Click **Set Up Engine…** on the Home screen and navigate to
+   `apps/desktop/engine-server.js` inside your timesheets repo.
+2. If the button is absent (app shows "Engine error" instead), see the engine error section below.
+
+---
+
+## Desktop app: engine error / sidecar crash
+
+**Symptom:** Home screen shows "Engine error: …" in red, or the app spins on "Starting engine…"
+indefinitely.
+
+**Cause:** The Node.js sidecar process (`engine-server.js`) failed to start or crashed.
+
+**Fix:**
+
+1. Make sure Node.js is installed: `node --version` should print v18 or later.
+2. Install workspace dependencies from the repo root:
+    ```bash
+    npm install
+    ```
+3. Test the sidecar directly:
+    ```bash
+    node apps/desktop/engine-server.js
+    ```
+    It should print `PORT:<n>` within a few seconds. Any error printed here is the root cause.
+4. If the error mentions a missing module, re-run `npm install` from the repo root to relink
+   workspace packages.
+5. After fixing, relaunch the desktop app — `SidecarProvider` will attempt to start the engine
+   automatically on mount.
+
+---
+
+## Desktop app: reports show no activity / empty days
+
+**Symptom:** The Reports screen loads but shows no projects or all-zero time.
+
+**Cause:** ActivityWatch is not running, the config has no projects, or the engine cannot read the
+local data paths.
+
+**Fix:**
+
+1. Make sure ActivityWatch is running (check Activity Monitor for `aw-server`).
+2. Open the Config screen → General tab and verify that the ActivityWatch and Chrome paths match
+   your local installation.
+3. Tap **↺ Rebuild** on the Reports screen to bypass any stale cache and re-fetch from source.
+4. Check the Signals tab in Config — if many signals appear as "unmatched", your project rules
+   may not cover the active windows/domains.
+
+---
+
+## Desktop app: LLM summary / suggestions not working
+
+**Symptom:** "Generate Summary" button does nothing, or the Signals tab shows no LLM suggestions.
+
+**Cause:** No LLM integration is configured, or the configured endpoint is unreachable.
+
+**Fix:**
+
+1. Open Config → Integrations and verify that an LLM connection is present with the correct
+   `base_url` and `api_key`.
+2. Test the endpoint from the terminal (see the **LLM / `--suggest`: endpoint unreachable**
+   section above).
+3. If using Ollama, ensure it is running: `ollama serve`
+
+---
+
 ## Web UI: blank page or "Failed to fetch"
 
 **Symptom:** Opening `http://localhost:8000` shows a blank report area or an error banner.

@@ -413,8 +413,8 @@ composer serve                              # PHP web UI — picks a free port s
 composer report                             # PHP CLI (no args = backfill last 7 days)
 composer report -- --days 3                 # pass flags after --
 composer report -- --from 2026-05-08        # explicit date
-npm run desktop:start                       # React Native metro bundler (Phase 1 — not yet runnable; see NATIVE.md)
-npm run desktop:macos                       # build and run macOS desktop app (Phase 1 — not yet runnable; see NATIVE.md)
+npm run desktop:start                       # React Native metro bundler
+npm run desktop:macos                       # build and run macOS desktop app
 ```
 
 ### Linting and static analysis
@@ -458,7 +458,7 @@ apps/
     static/
       app.css             — all styles
       app.js              — client-side renderer, admin panel, timeline, day summary
-  desktop/                — @timesheets/desktop: React Native macOS app shell (Phase 1 scaffolding)
+  desktop/                — @timesheets/desktop: React Native macOS app (Phase 5; fully functional)
 src/
   config.php              — saveConfigWithBackup(), applySignalToProject(), parseSlackSignal()
   helpers.php             — expandPath(), fmtDur(), appLog(), warning()

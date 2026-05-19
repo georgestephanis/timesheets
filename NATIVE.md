@@ -365,7 +365,7 @@ After Phase 3 and 4 are complete:
 
 - [ ] signed macOS `.app` build (ad-hoc or Developer ID)
 - [ ] bundle Node.js binary for the engine sidecar (`pkg` or `node` framework)
-- [ ] auto-start sidecar on launch, kill on quit
+- [x] auto-start sidecar on launch, kill on quit
 - [ ] migration guide for existing `config.json` and `reports/` users
 - [ ] remove PHP server entrypoints once the native engine has full test parity
 

@@ -44,7 +44,7 @@ apps/
     static/
       app.css                    — all styles
       app.js                     — client-side report renderer, admin panel, nav
-  desktop/                       — @timesheets/desktop: React Native macOS app shell (Phase 1 scaffolding)
+  desktop/                       — @timesheets/desktop: React Native macOS app (Phase 5; fully functional)
 src/
   cli.php                        — main(), parseArgs(), printHelp(), printProjects(),
                                    resolveDateRange(), generateReport(),
@@ -98,8 +98,17 @@ tools/
   ensure-github-integration.php  — adds default integrations.github entry (gh-auth) if absent
 packages/                        — TypeScript workspace; shared data layer for non-PHP surfaces (see NATIVE.md)
   contracts/                     — @timesheets/contracts: JS type definitions mirroring PHP JSON output + config schema
-  engine/                        — @timesheets/engine: TypeScript engine (same config.json + reports/ layout as PHP)
+  engine/                        — @timesheets/engine: Node.js engine (generateReport, saveConfig, reassignSignal,
+                                   generateSummary, suggestAssignments, discoverRepos); same config.json + reports/ layout as PHP
+  engine/index.js                — engine entry point; all methods exported
+  engine/engine-server.js        — HTTP sidecar wrapper (symlink from apps/desktop/engine-server.js)
   ui/                            — @timesheets/ui: React Native macOS components (peerDep)
+  ui/src/SidecarContext.tsx      — SidecarProvider (auto-start on mount) + useSidecar() hook
+  ui/src/config/ConfigScreen.tsx — tabbed config editor (General, Projects, Signals, Integrations)
+  ui/src/config/tabs/SignalsTab.tsx — unmatched signal assignment with LLM suggestions
+  ui/src/config/tabs/ProjectsTab.tsx — project list with GitHub Desktop repo discovery
+  ui/src/report/ReportScreen.tsx — day navigation, project activity, commits, LLM summary
+  ui/src/report/EngineClient.ts  — fetch-based IPC client for all engine-server endpoints
   test-fixtures/                 — @timesheets/test-fixtures: golden fixtures for PHP–TypeScript parity tests
 config.json                      — local config, gitignored, never committed
 config.example.json              — safe-to-commit template with dummy data
@@ -534,7 +543,7 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 
 ## Multi-UI architecture and native desktop migration
 
-The long-term goal is a common data layer shared by all UIs: PHP CLI, PHP web, and native desktop. The TypeScript engine (`packages/engine/`) is the shared foundation for non-PHP surfaces. See `NATIVE.md` for the full migration plan; current state is **Phase 1: workspace scaffolded**.
+The long-term goal is a common data layer shared by all UIs: PHP CLI, PHP web, and native desktop. The TypeScript engine (`packages/engine/`) is the shared foundation for non-PHP surfaces. See `NATIVE.md` for the full migration plan; current state is **Phase 5: fully functional desktop app**.
 
 ### Shared data contract (all UIs must respect this)
 
@@ -546,13 +555,13 @@ The long-term goal is a common data layer shared by all UIs: PHP CLI, PHP web, a
 
 ### What exists in `packages/`
 
-| Package                   | npm name                    | Status | Purpose                                                                                                                                                                                   |
-| ------------------------- | --------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/contracts/`     | `@timesheets/contracts`     | Active | JS type definitions mirroring the PHP JSON output shape and config schema (`Report`, `Config`, `ProjectConfig`, all connection types, IPC payload types)                                  |
-| `packages/engine/`        | `@timesheets/engine`        | Stub   | TypeScript engine — same `config.json` + `reports/` layout as PHP; placeholder implementations of `generateReport`, `loadSourcesForRange`, `classifyAndAggregate`, `saveConfigWithBackup` |
-| `packages/ui/`            | `@timesheets/ui`            | Stub   | React Native macOS UI; exports `TimesheetsApp` with day navigation and mocked data; `peerDependencies` on `react` and `react-native-macos`                                                |
-| `packages/test-fixtures/` | `@timesheets/test-fixtures` | Empty  | Will hold golden report JSON and config fixtures for PHP–TypeScript parity tests (Phase 0 capture)                                                                                        |
-| `apps/desktop/`           | `@timesheets/desktop`       | Shell  | React Native macOS app scaffold — `package.json` + deps declared, but no React Native project initialized yet; `npm run desktop:macos` will not work until Phase 1 init is complete       |
+| Package                   | npm name                    | Status | Purpose                                                                                                                                                                                                   |
+| ------------------------- | --------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contracts/`     | `@timesheets/contracts`     | Active | JS type definitions mirroring the PHP JSON output shape and config schema (`Report`, `Config`, `ProjectConfig`, all connection types, IPC payload types)                                                  |
+| `packages/engine/`        | `@timesheets/engine`        | Active | Node.js engine — reads ActivityWatch, Chrome, Git, integrations; writes `reports/`; implements `generateReport`, `saveConfig`, `reassignSignal`, `generateSummary`, `suggestAssignments`, `discoverRepos` |
+| `packages/ui/`            | `@timesheets/ui`            | Active | React Native macOS UI; exports `ConfigScreen`, `ReportScreen`, `SidecarProvider`, `useSidecar`; `peerDependencies` on `react` and `react-native-macos`                                                    |
+| `packages/test-fixtures/` | `@timesheets/test-fixtures` | Empty  | Will hold golden report JSON and config fixtures for PHP–TypeScript parity tests (Phase 0 capture)                                                                                                        |
+| `apps/desktop/`           | `@timesheets/desktop`       | Active | React Native macOS app (Phase 5); Home + Reports + Config screens; sidecar auto-starts via `SidecarProvider` on app mount                                                                                 |
 
 ### Guiding constraints for all UI work
 
