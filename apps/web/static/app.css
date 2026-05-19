@@ -1,3 +1,10 @@
+:root {
+    --ts-ink: #16130f;
+    --ts-paper: #f6f2ea;
+    --ts-amber: #f6b84a;
+    --ts-terracotta: #c25e2a;
+}
+
 body {
     font-family: system-ui, sans-serif;
     max-width: 1160px;
@@ -223,8 +230,8 @@ em {
 nav {
     position: sticky;
     top: 0;
-    background: #fff;
-    border-bottom: 1px solid #ddd;
+    background: var(--ts-ink);
+    border-bottom: 1px solid #333;
     padding: 0.5rem 0;
     display: flex;
     flex-wrap: wrap;
@@ -232,38 +239,40 @@ nav {
     align-items: center;
     z-index: 10;
     min-height: 2.2rem;
+    color: var(--ts-paper);
 }
 .btn {
     display: inline-block;
     padding: 0.25rem 0.6rem;
-    border: 1px solid #bbb;
+    border: 1px solid rgba(246, 242, 234, 0.35);
     border-radius: 4px;
     text-decoration: none;
-    color: inherit;
+    color: var(--ts-paper);
     font-size: 0.85rem;
-    background: #f8f8f8;
+    background: rgba(246, 242, 234, 0.1);
     white-space: nowrap;
     cursor: pointer;
 }
 .btn:hover {
-    background: #e8e8e8;
+    background: rgba(246, 242, 234, 0.2);
 }
 .btn.disabled,
 .btn:disabled {
-    color: #aaa;
-    border-color: #ddd;
+    color: rgba(246, 242, 234, 0.35);
+    border-color: rgba(246, 242, 234, 0.15);
     pointer-events: none;
     cursor: default;
 }
 .sep {
-    color: #ccc;
+    color: rgba(246, 242, 234, 0.4);
 }
 select {
     padding: 0.25rem 0.4rem;
-    border: 1px solid #bbb;
+    border: 1px solid rgba(246, 242, 234, 0.35);
     border-radius: 4px;
     font-size: 0.85rem;
-    background: #f8f8f8;
+    background: rgba(246, 242, 234, 0.1);
+    color: var(--ts-paper);
 }
 .date-form {
     display: inline-flex;
@@ -513,12 +522,12 @@ body.config-mode #warnings-banner {
     border: 1px solid #fcd34d;
 }
 .btn--primary {
-    background: #2563eb;
-    color: #fff;
-    border-color: #1d4ed8;
+    background: var(--ts-terracotta);
+    color: var(--ts-paper);
+    border-color: #a84e24;
 }
 .btn--primary:hover {
-    background: #1d4ed8;
+    background: #a84e24;
 }
 .btn--danger {
     background: #fee2e2;
@@ -551,8 +560,8 @@ body.config-mode #warnings-banner {
     background: #f9fafb;
 }
 .config-tab.active {
-    color: #2563eb;
-    border-bottom-color: #2563eb;
+    color: var(--ts-terracotta);
+    border-bottom-color: var(--ts-terracotta);
     font-weight: 600;
 }
 .config-tab-panel {

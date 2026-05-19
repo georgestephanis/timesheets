@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import type { ProjectReport } from "./EngineClient";
+import { Brand } from "../brand";
 
 type Props = {
     name: string;
@@ -128,7 +129,7 @@ const styles = StyleSheet.create({
     duration: {
         fontSize: 14,
         fontWeight: "600",
-        color: "#007AFF",
+        color: Brand.terracotta,
         marginLeft: 8,
         flexShrink: 0,
     },

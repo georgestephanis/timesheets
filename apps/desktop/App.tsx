@@ -1,18 +1,17 @@
 import React, {useState} from 'react';
-import {
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  Pressable,
-  View,
-  useColorScheme,
-} from 'react-native';
+import {SafeAreaView, StyleSheet, Text, Pressable, View} from 'react-native';
 import {ConfigScreen, ReportScreen} from '@timesheets/ui';
+
+const Brand = {
+  ink: '#16130F',
+  paper: '#F6F2EA',
+  amber: '#F6B84A',
+  terracotta: '#C25E2A',
+} as const;
 
 type Screen = 'home' | 'config' | 'reports';
 
 function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
   const [screen, setScreen] = useState<Screen>('home');
 
   if (screen === 'config') {
@@ -44,16 +43,10 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <SafeAreaView
-      style={[
-        styles.container,
-        {backgroundColor: isDarkMode ? '#1a1a1a' : '#f5f5f5'},
-      ]}>
+    <SafeAreaView style={[styles.container, {backgroundColor: Brand.ink}]}>
       <View style={styles.content}>
-        <Text style={[styles.title, {color: isDarkMode ? '#fff' : '#000'}]}>
-          Timesheets
-        </Text>
-        <Text style={[styles.subtitle, {color: isDarkMode ? '#aaa' : '#666'}]}>
+        <Text style={[styles.title, {color: Brand.paper}]}>Timesheets</Text>
+        <Text style={[styles.subtitle, {color: Brand.amber}]}>
           Desktop app is running.
         </Text>
         <View style={styles.buttons}>
@@ -83,8 +76,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#d0d0d0',
-    backgroundColor: '#f5f5f5',
+    borderBottomColor: '#333',
+    backgroundColor: Brand.ink,
   },
   backBtn: {
     paddingHorizontal: 4,
@@ -92,14 +85,14 @@ const styles = StyleSheet.create({
   },
   backBtnText: {
     fontSize: 13,
-    color: '#007AFF',
+    color: Brand.paper,
   },
   navTitle: {
     flex: 1,
     textAlign: 'center',
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: Brand.paper,
   },
   navSpacer: {
     width: 60,
@@ -125,26 +118,26 @@ const styles = StyleSheet.create({
   primaryBtn: {
     paddingVertical: 10,
     paddingHorizontal: 24,
-    backgroundColor: '#007AFF',
+    backgroundColor: Brand.terracotta,
     borderRadius: 8,
     alignItems: 'center',
   },
   primaryBtnText: {
     fontSize: 14,
-    color: '#fff',
+    color: Brand.paper,
     fontWeight: '600',
   },
   secondaryBtn: {
     paddingVertical: 10,
     paddingHorizontal: 24,
     borderWidth: 1,
-    borderColor: '#007AFF',
+    borderColor: Brand.paper,
     borderRadius: 8,
     alignItems: 'center',
   },
   secondaryBtnText: {
     fontSize: 14,
-    color: '#007AFF',
+    color: Brand.paper,
   },
 });
 

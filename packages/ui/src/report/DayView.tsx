@@ -3,6 +3,7 @@ import { ScrollView, View, Text, StyleSheet } from "react-native";
 import { ProjectCard } from "./ProjectCard";
 import { TimelineView } from "./TimelineView";
 import type { Report } from "./EngineClient";
+import { Brand } from "../brand";
 
 type Props = {
     date: string;
@@ -53,7 +54,7 @@ export function DayView({ date, report }: Props) {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1 },
+    container: { flex: 1, backgroundColor: Brand.paper },
     empty: {
         flex: 1,
         alignItems: "center",
@@ -77,10 +78,10 @@ const styles = StyleSheet.create({
         marginHorizontal: 12,
         marginBottom: 8,
         padding: 10,
-        backgroundColor: "#f0f8ff",
+        backgroundColor: "#FEF4E8",
         borderRadius: 6,
         borderLeftWidth: 3,
-        borderLeftColor: "#007AFF",
+        borderLeftColor: Brand.terracotta,
     },
     aiSummaryText: {
         fontSize: 12,

@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import type { TimelineSegment } from "./EngineClient";
+import { Brand } from "../brand";
 
 type Props = {
     segments: TimelineSegment[];
@@ -9,7 +10,7 @@ type Props = {
 
 function segColor(seg: TimelineSegment, groupingColors?: Record<string, string>): string {
     if (seg.g && groupingColors?.[seg.g]) return groupingColors[seg.g];
-    return "#007AFF";
+    return Brand.terracotta;
 }
 
 export function TimelineView({ segments, groupingColors }: Props) {

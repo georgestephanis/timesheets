@@ -20,14 +20,14 @@ const styles = StyleSheet.create({
     container: {
         margin: 12,
         padding: 10,
-        backgroundColor: "#fff8e1",
+        backgroundColor: "#FEF9EE",
         borderWidth: 1,
-        borderColor: "#f5c518",
+        borderColor: "#F6B84A",
         borderRadius: 6,
     },
     text: {
         fontSize: 12,
-        color: "#7a5000",
+        color: "#7a4800",
         lineHeight: 18,
     },
 });

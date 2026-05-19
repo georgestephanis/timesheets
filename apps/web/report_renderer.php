@@ -56,6 +56,12 @@ if ($format === 'html') {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Activity Report</title>
 <link rel="stylesheet" href="static/app.css">
+<link rel="icon" type="image/png" sizes="32x32" href="static/favicon/favicon-dark-32.png" media="(prefers-color-scheme: light)">
+<link rel="icon" type="image/png" sizes="16x16" href="static/favicon/favicon-dark-16.png" media="(prefers-color-scheme: light)">
+<link rel="apple-touch-icon" href="static/favicon/favicon-dark-180.png" media="(prefers-color-scheme: light)">
+<link rel="icon" type="image/png" sizes="32x32" href="static/favicon/favicon-light-32.png" media="(prefers-color-scheme: dark)">
+<link rel="icon" type="image/png" sizes="16x16" href="static/favicon/favicon-light-16.png" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="static/favicon/favicon-light-180.png" media="(prefers-color-scheme: dark)">
 </head>
 <body>
 <nav id="nav"></nav>

@@ -1,3 +1,6 @@
+// Brand
+export { Brand } from "./brand";
+
 // Config UI
 export { ConfigScreen } from "./config/ConfigScreen";
 export { useConfigDraft } from "./config/useConfigDraft";

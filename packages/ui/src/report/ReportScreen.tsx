@@ -5,6 +5,7 @@ import { EngineClient } from "./EngineClient";
 import type { Report } from "./EngineClient";
 import { DayView } from "./DayView";
 import { WarningBanner } from "./WarningBanner";
+import { Brand } from "../brand";
 
 type SidecarState = "idle" | "starting" | "running" | "no-script" | "error";
 
@@ -217,7 +218,7 @@ export function ReportScreen() {
 }
 
 const styles = StyleSheet.create({
-    root: { flex: 1, backgroundColor: "#f5f5f5" },
+    root: { flex: 1, backgroundColor: Brand.paper },
     center: {
         flex: 1,
         alignItems: "center",
@@ -233,45 +234,45 @@ const styles = StyleSheet.create({
     primaryBtn: {
         paddingVertical: 9,
         paddingHorizontal: 16,
-        backgroundColor: "#007AFF",
+        backgroundColor: Brand.terracotta,
         borderRadius: 6,
     },
-    primaryBtnText: { fontSize: 13, color: "#fff", fontWeight: "600" },
+    primaryBtnText: { fontSize: 13, color: Brand.paper, fontWeight: "600" },
     navBar: {
         flexDirection: "row",
         alignItems: "center",
         paddingHorizontal: 8,
         paddingVertical: 8,
-        backgroundColor: "#fff",
+        backgroundColor: Brand.ink,
         borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: "#d0d0d0",
+        borderBottomColor: "#333",
     },
     navBtn: { padding: 8 },
     navBtnDisabled: { opacity: 0.3 },
-    navBtnText: { fontSize: 24, color: "#007AFF", lineHeight: 28 },
-    navBtnTextDisabled: { color: "#aaa" },
+    navBtnText: { fontSize: 24, color: Brand.paper, lineHeight: 28 },
+    navBtnTextDisabled: { color: "#888" },
     navCenter: {
         flex: 1,
         alignItems: "center",
         gap: 2,
     },
-    dateLabel: { fontSize: 15, fontWeight: "600", color: "#222" },
-    todayLink: { fontSize: 11, color: "#007AFF" },
+    dateLabel: { fontSize: 15, fontWeight: "600", color: Brand.paper },
+    todayLink: { fontSize: 11, color: Brand.amber },
     toolbar: {
         flexDirection: "row",
         paddingHorizontal: 12,
         paddingVertical: 6,
-        backgroundColor: "#fff",
+        backgroundColor: Brand.paper,
         borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: "#e0e0e0",
+        borderBottomColor: "#d8d0c4",
     },
     rebuildBtn: {
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderWidth: 1,
-        borderColor: "#007AFF",
+        borderColor: Brand.terracotta,
         borderRadius: 4,
     },
     btnDisabled: { opacity: 0.4 },
-    rebuildBtnText: { fontSize: 12, color: "#007AFF" },
+    rebuildBtnText: { fontSize: 12, color: Brand.terracotta },
 });
