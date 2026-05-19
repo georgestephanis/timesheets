@@ -1,7 +1,16 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Switch, Pressable, StyleSheet } from "react-native";
 
-export type FieldType = "text" | "number" | "checkbox" | "textarea" | "password" | "segment" | "url" | "color";
+export type FieldType =
+    | "text"
+    | "number"
+    | "checkbox"
+    | "textarea"
+    | "password"
+    | "segment"
+    | "url"
+    | "color"
+    | "select";
 
 const PRESET_COLORS = [
     "#C25E2A",
@@ -43,6 +52,7 @@ type Props = {
 export function FieldRow({ label, value, onChange, type = "text", options, placeholder, hint }: Props) {
     const [showPassword, setShowPassword] = useState(false);
     const [showPalette, setShowPalette] = useState(false);
+    const [showSelect, setShowSelect] = useState(false);
 
     const renderControl = () => {
         switch (type) {
@@ -112,6 +122,51 @@ export function FieldRow({ label, value, onChange, type = "text", options, place
                         placeholderTextColor="#aaa"
                     />
                 );
+
+            case "select": {
+                const opts = options ?? [];
+                const displayValue = value != null && value !== "" ? String(value) : null;
+                return (
+                    <View>
+                        <Pressable
+                            style={[styles.selectBox, showSelect && styles.selectBoxOpen]}
+                            onPress={() => setShowSelect((v) => !v)}
+                        >
+                            <Text style={[styles.selectValue, !displayValue && styles.selectPlaceholder]}>
+                                {displayValue ?? placeholder ?? "Select…"}
+                            </Text>
+                            <Text style={styles.selectChevron}>{showSelect ? "▴" : "▾"}</Text>
+                        </Pressable>
+                        {showSelect && (
+                            <View style={styles.selectList}>
+                                {opts.length === 0 ? (
+                                    <Text style={styles.selectEmpty}>No options configured</Text>
+                                ) : (
+                                    opts.map((opt) => (
+                                        <Pressable
+                                            key={opt}
+                                            style={[styles.selectOption, value === opt && styles.selectOptionActive]}
+                                            onPress={() => {
+                                                onChange(opt);
+                                                setShowSelect(false);
+                                            }}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.selectOptionText,
+                                                    value === opt && styles.selectOptionTextActive,
+                                                ]}
+                                            >
+                                                {opt}
+                                            </Text>
+                                        </Pressable>
+                                    ))
+                                )}
+                            </View>
+                        )}
+                    </View>
+                );
+            }
 
             case "color": {
                 const hexStr = String(value ?? "");
@@ -283,6 +338,64 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: "#888",
         marginTop: 2,
+    },
+    selectBox: {
+        flexDirection: "row",
+        alignItems: "center",
+        borderWidth: 1,
+        borderColor: "#ccc",
+        borderRadius: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 5,
+        backgroundColor: "#fff",
+        minHeight: 28,
+    },
+    selectBoxOpen: {
+        borderColor: "#888",
+    },
+    selectValue: {
+        flex: 1,
+        fontSize: 13,
+        color: "#111",
+    },
+    selectPlaceholder: {
+        color: "#aaa",
+    },
+    selectChevron: {
+        fontSize: 10,
+        color: "#888",
+        marginLeft: 4,
+    },
+    selectList: {
+        marginTop: 2,
+        borderWidth: 1,
+        borderColor: "#ccc",
+        borderRadius: 4,
+        backgroundColor: "#fff",
+        overflow: "hidden",
+    },
+    selectOption: {
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: "#eee",
+    },
+    selectOptionActive: {
+        backgroundColor: "#f0f0f0",
+    },
+    selectOptionText: {
+        fontSize: 13,
+        color: "#111",
+    },
+    selectOptionTextActive: {
+        fontWeight: "600",
+    },
+    selectEmpty: {
+        paddingHorizontal: 10,
+        paddingVertical: 7,
+        fontSize: 12,
+        color: "#aaa",
+        fontStyle: "italic",
     },
     colorRow: {
         flexDirection: "row",

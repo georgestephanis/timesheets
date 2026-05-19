@@ -26,6 +26,8 @@ function GroupingCard({ name, draft, setField, onRemove }: GroupingCardProps) {
     const timeTracking = useFieldPath(draft, `${b}.time_tracking`, setField);
     const harvestConn = useFieldPath(draft, `${b}.harvest_connection`, setField);
 
+    const harvestConnectionNames = (draft.integrations?.harvest ?? []).map((c) => c.name);
+
     const handleRemove = () => {
         Alert.alert("Remove Grouping", `Remove "${name}"? This cannot be undone until you discard.`, [
             { text: "Cancel", style: "cancel" },
@@ -62,7 +64,9 @@ function GroupingCard({ name, draft, setField, onRemove }: GroupingCardProps) {
                     label="Harvest connection"
                     value={harvestConn.value}
                     onChange={harvestConn.onChange}
-                    placeholder="Connection name"
+                    type="select"
+                    options={harvestConnectionNames}
+                    placeholder="Select connection…"
                 />
             )}
         </View>
