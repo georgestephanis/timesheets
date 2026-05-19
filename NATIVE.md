@@ -119,16 +119,27 @@ The full API the desktop app calls. Tier 1 covers config operations; Tier 2 cove
 everything that needs the engine's data pipeline.
 
 ```
-Tier 1 (native module, Phase 4):
-  getConfig()                              → Config
-  saveConfig(config: Config)               → void
+Tier 1 (ObjC native module):
+  getConfig()                              → Config | null
+  saveConfig(config: Config)               → string (path written)
   getConfigPath()                          → string
+  setConfigDir(dir: string)               → string (new path)
+  pickConfigDir()                          → string | null (NSOpenPanel)
+  startSidecar()                           → number (port)
+  stopSidecar()                            → boolean
+  getSidecarPort()                         → number (0 if not running)
+  getEngineScriptPath()                    → string | null
+  setEngineScriptPath(path: string)        → string
+  pickEngineScript()                       → string | null (NSOpenPanel)
 
-Tier 2 (sidecar HTTP, Phase 3+):
+Tier 2 (Node.js sidecar HTTP):
+  GET  /status                                              → { ok: true }
   GET  /report?from=YYYY-MM-DD&to=YYYY-MM-DD[&rebuild=1]   → Report
-  POST /reassign-signal   { type, key, project }           → void
-  POST /set-grouping      { project, grouping }            → void
-  POST /flag-ignored      { projects[], ignored }          → void
+  POST /reassign-signal   { type, key, project }           → { ok: true }
+  POST /set-grouping      { project, grouping }            → { ok: true }
+  POST /flag-ignored      { projects[], ignored }          → { ok: true }
+
+Planned (Phase 5):
   POST /generate-summary  { date }                         → { summary: string }
   POST /suggest-logging   { date }                         → { suggestions[] }
 ```
@@ -221,79 +232,113 @@ Remaining:
 - [x] source loaders — ActivityWatch, Chrome, Git, GitHub Desktop (`lib/loader-*.js`)
 - [x] 30+ unit tests pass; typecheck clean
 
-### Phase 3: Native Report UI _(not started)_
+### Phase 3: Native Report UI _(complete)_
 
-Depends on Tier 2 sidecar being in place.
+**IPC work:**
 
-**IPC work (do first):**
-
-- [ ] `apps/desktop/engine-server.js` — minimal Express server wrapping `packages/engine`
-- [ ] native Objective-C code to launch/kill the sidecar as an `NSTask`
-- [ ] `TimesheetsEngineModule` extended with `startSidecar`, `stopSidecar`, `getSidecarPort`
-- [ ] React Native `EngineClient.ts` — typed fetch wrapper for all Tier 2 endpoints
+- [x] `apps/desktop/engine-server.js` — minimal HTTP server (Node built-in `http`, no
+      Express) wrapping `packages/engine`; dynamic `await import('@timesheets/engine')`
+      bridges ESM engine from CJS wrapper; writes `PORT:<n>\n` to stdout on startup
+- [x] native Objective-C `NSTask` sidecar management in `TimesheetsEngineModule.mm`: - `resolveNodeBinary` — runs `/bin/zsh -l -c "which node"` (login shell picks up nvm),
+      result cached in-process - `resolveEngineScriptPath` — checks `NSUserDefaults` key `TimesheetsEngineScript`,
+      falls back to bundle Resources - port discovery via POSIX `select()` + `read()` on the stdout pipe in a
+      `dispatch_async` background queue, scanning for `PORT:` within 15 s
+- [x] `TimesheetsEngineModule` extended with `startSidecar`, `stopSidecar`,
+      `getSidecarPort`, `getEngineScriptPath`, `setEngineScriptPath`, `pickEngineScript`
+- [x] `EngineClient.ts` — typed fetch wrapper for all Tier 2 endpoints
+- [x] `engine-server.js` added to Xcode target as a bundled resource
 
 **UI work:**
 
-- [ ] `ReportScreen` — date navigation, day/range toggle
-- [ ] `DayView` — project cards, grouped display, duration bars
-- [ ] `ProjectCard` — grouping color, duration, activity ratio, commit list, detail rows
-- [ ] `TimelineBar` — SVG-based (react-native-svg) per-day timeline
-- [ ] `WarningBanner` — integration error messages
-- [ ] `RebuildButton` — triggers rebuild, shows cache age
+- [x] `ReportScreen` — sidecar lifecycle ownership; `SidecarState` machine
+      (`idle | starting | running | no-script | error`); date navigation; rebuild button
+- [x] `DayView` — projects sorted by seconds descending, summary line, AI summary block
+- [x] `ProjectCard` — tap-to-expand commits and signal breakdown; activity ratio bar;
+      integration badges
+- [x] `TimelineView` — 7AM–9PM window, proportional `position: 'absolute'` View segments
+      (react-native-svg not installed; pure RN Views used instead); 2-hour tick labels
+- [x] `WarningBanner` — amber-bordered warning box, null-renders when empty
 
-Acceptance criteria:
+Acceptance criteria met:
 
 - user can navigate days and view project breakdowns without a browser
 - rebuild flow works end-to-end against the local engine
+- `no-script` state shows a file-picker setup UI to locate `engine-server.js`
 
-### Phase 4: Native Config UI _(next)_
+### Phase 4: Native Config UI _(complete)_
 
 Uses Tier 1 native module only (no sidecar needed).
 
-**Native module (do first):**
+**Native module:**
 
-- [ ] `TimesheetsEngineModule.h` / `.mm` — ObjC RCT module with `getConfig`,
-      `saveConfig`, `getConfigPath`
-- [ ] First-launch config path resolution (NSUserDefaults + default + file picker)
-- [ ] Register module in `AppDelegate.mm`
+- [x] `TimesheetsEngineModule.h` / `.mm` — ObjC RCT module with `getConfig`,
+      `saveConfig`, `getConfigPath`, `setConfigDir`, `pickConfigDir`
+- [x] First-launch config path resolution (NSUserDefaults key `TimesheetsConfigDir` →
+      `~/.config/timesheets/config.json` → picker)
+- [x] Module registered in `AppDelegate.mm`; wired into Xcode pbxproj
 
 **Shared logic (`packages/ui/src/config/`):**
 
-- [ ] `useConfigDraft.ts` — draft state, dirty flag, discard, field mutation
-- [ ] `useFieldPath.ts` — dotted-path accessor/mutator; array ↔ newline-textarea coercion
-- [ ] `configSchema.ts` — zod schema validating the full `Config` shape before save
-- [ ] `ianaTimezones.ts` — IANA timezone list for the timezone autocomplete
+- [x] `useConfigDraft.ts` — `useReducer`-based draft state with `reset`, `setField`,
+      `discard`, `markSaved` actions; `setNestedValue` handles dotted-path mutation and
+      `undefined` deletion
+- [x] `useFieldPath.ts` — dotted-path getter/setter; `arrayAsTextarea` option coerces
+      `string[]` ↔ newline-joined string
+- [x] `configSchema.ts` — full zod schema covering Config, ProjectConfig, GroupingConfig,
+      HarvestConnection, ClickUpConnection, GitHubConnection, LlmConnection,
+      ClockifyConnection; validated before save
+- [x] `NativeEngine.ts` — typed bridge to all native module methods (both Tier 1 and 2)
 
-**Components (`packages/ui/src/config/components/`):**
+**Components (`packages/ui/src/config/`):**
 
-- [ ] `ConfigScreen.tsx` — tab navigator (General / Projects / Groupings / Integrations /
-      Signals), dirty-state header bar, Save / Discard buttons
-- [ ] `GeneralTab.tsx` — Core paths, Chrome profiles auto-detect toggle, Git authors,
-      timing fields, personal hosts/apps
-- [ ] `ProjectsTab.tsx` — project list with grouping badge and signal badges; Add project
-- [ ] `ProjectDrawer.tsx` — per-project editor: name, grouping, repos, VSCode dirs,
+- [x] `ConfigScreen.tsx` — loading / no-config / error / ready phases; five-tab tab bar;
+      dirty-state header (`Config •`) with Save / Discard buttons; zod validation before save
+- [x] `GeneralTab.tsx` — core paths, Chrome profiles textarea + auto-detect checkbox,
+      Git authors, timing fields, personal hosts/apps
+- [x] `ProjectsTab.tsx` — project list with grouping badge and signal count; inline Add flow
+- [x] `ProjectDrawer.tsx` — per-project editor: name, grouping, repos, VSCode dirs,
       domains, Slack rules, SSH hosts, apps, Harvest, ClickUp; delete/ignore buttons
-- [ ] `GroupingsTab.tsx` — grouping cards: name, color picker, logo URL, aliases,
+- [x] `GroupingsTab.tsx` — grouping cards with name, color, logo URL, aliases,
       time-tracking type, Harvest connection
-- [ ] `IntegrationsTab.tsx` — repeatable connection cards for Harvest, ClickUp, GitHub,
-      LLM, Clockify
-- [ ] `SignalsTab.tsx` — unmatched signal reassignment (needs report data; show
-      placeholder when no report loaded yet)
-- [ ] `FieldRow.tsx` — universal label + control: text, number, checkbox, select,
-      textarea (newline-separated arrays), color, URL, password (with show/hide), JSON blob
-- [ ] `ConnectionCard.tsx` — labelled card with Remove button; used by IntegrationsTab
+- [x] `IntegrationsTab.tsx` — five collapsible sections (Harvest, ClickUp, GitHub, LLM,
+      Clockify) with repeatable connection cards
+- [x] `SignalsTab.tsx` — placeholder pending Phase 5 report integration
+- [x] `FieldRow.tsx` — supports `text | number | checkbox | textarea | password | segment
+| url`; 200 px label column, full-width control
+- [x] `ConnectionCard.tsx` — labelled card with Remove button
 
 **Desktop app wiring (`apps/desktop/`):**
 
-- [ ] Add `ConfigScreen` to app navigation (button from main placeholder screen)
-- [ ] Hook `getConfig` / `saveConfig` native module calls into `useConfigDraft`
-- [ ] Dirty-state warning on navigate-away (macOS `windowShouldClose:` equivalent)
+- [x] `App.tsx` — three-screen navigator (`home | reports | config`) with nav bar and back
+      button; unsaved-change guard (`beforeunload` / `popstate`)
+- [x] `ConfigScreen` and `ReportScreen` wired via imports from `@timesheets/ui`
 
-Acceptance criteria:
+Acceptance criteria met:
 
 - user can open config, edit any field across all five tabs, save, and discard
-- save writes a valid `config.json` that the PHP app can still parse
-- dirty-state is tracked correctly; navigating away with unsaved changes warns
+- save writes a valid `config.json` the PHP app can still parse (zod → JSON)
+- dirty-state tracked correctly; navigating away with unsaved changes warns
+
+### Phase 4.5: Branding _(complete)_
+
+Applied the brand identity from `branding/` across all three UI surfaces:
+
+- [x] `packages/ui/src/brand.ts` — `Brand.ink/paper/amber/terracotta` constants, exported
+      from package index
+- [x] React Native components — terracotta (`#C25E2A`) replaces `#007AFF` as primary
+      action color throughout; nav bars use ink (`#16130F`) background with paper text;
+      `WarningBanner` uses amber border; `DayView` AI summary uses terracotta left-border
+- [x] `apps/desktop/App.tsx` home screen — ink background, paper title, amber subtitle,
+      terracotta primary button
+- [x] `apps/web/static/app.css` — `:root` CSS vars (`--ts-ink/paper/amber/terracotta`);
+      nav bar recolored to ink with paper-tinted buttons/selects; `.btn--primary` →
+      terracotta; active config tab → terracotta underline
+- [x] `apps/web/report_renderer.php` — favicon `<link>` tags (light/dark `prefers-color-scheme`
+      pairs) pointing to `static/favicon/`
+- [x] `apps/web/static/favicon/` — six PNGs copied from `branding/favicon/`
+      (16 px, 32 px, 180 px in dark and light colorways)
+- [x] `AppIcon.appiconset/Contents.json` — all 10 macOS icon sizes wired to filenames;
+      dark-colorway PNGs (icon-16 through icon-1024) copied from `branding/png/dark/`
 
 ### Phase 5: Advanced Features _(not started)_
 
@@ -319,18 +364,20 @@ After Phase 3 and 4 are complete:
 
 ## Technology Stack
 
-| Layer        | Choice                                                      | Notes                                         |
-| ------------ | ----------------------------------------------------------- | --------------------------------------------- |
-| UI framework | React Native macOS (react-native-macos 0.81)                | macOS first; Windows later                    |
-| Language     | TypeScript (engine) + JSDoc-annotated JS (engine internals) | strict mode                                   |
-| Build        | Metro bundler + React Native CLI                            | `npm run desktop:dev`                         |
-| Navigation   | React Navigation or built-in tab view                       | TBD in Phase 4                                |
-| Form state   | Custom `useConfigDraft` hook                                | keeps logic in packages/ui, no RHF dependency |
-| Validation   | zod                                                         | `configSchema` in packages/ui                 |
-| Timelines    | react-native-svg                                            | Phase 3                                       |
-| Testing      | Jest + fixture-based parity tests                           | 30+ tests passing                             |
-| IPC tier 1   | ObjC `RCTBridgeModule` native module                        | config file I/O only                          |
-| IPC tier 2   | Node.js child process + local HTTP                          | reports, SQLite, integrations                 |
+| Layer        | Choice                                                         | Notes                                                 |
+| ------------ | -------------------------------------------------------------- | ----------------------------------------------------- |
+| UI framework | React Native macOS (react-native-macos 0.81)                   | macOS first; Windows later                            |
+| Language     | TypeScript (UI/engine) + JSDoc-annotated JS (engine internals) | strict mode                                           |
+| Build        | Metro bundler + React Native CLI                               | `npm run desktop:dev`                                 |
+| Navigation   | Custom `useState` screen switcher in `App.tsx`                 | no react-navigation dependency                        |
+| Form state   | Custom `useConfigDraft` hook (`useReducer`)                    | keeps logic in packages/ui, no RHF dependency         |
+| Validation   | zod                                                            | `configSchema` in packages/ui                         |
+| Timelines    | Absolute-positioned `View` segments                            | react-native-svg not installed                        |
+| Sidecar HTTP | Node.js built-in `http` module                                 | no Express; `engine-server.js` is CJS with ESM import |
+| Brand        | `packages/ui/src/brand.ts` + web CSS vars                      | ink/paper/amber/terracotta colorway                   |
+| Testing      | Jest + fixture-based parity tests                              | 30+ tests passing                                     |
+| IPC tier 1   | ObjC `RCTBridgeModule` native module                           | config file I/O + sidecar lifecycle                   |
+| IPC tier 2   | Node.js child process + local HTTP                             | reports, SQLite, integrations                         |
 
 ## Testing Strategy
 
