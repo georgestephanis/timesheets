@@ -8,6 +8,7 @@ import { Brand } from "../brand";
 type Props = {
     date: string;
     report: Report;
+    projectFilter?: string;
     onGenerateSummary?: () => void;
     generatingSummary?: boolean;
 };
@@ -18,8 +19,9 @@ function fmtDur(seconds: number): string {
     return `${h}h ${m}m`;
 }
 
-export function DayView({ date, report, onGenerateSummary, generatingSummary }: Props) {
-    const projects = Object.entries(report.days[date] ?? {}).sort(([, a], [, b]) => b.seconds - a.seconds);
+export function DayView({ date, report, projectFilter, onGenerateSummary, generatingSummary }: Props) {
+    const allProjects = Object.entries(report.days[date] ?? {}).sort(([, a], [, b]) => b.seconds - a.seconds);
+    const projects = projectFilter ? allProjects.filter(([name]) => name === projectFilter) : allProjects;
 
     const segments = report.timelines?.[date] ?? [];
     const totalSeconds = projects.reduce((sum, [, p]) => sum + p.seconds, 0);

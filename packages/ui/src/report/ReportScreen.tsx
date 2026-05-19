@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, TextInput } from "react-native";
 import { useSidecar } from "../SidecarContext";
 import type { Report } from "./EngineClient";
 import { DayView } from "./DayView";
@@ -30,6 +30,12 @@ export function ReportScreen() {
     const [loadError, setLoadError] = useState("");
     const [rebuilding, setRebuilding] = useState(false);
     const [generating, setGenerating] = useState(false);
+    const [dateEditing, setDateEditing] = useState(false);
+    const [dateInput, setDateInput] = useState("");
+    const [backfilling, setBackfilling] = useState(false);
+    const [backfillProgress, setBackfillProgress] = useState(0);
+    const [projectFilter, setProjectFilter] = useState("");
+    const [filterOpen, setFilterOpen] = useState(false);
 
     // ── Load report ───────────────────────────────────────────────────────────
 
@@ -65,6 +71,52 @@ export function ReportScreen() {
     }, []);
 
     const isToday = date === todayString();
+
+    // Clear filter whenever the date or report changes so a stale project name
+    // doesn't linger after a rebuild that removed that project.
+    useEffect(() => {
+        setProjectFilter("");
+        setFilterOpen(false);
+    }, [date]);
+
+    useEffect(() => {
+        if (projectFilter && report && !(projectFilter in (report.days[date] ?? {}))) {
+            setProjectFilter("");
+        }
+    }, [report, date, projectFilter]);
+
+    // ── Date jump (tap-to-edit) ───────────────────────────────────────────────
+
+    const commitDateEdit = useCallback(() => {
+        const trimmed = dateInput.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+            const d = new Date(trimmed + "T12:00:00");
+            if (!isNaN(d.getTime()) && trimmed <= todayString()) {
+                setDate(trimmed);
+                setReport(null);
+            }
+        }
+        setDateEditing(false);
+        setDateInput("");
+    }, [dateInput]);
+
+    // ── Backfill last 7 days ──────────────────────────────────────────────────
+
+    const handleBackfill = useCallback(async () => {
+        if (!client) return;
+        setBackfilling(true);
+        const today = todayString();
+        for (let i = 1; i <= 7; i++) {
+            setBackfillProgress(i);
+            try {
+                await client.getReport(offsetDate(today, -i), offsetDate(today, -i), true);
+            } catch {
+                // continue with next day
+            }
+        }
+        setBackfilling(false);
+        setBackfillProgress(0);
+    }, [client]);
 
     // ── Generate LLM summary ──────────────────────────────────────────────────
 
@@ -129,8 +181,27 @@ export function ReportScreen() {
                     <Text style={styles.navBtnText}>‹</Text>
                 </Pressable>
                 <View style={styles.navCenter}>
-                    <Text style={styles.dateLabel}>{fmtDisplay(date)}</Text>
-                    {!isToday && (
+                    {dateEditing ? (
+                        <TextInput
+                            value={dateInput}
+                            onChangeText={setDateInput}
+                            onSubmitEditing={commitDateEdit}
+                            onBlur={commitDateEdit}
+                            placeholder={date}
+                            autoFocus
+                            style={styles.dateInput}
+                        />
+                    ) : (
+                        <Pressable
+                            onPress={() => {
+                                setDateEditing(true);
+                                setDateInput(date);
+                            }}
+                        >
+                            <Text style={styles.dateLabel}>{fmtDisplay(date)}</Text>
+                        </Pressable>
+                    )}
+                    {!isToday && !dateEditing && (
                         <Pressable
                             onPress={() => {
                                 setDate(todayString());
@@ -155,11 +226,71 @@ export function ReportScreen() {
                 <Pressable
                     onPress={() => loadReport(true)}
                     disabled={rebuilding || loadState === "loading"}
-                    style={[styles.rebuildBtn, (rebuilding || loadState === "loading") && styles.btnDisabled]}
+                    style={[styles.toolbarBtn, (rebuilding || loadState === "loading") && styles.btnDisabled]}
                 >
-                    <Text style={styles.rebuildBtnText}>{rebuilding ? "Rebuilding…" : "↺ Rebuild"}</Text>
+                    <Text style={styles.toolbarBtnText}>{rebuilding ? "Rebuilding…" : "↺ Rebuild"}</Text>
                 </Pressable>
+                <Pressable
+                    onPress={handleBackfill}
+                    disabled={backfilling}
+                    style={[styles.toolbarBtn, backfilling && styles.btnDisabled]}
+                >
+                    <Text style={styles.toolbarBtnText}>
+                        {backfilling ? `Backfilling ${backfillProgress}/7…` : "⟳ Backfill 7 days"}
+                    </Text>
+                </Pressable>
+                {report && Object.keys(report.days[date] ?? {}).length > 1 && (
+                    <Pressable
+                        onPress={() => setFilterOpen((o) => !o)}
+                        style={[styles.toolbarBtn, styles.filterBtn, projectFilter ? styles.filterBtnActive : null]}
+                    >
+                        <Text
+                            style={[styles.toolbarBtnText, projectFilter ? styles.filterBtnActiveText : null]}
+                            numberOfLines={1}
+                        >
+                            {projectFilter || "All projects"}
+                        </Text>
+                        <Text style={styles.filterChevron}>{filterOpen ? "▲" : "▼"}</Text>
+                    </Pressable>
+                )}
             </View>
+            {filterOpen && report && (
+                <View style={styles.filterDropdown}>
+                    <Pressable
+                        onPress={() => {
+                            setProjectFilter("");
+                            setFilterOpen(false);
+                        }}
+                        style={[styles.filterItem, !projectFilter && styles.filterItemSelected]}
+                    >
+                        <Text style={[styles.filterItemText, !projectFilter && styles.filterItemTextSelected]}>
+                            All projects
+                        </Text>
+                    </Pressable>
+                    {Object.keys(report.days[date] ?? {})
+                        .sort()
+                        .map((p) => (
+                            <Pressable
+                                key={p}
+                                onPress={() => {
+                                    setProjectFilter(p);
+                                    setFilterOpen(false);
+                                }}
+                                style={[styles.filterItem, projectFilter === p && styles.filterItemSelected]}
+                            >
+                                <Text
+                                    style={[
+                                        styles.filterItemText,
+                                        projectFilter === p && styles.filterItemTextSelected,
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {p}
+                                </Text>
+                            </Pressable>
+                        ))}
+                </View>
+            )}
 
             {/* Warnings */}
             {report?.warnings && <WarningBanner warnings={report.warnings} />}
@@ -183,6 +314,7 @@ export function ReportScreen() {
                 <DayView
                     date={date}
                     report={report}
+                    projectFilter={projectFilter}
                     onGenerateSummary={handleGenerateSummary}
                     generatingSummary={generating}
                 />
@@ -234,19 +366,55 @@ const styles = StyleSheet.create({
     todayLink: { fontSize: 11, color: Brand.amber },
     toolbar: {
         flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: 6,
         paddingHorizontal: 12,
         paddingVertical: 6,
         backgroundColor: Brand.paper,
         borderBottomWidth: StyleSheet.hairlineWidth,
         borderBottomColor: "#d8d0c4",
     },
-    rebuildBtn: {
+    toolbarBtn: {
+        flexDirection: "row",
+        alignItems: "center",
         paddingHorizontal: 10,
         paddingVertical: 4,
         borderWidth: 1,
         borderColor: Brand.terracotta,
         borderRadius: 4,
+        gap: 4,
     },
+    toolbarBtnText: { fontSize: 12, color: Brand.terracotta },
+    filterBtn: { borderColor: "#bbb", maxWidth: 180 },
+    filterBtnActive: { borderColor: Brand.terracotta, backgroundColor: "#FFF4EE" },
+    filterBtnActiveText: { color: Brand.terracotta },
+    filterChevron: { fontSize: 9, color: "#999" },
+    filterDropdown: {
+        backgroundColor: "#fff",
+        borderWidth: 1,
+        borderColor: "#ddd",
+        borderTopWidth: 0,
+        maxHeight: 220,
+        overflow: "hidden",
+    },
+    filterItem: {
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: "#eee",
+    },
+    filterItemSelected: { backgroundColor: "#FFF4EE" },
+    filterItemText: { fontSize: 12, color: "#333" },
+    filterItemTextSelected: { color: Brand.terracotta, fontWeight: "600" },
     btnDisabled: { opacity: 0.4 },
-    rebuildBtnText: { fontSize: 12, color: Brand.terracotta },
+    dateInput: {
+        fontSize: 14,
+        fontWeight: "600",
+        color: Brand.paper,
+        borderBottomWidth: 1,
+        borderBottomColor: Brand.amber,
+        minWidth: 100,
+        textAlign: "center",
+    },
 });
