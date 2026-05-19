@@ -16,7 +16,28 @@ function fmtDur(seconds: number): string {
     return `${h}h ${m}m`;
 }
 
-type ExternalIntg = { entries?: number; seconds?: number; discussion?: number };
+type ExternalIntg = { entries?: number; activity?: number; discussion?: number };
+
+function badgeLabel(key: string, val: ExternalIntg): string {
+    switch (key) {
+        case "github": {
+            const commits = val.entries ?? 0;
+            const prs = val.discussion ?? 0;
+            const parts = [];
+            if (commits) parts.push(`${commits} commit${commits !== 1 ? "s" : ""}`);
+            if (prs) parts.push(`${prs} PR${prs !== 1 ? "s" : ""}`);
+            return `GitHub: ${parts.join(", ") || "0"}`;
+        }
+        case "harvest":
+            return `Harvest: ${val.entries ?? 0} entr${(val.entries ?? 0) !== 1 ? "ies" : "y"}`;
+        case "clickup":
+            return `ClickUp: ${val.entries ?? 0} task${(val.entries ?? 0) !== 1 ? "s" : ""}`;
+        case "clockify":
+            return `Clockify: ${val.entries ?? 0} entr${(val.entries ?? 0) !== 1 ? "ies" : "y"}`;
+        default:
+            return `${key}: ${val.entries ?? 0}`;
+    }
+}
 
 export function ProjectCard({ name, data }: Props) {
     const [expanded, setExpanded] = useState(false);
@@ -45,7 +66,7 @@ export function ProjectCard({ name, data }: Props) {
                 <View style={styles.badges}>
                     {Object.entries(external).map(([key, val]) => (
                         <Text key={key} style={styles.badge}>
-                            {key}: {val?.entries ?? 0}
+                            {badgeLabel(key, val)}
                         </Text>
                     ))}
                 </View>

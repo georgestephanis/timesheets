@@ -68,6 +68,18 @@ export class EngineClient {
         return this.post("/generate-summary", { date });
     }
 
+    async suggestAssignments(
+        date: string,
+    ): Promise<{ suggestions: Array<{ kind: string; value: string; project: string; reason: string }> }> {
+        return this.post("/suggest-assignments", { date });
+    }
+
+    async discoverRepos(): Promise<{
+        repos: Array<{ path: string; name: string; recent: boolean; assigned: string | null }>;
+    }> {
+        return this.get("/discover-repos");
+    }
+
     private async get<T>(path: string): Promise<T> {
         const res = await fetch(this.base + path);
         const body = await res.json();

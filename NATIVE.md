@@ -135,13 +135,15 @@ Tier 1 (ObjC native module):
 Tier 2 (Node.js sidecar HTTP):
   GET  /status                                              → { ok: true }
   GET  /report?from=YYYY-MM-DD&to=YYYY-MM-DD[&rebuild=1]   → Report
+  GET  /discover-repos                                      → Record<path, { name, recent, last_commit_ts }>
   POST /reassign-signal   { type, key, project }           → { ok: true }
   POST /set-grouping      { project, grouping }            → { ok: true }
   POST /flag-ignored      { projects[], ignored }          → { ok: true }
-
-Planned (Phase 5):
   POST /generate-summary  { date }                         → { summary: string }
-  POST /suggest-logging   { date }                         → { suggestions[] }
+  POST /suggest-assignments { date }                       → { suggestions: [{kind,value,project,reason}] }
+
+Planned (deferred):
+  POST /suggest-logging   { date }                         → { suggestions[] }  (Harvest-specific)
 ```
 
 ## Shared UI Architecture
@@ -302,7 +304,8 @@ Uses Tier 1 native module only (no sidecar needed).
       time-tracking type, Harvest connection
 - [x] `IntegrationsTab.tsx` — five collapsible sections (Harvest, ClickUp, GitHub, LLM,
       Clockify) with repeatable connection cards
-- [x] `SignalsTab.tsx` — placeholder pending Phase 5 report integration
+- [x] `SignalsTab.tsx` — full implementation (Phase 5): loads today's unmatched signals
+      from sidecar, groups by kind, project assignment with draft sync, LLM suggestions
 - [x] `FieldRow.tsx` — supports `text | number | checkbox | textarea | password | segment
 | url`; 200 px label column, full-width control
 - [x] `ConnectionCard.tsx` — labelled card with Remove button
@@ -340,14 +343,23 @@ Applied the brand identity from `branding/` across all three UI surfaces:
 - [x] `AppIcon.appiconset/Contents.json` — all 10 macOS icon sizes wired to filenames;
       dark-colorway PNGs (icon-16 through icon-1024) copied from `branding/png/dark/`
 
-### Phase 5: Advanced Features _(not started)_
+### Phase 5: Advanced Features _(in progress)_
 
 After Phase 3 and 4 are complete:
 
-1. **LLM day summaries** — call sidecar `/generate-summary`, display in DayView
-2. **Unlogged-time suggestions** — call sidecar `/suggest-logging`, display in Signals tab
-3. **GitHub integration activity** — surface GitHub PR/commit counts alongside projects
-4. **GitHub Desktop repo discovery** — surface discovered repos in Projects tab
+1. **LLM day summaries** _(complete)_ — `POST /generate-summary` sidecar endpoint;
+   `engine.generateSummary(date)` auto-discovers model from `/models`, caches back to
+   config, retries on 404; DayView shows cached summary with "✦ Generate Summary" button
+2. **Signals tab** _(complete)_ — real `SignalsTab` loads today's `report.unmatched` via
+   sidecar; groups by kind (vscode/browser/slack/apps); project picker + Assign button
+   persists via `/reassign-signal` and updates draft; "Suggest with AI" calls
+   `/suggest-assignments` (engine uses same model-resolve/retry logic as summaries)
+3. **GitHub Desktop repo discovery** _(complete)_ — `GET /discover-repos` sidecar endpoint;
+   discovery panel in ProjectsTab shows unassigned repos with inline project assignment
+4. **Improved integration badges** _(complete)_ — ProjectCard shows human-readable counts
+   for GitHub commits, Harvest entries, ClickUp tasks, Clockify entries
+5. **Unlogged-time suggestions** — call sidecar `/suggest-logging`, display in Signals tab
+   _(deferred: Harvest-specific, lower priority)_
 
 ### Phase 6: Packaging and Cutover _(not started)_
 

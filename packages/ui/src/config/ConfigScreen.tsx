@@ -196,7 +196,7 @@ export function ConfigScreen() {
                 {draft && activeTab === "Projects" && <ProjectsTab draft={draft} setField={setField} />}
                 {draft && activeTab === "Groupings" && <GroupingsTab draft={draft} setField={setField} />}
                 {draft && activeTab === "Integrations" && <IntegrationsTab draft={draft} setField={setField} />}
-                {activeTab === "Signals" && <SignalsTab />}
+                {draft && activeTab === "Signals" && <SignalsTab draft={draft} setField={setField} />}
             </View>
         </View>
     );

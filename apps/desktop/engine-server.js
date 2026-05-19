@@ -51,6 +51,20 @@ if (!configPath) {
         }
         const summary = await engine.generateSummary(date);
         json(res, 200, {summary});
+      } else if (
+        req.method === 'POST' &&
+        url.pathname === '/suggest-assignments'
+      ) {
+        const {date} = await readJson(req);
+        if (!date) {
+          json(res, 400, {error: 'date required'});
+          return;
+        }
+        const suggestions = await engine.suggestAssignments(date);
+        json(res, 200, {suggestions});
+      } else if (req.method === 'GET' && url.pathname === '/discover-repos') {
+        const repos = await engine.discoverRepos();
+        json(res, 200, {repos});
       } else {
         json(res, 404, {error: 'not found'});
       }
