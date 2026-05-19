@@ -1,5 +1,5 @@
 import React, {useState} from 'react';
-import {SafeAreaView, StyleSheet, Text, Pressable, View} from 'react-native';
+import {StyleSheet, Text, Pressable, View} from 'react-native';
 import {ConfigScreen, ReportScreen} from '@timesheets/ui';
 
 const Brand = {
@@ -16,20 +16,20 @@ function App(): React.JSX.Element {
 
   if (screen === 'config') {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.navBar}>
           <Pressable onPress={() => setScreen('home')} style={styles.backBtn}>
             <Text style={styles.backBtnText}>← Home</Text>
           </Pressable>
         </View>
         <ConfigScreen />
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (screen === 'reports') {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.navBar}>
           <Pressable onPress={() => setScreen('home')} style={styles.backBtn}>
             <Text style={styles.backBtnText}>← Home</Text>
@@ -38,12 +38,12 @@ function App(): React.JSX.Element {
           <View style={styles.navSpacer} />
         </View>
         <ReportScreen />
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, {backgroundColor: Brand.ink}]}>
+    <View style={[styles.container, {backgroundColor: Brand.ink}]}>
       <View style={styles.content}>
         <Text style={[styles.title, {color: Brand.paper}]}>Timesheets</Text>
         <Text style={[styles.subtitle, {color: Brand.amber}]}>
@@ -62,7 +62,7 @@ function App(): React.JSX.Element {
           </Pressable>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
