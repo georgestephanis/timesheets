@@ -6,12 +6,10 @@ const workspaceRoot = path.resolve(__dirname, '../..');
 const appRoot = __dirname;
 
 const config = {
-  // Only watch source packages that need hot-reload — not the entire workspace
-  // root (which would pull in node_modules and cause Watchman inode overflow).
-  watchFolders: [
-    path.resolve(workspaceRoot, 'packages/ui'),
-    path.resolve(workspaceRoot, 'packages/contracts'),
-  ],
+  // Watch the full workspace so Metro can see node_modules hoisted to the root.
+  // Watchman is configured via .watchmanconfig to exclude node_modules from
+  // file-change notifications, keeping the watch set small.
+  watchFolders: [workspaceRoot],
   resolver: {
     nodeModulesPaths: [
       path.resolve(appRoot, 'node_modules'),

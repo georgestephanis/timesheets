@@ -1,7 +1,8 @@
 #!/bin/bash
 # Start Metro bundler, wait for it to be ready, then build and launch the macOS app.
-# Usage: npm run desktop:dev [-- --clean]  (from repo root)
-#   --clean  wipe Xcode DerivedData for TimesheetsDesktop before building
+# Usage: npm run desktop:dev [-- --clean] [-- --reset-cache]  (from repo root)
+#   --clean        wipe Xcode DerivedData for TimesheetsDesktop before building
+#   --reset-cache  pass --reset-cache to Metro (clears transform cache)
 
 set -e
 
@@ -9,8 +10,10 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Parse flags
 CLEAN=0
+RESET_CACHE=0
 for arg in "$@"; do
-    [[ "$arg" == "--clean" ]] && CLEAN=1
+    [[ "$arg" == "--clean" ]]       && CLEAN=1
+    [[ "$arg" == "--reset-cache" ]] && RESET_CACHE=1
 done
 
 if [[ $CLEAN -eq 1 ]]; then
@@ -33,8 +36,12 @@ echo "--- app log stream (process: TimesheetsDesktop) ---"
 log stream --predicate 'process == "TimesheetsDesktop" AND NOT subsystem BEGINSWITH "com.apple.network" AND NOT subsystem BEGINSWITH "com.apple.launchservices" AND NOT subsystem BEGINSWITH "com.apple.CFNetwork" AND NOT subsystem BEGINSWITH "com.apple.defaults"' --level default 2>/dev/null &
 LOG_PID=$!
 
+METRO_FLAGS=""
+[[ $RESET_CACHE -eq 1 ]] && METRO_FLAGS="-- --reset-cache"
+
 echo "Starting Metro bundler..."
-npm run desktop:start --prefix "$ROOT" &
+# shellcheck disable=SC2086
+npm run desktop:start --prefix "$ROOT" $METRO_FLAGS &
 METRO_PID=$!
 
 echo "Waiting for Metro to be ready..."
