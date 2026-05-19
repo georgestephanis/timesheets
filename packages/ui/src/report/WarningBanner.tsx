@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
+import { Brand } from "../brand";
 
 type Props = { warnings: string[] };
 
@@ -22,7 +23,7 @@ const styles = StyleSheet.create({
         padding: 10,
         backgroundColor: "#FEF9EE",
         borderWidth: 1,
-        borderColor: "#F6B84A",
+        borderColor: Brand.amber,
         borderRadius: 6,
     },
     text: {

@@ -1,13 +1,6 @@
 import React, {useState} from 'react';
 import {StyleSheet, Text, Pressable, View} from 'react-native';
-import {ConfigScreen, ReportScreen} from '@timesheets/ui';
-
-const Brand = {
-  ink: '#16130F',
-  paper: '#F6F2EA',
-  amber: '#F6B84A',
-  terracotta: '#C25E2A',
-} as const;
+import {ConfigScreen, ReportScreen, Brand} from '@timesheets/ui';
 
 type Screen = 'home' | 'config' | 'reports';
 

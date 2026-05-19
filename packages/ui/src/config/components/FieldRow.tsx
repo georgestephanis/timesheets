@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Switch, Pressable, StyleSheet } from "react-native";
+import { Brand } from "../../brand";
 
 export type FieldType =
     | "text"
@@ -13,10 +14,10 @@ export type FieldType =
     | "select";
 
 const PRESET_COLORS = [
-    "#C25E2A",
-    "#F6B84A",
-    "#16130F",
-    "#F6F2EA",
+    Brand.terracotta,
+    Brand.amber,
+    Brand.ink,
+    Brand.paper,
     "#E53E3E",
     "#DD6B20",
     "#D69E2E",
