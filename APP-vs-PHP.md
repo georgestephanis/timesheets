@@ -27,7 +27,7 @@ Legend: ✅ present · ⚠️ partial/different · ❌ absent · 🔒 intentiona
 | Commits list                  | ✅                           | ✅ inline                     | ✅ collapsible (up to 8)                  |
 | Integration badges            | ❌ (sidebar replaces)        | ✅ entry counts in text       | ✅ Harvest/ClickUp/GitHub/Clockify        |
 | Harvest time-tracking sidebar | ✅ sticky right panel        | ❌                            | ❌                                        |
-| Harvest gap detection         | ✅ highlights unlogged hours | ❌                            | ❌                                        |
+| Harvest gap detection         | ✅ highlights unlogged hours | ❌                            | ✅ collapsible panel with gap badge       |
 | LLM day summary               | ✅ on-demand button          | ✅ auto on single-day run     | ✅ on-demand button                       |
 | Export (md/json/tsv)          | ❌                           | ✅ `--format`                 | ❌                                        |
 | `--show-unmatched` debug      | ❌                           | ✅                            | ❌                                        |
@@ -136,24 +136,17 @@ The following are desktop gaps worth addressing, roughly ordered by user impact:
 
 ### High impact
 
-1. **Harvest gap detection** — The web UI's sticky Harvest sidebar with logged-vs-tracked
-   comparison is a key accountability feature. The desktop shows Harvest badge counts but
-   no gap analysis. Adding a collapsible Harvest summary panel to `DayView` would close
-   this.
-
-### Medium impact
-
-2. **Harvest/ClickUp sync tool in UI** — `sync-integration-projects.php` is the main
+1. **Harvest/ClickUp sync tool in UI** — `sync-integration-projects.php` is the main
    onboarding accelerator for integration users. A "Sync projects from Harvest/ClickUp"
    button in the Integrations tab (calling a new sidecar endpoint) would remove the CLI
    dependency for a common setup task.
 
 ### Lower impact / nice-to-have
 
-3. **Cron / backfill status** — No visibility into whether daily backfill has run. A
+2. **Cron / backfill status** — No visibility into whether daily backfill has run. A
    small "last updated" timestamp in the Reports header would surface this.
 
-4. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
+3. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
    sheet or export action in the Reports toolbar would unlock the spreadsheet/invoice
    workflow from the desktop.
 
