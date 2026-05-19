@@ -270,8 +270,9 @@ RCT_EXPORT_METHOD(startSidecar:(RCTPromiseResolveBlock)resolve
   task.arguments = @[scriptPath, configPath];
 
   NSPipe *outPipe = [NSPipe pipe];
+  NSPipe *errPipe = [NSPipe pipe];
   task.standardOutput = outPipe;
-  task.standardError = [NSFileHandle fileHandleWithNullDevice];
+  task.standardError = errPipe;
 
   @try { [task launch]; }
   @catch (NSException *e) {
@@ -293,40 +294,51 @@ RCT_EXPORT_METHOD(startSidecar:(RCTPromiseResolveBlock)resolve
     int foundPort = -1;
 
     while (foundPort < 0 && [NSDate.date compare:deadline] == NSOrderedAscending) {
-      if (![self->_sidecarTask isRunning]) break;
-
       fd_set readfds;
       FD_ZERO(&readfds);
       FD_SET(fd, &readfds);
       struct timeval tv = { 0, 100000 }; // 100 ms
       int sel = select(fd + 1, &readfds, NULL, NULL, &tv);
-      if (sel <= 0) continue;
 
-      ssize_t n = read(fd, buf, sizeof(buf) - 1);
-      if (n <= 0) break;
+      if (sel > 0) {
+        ssize_t n = read(fd, buf, sizeof(buf) - 1);
+        if (n <= 0) break; // EOF — process exited and closed stdout
 
-      // Append to accumulator (cap at buffer size).
-      size_t space = sizeof(accum) - accumLen - 1;
-      if (space > 0) {
-        size_t copy = (size_t)n < space ? (size_t)n : space;
-        memcpy(accum + accumLen, buf, copy);
-        accumLen += copy;
-        accum[accumLen] = '\0';
+        // Append to accumulator (cap at buffer size).
+        size_t space = sizeof(accum) - accumLen - 1;
+        if (space > 0) {
+          size_t copy = (size_t)n < space ? (size_t)n : space;
+          memcpy(accum + accumLen, buf, copy);
+          accumLen += copy;
+          accum[accumLen] = '\0';
+        }
+
+        char *portTag = strstr(accum, "PORT:");
+        if (portTag) {
+          foundPort = atoi(portTag + 5);
+        }
       }
 
-      char *portTag = strstr(accum, "PORT:");
-      if (portTag) {
-        foundPort = atoi(portTag + 5);
-      }
+      // Check after the read so we drain stdout before giving up.
+      if (![self->_sidecarTask isRunning]) break;
     }
 
     if (foundPort > 0) {
       self->_sidecarPort = foundPort;
       resolve(@(foundPort));
     } else {
+      // Collect stderr — this is the actual crash reason when node exits early.
+      NSData *errData = [errPipe.fileHandleForReading availableData];
+      NSString *errText = [[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding];
+      errText = [errText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
       [self->_sidecarTask terminate];
       self->_sidecarTask = nil;
-      reject(@"SIDECAR_TIMEOUT", @"Engine server did not report a port within 15 seconds", nil);
+
+      NSString *reason = errText.length
+        ? [NSString stringWithFormat:@"Engine server failed to start:\n%@", errText]
+        : @"Engine server did not report a port within 15 seconds";
+      reject(@"SIDECAR_TIMEOUT", reason, nil);
     }
   });
 }
