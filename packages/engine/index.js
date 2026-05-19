@@ -310,6 +310,178 @@ class TimesheetsEngine {
     }
 
     /**
+     * Uses the configured LLM to suggest project assignments for today's unmatched signals.
+     * Returns validated suggestions: [{kind, value, project, reason}].
+     * Mirrors PHP llmSuggestAssignments().
+     *
+     * @param {string} date  YYYY-MM-DD
+     * @returns {Promise<Array<{kind:string, value:string, project:string, reason:string}>>}
+     */
+    async suggestAssignments(date) {
+        if (!this.config) await this.loadConfig();
+        const cfg = /** @type {import('@timesheets/contracts').Config} */ (this.config);
+
+        const llm = cfg.integrations?.llm?.[0];
+        if (!llm) throw new Error("No LLM connection configured in config.integrations.llm");
+
+        const report = await this.generateReport({ from: date, to: date });
+        const unmatchedRaw = report.unmatched ?? {};
+
+        const KINDS = ["vscode", "browser", "slack", "apps"];
+        const projects = cfg.projects ?? {};
+        const ignoredSet = new Set(cfg.ignored_projects ?? []);
+
+        // Build per-project description lines for the prompt.
+        const projectLines = [];
+        for (const [name, p] of Object.entries(projects)) {
+            if (ignoredSet.has(name)) continue;
+            const parts = [];
+            if (p.grouping) parts.push(`group: ${p.grouping}`);
+            if (p.repos?.length) parts.push(`repos: ${p.repos.map((r) => r.split("/").pop()).join(", ")}`);
+            if (p.vscode_dirs?.length) parts.push(`vscode: ${p.vscode_dirs.join(", ")}`);
+            if (p.domains?.length) parts.push(`domains: ${p.domains.join(", ")}`);
+            projectLines.push(`- "${name}"${parts.length ? ": " + parts.join("; ") : ""}`);
+        }
+
+        // Flatten and sanitise unmatched signals.
+        const signalLines = [];
+        /** @type {Record<string, string[]>} */
+        const signalSet = {};
+        for (const kind of KINDS) {
+            for (const [raw, count] of Object.entries(unmatchedRaw[kind] ?? {})) {
+                const value = raw.replace(/[\n\r\t]/g, " ").slice(0, 200);
+                if (!value || value === "(no url)") continue;
+                signalLines.push(`- ${kind}: "${value}" (${count} events)`);
+                (signalSet[kind] ??= []).push(value);
+            }
+        }
+
+        if (signalLines.length === 0) return [];
+
+        const baseUrl = llm.base_url.replace(/\/$/, "");
+        const authHeaders = {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${llm.api_key ?? "sk-no-key"}`,
+        };
+        const timeout = (llm.timeout ?? 30) * 1000;
+
+        const resolveModel = async () => {
+            if (llm.model) return llm.model;
+            const modelsRes = await fetch(`${baseUrl}/models`, {
+                headers: authHeaders,
+                signal: AbortSignal.timeout(timeout),
+            });
+            if (!modelsRes.ok) throw new Error(`Could not fetch model list: ${modelsRes.status}`);
+            const modelsData = /** @type {any} */ (await modelsRes.json());
+            const discovered = modelsData?.data?.[0]?.id;
+            if (!discovered) throw new Error("LLM /models returned no models");
+            llm.model = discovered;
+            await this.saveConfig(cfg);
+            return discovered;
+        };
+
+        const systemPrompt =
+            "You are a time-tracking assistant. Map unclassified computer-activity signals to the " +
+            "correct project based on naming patterns. Be conservative: only suggest when confident. " +
+            "Respond with a JSON array only — no prose, no markdown fences.";
+
+        const userPrompt =
+            `Configured projects:\n${projectLines.join("\n")}\n\n` +
+            `Unmatched signals (activity that matched no project rule):\n${signalLines.join("\n")}\n\n` +
+            "For each signal you are confident about, output one JSON object:\n" +
+            '  {"kind": "vscode|browser|slack|apps", "value": "<exact signal value>", ' +
+            '"project": "<exact project name>", "reason": "<one sentence>"}\n\n' +
+            "Use only exact values and project names from the lists above. " +
+            "Omit signals you are unsure about. Reply with the JSON array only.";
+
+        const callLlm = /** @param {string} model */ (model) =>
+            fetch(`${baseUrl}/chat/completions`, {
+                method: "POST",
+                headers: authHeaders,
+                body: JSON.stringify({
+                    model,
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: userPrompt },
+                    ],
+                }),
+                signal: AbortSignal.timeout(timeout),
+            });
+
+        let model = await resolveModel();
+        let res = await callLlm(model);
+
+        if (!res.ok && res.status === 404) {
+            delete llm.model;
+            await this.saveConfig(cfg);
+            model = await resolveModel();
+            res = await callLlm(model);
+        }
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            throw new Error(`LLM API error ${res.status}: ${text}`);
+        }
+
+        const data = /** @type {any} */ (await res.json());
+        let content = (data?.choices?.[0]?.message?.content ?? "").trim();
+        // Strip markdown code fences some models add despite instructions.
+        content = content
+            .replace(/^```(?:json)?\s*/m, "")
+            .replace(/\s*```\s*$/m, "")
+            .trim();
+
+        let raw;
+        try {
+            raw = JSON.parse(content);
+        } catch {
+            return [];
+        }
+        if (!Array.isArray(raw)) return [];
+
+        const projectNames = Object.keys(projects);
+        return raw.filter(
+            (s) =>
+                s &&
+                typeof s === "object" &&
+                KINDS.includes(s.kind) &&
+                s.value &&
+                s.project &&
+                projectNames.includes(s.project) &&
+                (signalSet[s.kind] ?? []).includes(s.value),
+        );
+    }
+
+    /**
+     * Returns repos registered in GitHub Desktop that are not yet assigned to any project.
+     *
+     * @returns {Promise<Array<{path:string, name:string, recent:boolean, assigned:string|null}>>}
+     */
+    async discoverRepos() {
+        if (!this.config) await this.loadConfig();
+        const cfg = /** @type {import('@timesheets/contracts').Config} */ (this.config);
+
+        const { discoverGitHubDesktopRepos } = await import("./lib/loader-github-desktop.js");
+        const found = discoverGitHubDesktopRepos(true);
+
+        // Build a map from repo path → project name using existing config.
+        /** @type {Map<string, string>} */
+        const repoToProject = new Map();
+        for (const [name, p] of Object.entries(cfg.projects ?? {})) {
+            for (const r of p.repos ?? []) {
+                repoToProject.set(r, name);
+            }
+        }
+
+        return Object.entries(found).map(([repoPath, info]) => ({
+            path: repoPath,
+            name: info.name,
+            recent: info.recent,
+            assigned: repoToProject.get(repoPath) ?? null,
+        }));
+    }
+
+    /**
      * Marks a set of projects as ignored (or un-ignored) and persists the config.
      * @param {import('@timesheets/contracts').FlagIgnoredPayload} payload
      * @returns {Promise<void>}
