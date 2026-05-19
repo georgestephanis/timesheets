@@ -7,9 +7,9 @@ import {
   View,
   useColorScheme,
 } from 'react-native';
-import {ConfigScreen} from '@timesheets/ui';
+import {ConfigScreen, ReportScreen} from '@timesheets/ui';
 
-type Screen = 'home' | 'config';
+type Screen = 'home' | 'config' | 'reports';
 
 function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
@@ -28,6 +28,21 @@ function App(): React.JSX.Element {
     );
   }
 
+  if (screen === 'reports') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.navBar}>
+          <Pressable onPress={() => setScreen('home')} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← Home</Text>
+          </Pressable>
+          <Text style={styles.navTitle}>Reports</Text>
+          <View style={styles.navSpacer} />
+        </View>
+        <ReportScreen />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView
       style={[
@@ -41,9 +56,18 @@ function App(): React.JSX.Element {
         <Text style={[styles.subtitle, {color: isDarkMode ? '#aaa' : '#666'}]}>
           Desktop app is running.
         </Text>
-        <Pressable onPress={() => setScreen('config')} style={styles.configBtn}>
-          <Text style={styles.configBtnText}>Open Config</Text>
-        </Pressable>
+        <View style={styles.buttons}>
+          <Pressable
+            onPress={() => setScreen('reports')}
+            style={styles.primaryBtn}>
+            <Text style={styles.primaryBtnText}>Open Reports</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setScreen('config')}
+            style={styles.secondaryBtn}>
+            <Text style={styles.secondaryBtnText}>Open Config</Text>
+          </Pressable>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -70,6 +94,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#007AFF',
   },
+  navTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  navSpacer: {
+    width: 60,
+  },
   content: {
     flex: 1,
     alignItems: 'center',
@@ -83,17 +117,34 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
   },
-  configBtn: {
+  buttons: {
+    gap: 10,
+    alignItems: 'stretch',
     marginTop: 8,
+  },
+  primaryBtn: {
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     backgroundColor: '#007AFF',
     borderRadius: 8,
+    alignItems: 'center',
   },
-  configBtnText: {
+  primaryBtnText: {
     fontSize: 14,
     color: '#fff',
     fontWeight: '600',
+  },
+  secondaryBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  secondaryBtnText: {
+    fontSize: 14,
+    color: '#007AFF',
   },
 });
 

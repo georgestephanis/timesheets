@@ -15,6 +15,7 @@
 		514201552437B4B40078DB4F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 514201532437B4B40078DB4F /* Main.storyboard */; };
 		514201582437B4B40078DB4F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 514201572437B4B40078DB4F /* main.m */; };
 		99DAC7C2689ADA3439AFB8AC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C48625CF63C4F9538FF4C21F /* PrivacyInfo.xcprivacy */; };
+		AA0000020000000000000001 /* engine-server.js in Resources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000002 /* engine-server.js */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -33,6 +34,7 @@
 		B06F47FCA64BCC15DF852AF5 /* Pods-TimesheetsDesktop-macOS.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-TimesheetsDesktop-macOS.release.xcconfig"; path = "Target Support Files/Pods-TimesheetsDesktop-macOS/Pods-TimesheetsDesktop-macOS.release.xcconfig"; sourceTree = "<group>"; };
 		B6665FA3F95CEF4999D1DF66 /* libPods-TimesheetsDesktop-macOS.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-TimesheetsDesktop-macOS.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		C48625CF63C4F9538FF4C21F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AA0000020000000000000002 /* engine-server.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "engine-server.js"; path = "../engine-server.js"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -106,6 +108,7 @@
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
 				827A558E26F7AAEC4A3620E8 /* Pods */,
 				C48625CF63C4F9538FF4C21F /* PrivacyInfo.xcprivacy */,
+				AA0000020000000000000002 /* engine-server.js */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -215,6 +218,7 @@
 				514201522437B4B40078DB4F /* Assets.xcassets in Resources */,
 				514201552437B4B40078DB4F /* Main.storyboard in Resources */,
 				38B0983EAD2B0EB44C813C5C /* PrivacyInfo.xcprivacy in Resources */,
+				AA0000020000000000000001 /* engine-server.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
