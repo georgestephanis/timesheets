@@ -34,6 +34,7 @@ export function ReportScreen() {
     const [loadState, setLoadState] = useState<"idle" | "loading" | "error">("idle");
     const [loadError, setLoadError] = useState("");
     const [rebuilding, setRebuilding] = useState(false);
+    const [generating, setGenerating] = useState(false);
 
     // ── Start sidecar ─────────────────────────────────────────────────────────
 
@@ -104,6 +105,21 @@ export function ReportScreen() {
     }, []);
 
     const isToday = date === todayString();
+
+    // ── Generate LLM summary ──────────────────────────────────────────────────
+
+    const handleGenerateSummary = useCallback(async () => {
+        if (!clientRef.current) return;
+        setGenerating(true);
+        try {
+            await clientRef.current.generateSummary(date);
+            await loadReport();
+        } catch (e: unknown) {
+            Alert.alert("Summary Error", e instanceof Error ? e.message : String(e));
+        } finally {
+            setGenerating(false);
+        }
+    }, [date, loadReport]);
 
     // ── Locate engine script ──────────────────────────────────────────────────
 
@@ -215,7 +231,12 @@ export function ReportScreen() {
                     </Pressable>
                 </View>
             ) : report ? (
-                <DayView date={date} report={report} />
+                <DayView
+                    date={date}
+                    report={report}
+                    onGenerateSummary={handleGenerateSummary}
+                    generatingSummary={generating}
+                />
             ) : null}
         </View>
     );

@@ -40,6 +40,17 @@ if (!configPath) {
       } else if (req.method === 'POST' && url.pathname === '/flag-ignored') {
         await engine.flagProjectsIgnored(await readJson(req));
         json(res, 200, {ok: true});
+      } else if (
+        req.method === 'POST' &&
+        url.pathname === '/generate-summary'
+      ) {
+        const {date} = await readJson(req);
+        if (!date) {
+          json(res, 400, {error: 'date required'});
+          return;
+        }
+        const summary = await engine.generateSummary(date);
+        json(res, 200, {summary});
       } else {
         json(res, 404, {error: 'not found'});
       }

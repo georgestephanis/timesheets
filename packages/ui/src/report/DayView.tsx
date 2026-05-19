@@ -1,5 +1,5 @@
 import React from "react";
-import { ScrollView, View, Text, StyleSheet } from "react-native";
+import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
 import { ProjectCard } from "./ProjectCard";
 import { TimelineView } from "./TimelineView";
 import type { Report } from "./EngineClient";
@@ -8,6 +8,8 @@ import { Brand } from "../brand";
 type Props = {
     date: string;
     report: Report;
+    onGenerateSummary?: () => void;
+    generatingSummary?: boolean;
 };
 
 function fmtDur(seconds: number): string {
@@ -16,7 +18,7 @@ function fmtDur(seconds: number): string {
     return `${h}h ${m}m`;
 }
 
-export function DayView({ date, report }: Props) {
+export function DayView({ date, report, onGenerateSummary, generatingSummary }: Props) {
     const projects = Object.entries(report.days[date] ?? {}).sort(([, a], [, b]) => b.seconds - a.seconds);
 
     const segments = report.timelines?.[date] ?? [];
@@ -40,11 +42,25 @@ export function DayView({ date, report }: Props) {
                 </Text>
             </View>
 
-            {report.summaries?.[date] && (
+            {report.summaries?.[date] ? (
                 <View style={styles.aiSummary}>
-                    <Text style={styles.aiSummaryText}>{report.summaries[date]}</Text>
+                    <Text style={styles.aiSummaryText} selectable>
+                        {report.summaries[date]}
+                    </Text>
                 </View>
-            )}
+            ) : onGenerateSummary ? (
+                <View style={styles.generateRow}>
+                    <Pressable
+                        onPress={onGenerateSummary}
+                        disabled={generatingSummary}
+                        style={[styles.generateBtn, generatingSummary && styles.generateBtnDisabled]}
+                    >
+                        <Text style={styles.generateBtnText}>
+                            {generatingSummary ? "Generating…" : "✦ Generate Summary"}
+                        </Text>
+                    </Pressable>
+                </View>
+            ) : null}
 
             {projects.map(([name, data]) => (
                 <ProjectCard key={name} name={name} data={data} />
@@ -87,5 +103,24 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: "#333",
         lineHeight: 18,
+    },
+    generateRow: {
+        marginHorizontal: 12,
+        marginBottom: 8,
+    },
+    generateBtn: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderWidth: 1,
+        borderColor: Brand.terracotta,
+        borderRadius: 6,
+        alignSelf: "flex-start",
+    },
+    generateBtnDisabled: {
+        opacity: 0.4,
+    },
+    generateBtnText: {
+        fontSize: 12,
+        color: Brand.terracotta,
     },
 });

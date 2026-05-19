@@ -64,6 +64,10 @@ export class EngineClient {
         await this.post("/flag-ignored", { projects, ignored });
     }
 
+    async generateSummary(date: string): Promise<{ summary: string }> {
+        return this.post("/generate-summary", { date });
+    }
+
     private async get<T>(path: string): Promise<T> {
         const res = await fetch(this.base + path);
         const body = await res.json();

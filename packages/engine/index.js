@@ -12,7 +12,7 @@
 import path from "path";
 import { loadConfig, saveConfigWithBackup, applySignalToProject } from "./lib/config.js";
 import { clearWarnings, getWarnings } from "./lib/helpers.js";
-import { loadSourcesForRange, loadCachedLlmSummary } from "./lib/cache.js";
+import { loadSourcesForRange, loadCachedLlmSummary, saveCachedLlmSummary } from "./lib/cache.js";
 import { classifyAndAggregate } from "./lib/classifiers.js";
 import { buildReport } from "./lib/renderer.js";
 import { makeLoadFreshFn } from "./lib/loaders.js";
@@ -197,6 +197,75 @@ class TimesheetsEngine {
         const cfg = /** @type {import('@timesheets/contracts').Config} */ (this.config);
         if (cfg.projects?.[payload.project]) cfg.projects[payload.project].grouping = payload.grouping;
         await this.saveConfig(cfg);
+    }
+
+    /**
+     * Generates (or returns cached) an LLM day summary for the given date.
+     * Uses the first configured LLM connection from config.integrations.llm.
+     * The result is cached to disk and will be included in subsequent generateReport calls.
+     *
+     * @param {string} date  YYYY-MM-DD
+     * @returns {Promise<string>}
+     */
+    async generateSummary(date) {
+        if (!this.config) await this.loadConfig();
+        const cfg = /** @type {import('@timesheets/contracts').Config} */ (this.config);
+        const tz = cfg.timezone ?? "UTC";
+
+        const llm = cfg.integrations?.llm?.[0];
+        if (!llm) throw new Error("No LLM connection configured in config.integrations.llm");
+
+        const dayDate = new Date(date + "T12:00:00");
+
+        // Return cached summary if it's still fresh.
+        const cached = await loadCachedLlmSummary(this.projectRoot, dayDate, tz);
+        if (cached) return cached;
+
+        // Build a compact prompt from the day's report.
+        const report = await this.generateReport({ from: date, to: date });
+        const projects = report.days[date] ?? {};
+        const lines = Object.entries(projects)
+            .sort(([, a], [, b]) => b.seconds - a.seconds)
+            .map(([name, p]) => {
+                const h = Math.floor(p.seconds / 3600);
+                const m = Math.floor((p.seconds % 3600) / 60);
+                const subjects = (p.commits ?? []).map((c) => c.subj).join("; ");
+                return `- ${name}: ${h}h ${m}m${subjects ? ` (${subjects})` : ""}`;
+            });
+
+        if (lines.length === 0) throw new Error("No project data available for this day");
+
+        const prompt =
+            `Summarize my work on ${date}:\n${lines.join("\n")}\n\n` +
+            "Write 2-3 concise sentences. Focus on what was accomplished, not the time.";
+
+        // Call the OpenAI-compatible chat completions endpoint.
+        const baseUrl = llm.base_url.replace(/\/$/, "");
+        const res = await fetch(`${baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${llm.api_key ?? "sk-no-key"}`,
+            },
+            body: JSON.stringify({
+                model: llm.model ?? "gpt-4o-mini",
+                messages: [{ role: "user", content: prompt }],
+                max_tokens: 200,
+            }),
+            signal: AbortSignal.timeout((llm.timeout ?? 30) * 1000),
+        });
+
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            throw new Error(`LLM API error ${res.status}: ${text}`);
+        }
+
+        const data = /** @type {any} */ (await res.json());
+        const summary = data?.choices?.[0]?.message?.content?.trim();
+        if (!summary) throw new Error("LLM returned an empty response");
+
+        await saveCachedLlmSummary(this.projectRoot, dayDate, tz, summary);
+        return summary;
     }
 
     /**
