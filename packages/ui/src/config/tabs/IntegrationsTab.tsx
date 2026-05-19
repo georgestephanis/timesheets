@@ -1,5 +1,6 @@
 import React from "react";
 import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
+import { useSidecar } from "../../SidecarContext";
 import { ConnectionCard } from "../components/ConnectionCard";
 import { FieldRow } from "../components/FieldRow";
 import { useFieldPath } from "../useFieldPath";
@@ -186,6 +187,8 @@ function AddButton({ label, onPress }: { label: string; onPress: () => void }) {
 
 export function IntegrationsTab({ draft, setField }: Props) {
     const integrations = draft.integrations ?? {};
+    const { activeLlmIndex, setActiveLlmIndex } = useSidecar();
+    const llmList = integrations.llm ?? [];
 
     const addHarvest = () => {
         const existing = integrations.harvest ?? [];
@@ -281,7 +284,30 @@ export function IntegrationsTab({ draft, setField }: Props) {
 
             <View style={styles.section}>
                 <Text style={styles.sectionLabel}>LLM</Text>
-                {(integrations.llm ?? []).map((conn, i) => (
+                {llmList.length > 1 && (
+                    <View style={styles.llmPicker}>
+                        <Text style={styles.llmPickerLabel}>Active provider (this session):</Text>
+                        <View style={styles.llmPickerRow}>
+                            {llmList.map((conn, i) => (
+                                <Pressable
+                                    key={i}
+                                    style={[styles.llmPickerChip, activeLlmIndex === i && styles.llmPickerChipActive]}
+                                    onPress={() => setActiveLlmIndex(i)}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.llmPickerChipText,
+                                            activeLlmIndex === i && styles.llmPickerChipTextActive,
+                                        ]}
+                                    >
+                                        {conn.name || `LLM #${i + 1}`}
+                                    </Text>
+                                </Pressable>
+                            ))}
+                        </View>
+                    </View>
+                )}
+                {llmList.map((conn, i) => (
                     <LlmCard
                         key={i}
                         idx={i}
@@ -344,5 +370,43 @@ const styles = StyleSheet.create({
     addBtnText: {
         fontSize: 12,
         color: "#007AFF",
+    },
+    llmPicker: {
+        marginHorizontal: 16,
+        marginTop: 8,
+        marginBottom: 4,
+        padding: 10,
+        backgroundColor: "#f0f4ff",
+        borderRadius: 6,
+        borderWidth: 1,
+        borderColor: "#d0d8f0",
+    },
+    llmPickerLabel: {
+        fontSize: 11,
+        color: "#555",
+        marginBottom: 6,
+    },
+    llmPickerRow: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 6,
+    },
+    llmPickerChip: {
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: "#007AFF",
+        backgroundColor: "#fff",
+    },
+    llmPickerChipActive: {
+        backgroundColor: "#007AFF",
+    },
+    llmPickerChipText: {
+        fontSize: 12,
+        color: "#007AFF",
+    },
+    llmPickerChipTextActive: {
+        color: "#fff",
     },
 });
