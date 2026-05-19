@@ -9,6 +9,7 @@ export type Report = {
     timelines?: Record<string, TimelineSegment[]>;
     warnings?: string[];
     summaries?: Record<string, string>;
+    cachedAt?: number;
 };
 
 export type ProjectReport = {
@@ -53,8 +54,8 @@ export class EngineClient {
         return this.get(`/report?${params}`);
     }
 
-    async reassignSignal(type: string, key: string, project: string): Promise<void> {
-        await this.post("/reassign-signal", { type, key, project });
+    async reassignSignal(type: string, key: string, project: string, createProject = false): Promise<void> {
+        await this.post("/reassign-signal", { type, key, project, createProject });
     }
 
     async setGrouping(project: string, grouping: string): Promise<void> {

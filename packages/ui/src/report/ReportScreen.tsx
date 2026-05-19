@@ -239,6 +239,17 @@ export function ReportScreen() {
                         {backfilling ? `Backfilling ${backfillProgress}/7…` : "⟳ Backfill 7 days"}
                     </Text>
                 </Pressable>
+                {report?.cachedAt && (
+                    <Text style={styles.cacheBadge}>
+                        cached ·{" "}
+                        {(() => {
+                            const ageMs = Date.now() - report.cachedAt;
+                            const h = Math.floor(ageMs / 3_600_000);
+                            const m = Math.floor((ageMs % 3_600_000) / 60_000);
+                            return h > 0 ? `${h}h ${m}m ago` : `${m}m ago`;
+                        })()}
+                    </Text>
+                )}
                 {report && Object.keys(report.days[date] ?? {}).length > 1 && (
                     <Pressable
                         onPress={() => setFilterOpen((o) => !o)}
@@ -407,6 +418,7 @@ const styles = StyleSheet.create({
     filterItemSelected: { backgroundColor: "#FFF4EE" },
     filterItemText: { fontSize: 12, color: "#333" },
     filterItemTextSelected: { color: Brand.terracotta, fontWeight: "600" },
+    cacheBadge: { fontSize: 11, color: "#999", marginLeft: "auto" },
     btnDisabled: { opacity: 0.4 },
     dateInput: {
         fontSize: 14,

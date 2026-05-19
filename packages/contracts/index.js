@@ -71,6 +71,8 @@
  *   Present only when non-empty. Human-readable integration warning messages.
  * @property {Object<string, string>} [summaries]
  *   Present only when non-empty. LLM-generated summaries keyed by "YYYY-MM-DD".
+ * @property {number} [cachedAt]
+ *   Unix epoch ms of the source-cache files, present only when all data came from cache.
  */
 
 /**
@@ -192,9 +194,10 @@
 
 /**
  * @typedef {Object} ReassignSignalPayload
- * @property {string} type    - Signal type ('vscode'|'browser'|'slack'|'apps'|'harvest'|'clickup'|'clockify'|'github')
- * @property {string} key     - Signal identifier (domain, workspace, app name, etc.)
- * @property {string} project - Target project name
+ * @property {string}  type          - Signal type ('vscode'|'browser'|'slack'|'apps'|'harvest'|'clickup'|'clockify'|'github')
+ * @property {string}  key           - Signal identifier (domain, workspace, app name, etc.)
+ * @property {string}  project       - Target project name
+ * @property {boolean} [createProject] - When true, create the project if it does not already exist
  */
 
 /**

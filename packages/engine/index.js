@@ -12,7 +12,7 @@
 import path from "path";
 import { loadConfig, saveConfigWithBackup, applySignalToProject, applySignalToSpecialTarget } from "./lib/config.js";
 import { clearWarnings, getWarnings } from "./lib/helpers.js";
-import { loadSourcesForRange, loadCachedLlmSummary, saveCachedLlmSummary } from "./lib/cache.js";
+import { loadSourcesForRange, loadCachedLlmSummary, saveCachedLlmSummary, sourceCacheMtime } from "./lib/cache.js";
 import { classifyAndAggregate } from "./lib/classifiers.js";
 import { buildReport } from "./lib/renderer.js";
 import { makeLoadFreshFn } from "./lib/loaders.js";
@@ -121,7 +121,7 @@ class TimesheetsEngine {
         const from = new Date(range.from + "T00:00:00");
         const to = new Date(range.to + "T23:59:59");
 
-        const { bundle } = await loadSourcesForRange(
+        const { bundle, fromCache } = await loadSourcesForRange(
             this.projectRoot,
             tz,
             from,
@@ -148,7 +148,14 @@ class TimesheetsEngine {
             if (s) summaries[new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(day)] = s;
         }
 
-        return buildReport(bucket, unmatched, from, to, tz, timeline, getWarnings(), summaries);
+        const report = buildReport(bucket, unmatched, from, to, tz, timeline, getWarnings(), summaries);
+
+        if (fromCache && days.length > 0) {
+            const mtime = await sourceCacheMtime(this.projectRoot, days[0], tz);
+            if (mtime > 0) report.cachedAt = mtime;
+        }
+
+        return report;
     }
 
     /**
@@ -186,6 +193,10 @@ class TimesheetsEngine {
         if (payload.project === "__personal__" || payload.project === "__correlated__") {
             applySignalToSpecialTarget(cfg, payload.type, payload.key, payload.project);
         } else {
+            if (payload.createProject && !cfg.projects?.[payload.project]) {
+                cfg.projects ??= {};
+                cfg.projects[payload.project] = {};
+            }
             applySignalToProject(cfg, payload.type, payload.key, payload.project);
         }
         await this.saveConfig(cfg);
