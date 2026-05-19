@@ -3,6 +3,7 @@ import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet, TextInput 
 import { useSidecar } from "../SidecarContext";
 import type { Report } from "./EngineClient";
 import { DayView } from "./DayView";
+import { RangeView } from "./RangeView";
 import { WarningBanner } from "./WarningBanner";
 import { Brand } from "../brand";
 
@@ -36,8 +37,12 @@ export function ReportScreen() {
     const [backfillProgress, setBackfillProgress] = useState(0);
     const [projectFilter, setProjectFilter] = useState("");
     const [filterOpen, setFilterOpen] = useState(false);
+    const [rangeMode, setRangeMode] = useState<"day" | "week">("day");
 
     // ── Load report ───────────────────────────────────────────────────────────
+
+    const rangeFrom = rangeMode === "week" ? offsetDate(date, -6) : date;
+    const rangeTo = date;
 
     const loadReport = useCallback(
         async (rebuild = false) => {
@@ -46,7 +51,7 @@ export function ReportScreen() {
             setLoadError("");
             if (rebuild) setRebuilding(true);
             try {
-                const r = await client.getReport(date, date, rebuild);
+                const r = await client.getReport(rangeFrom, rangeTo, rebuild);
                 setReport(r);
                 setLoadState("idle");
             } catch (e: unknown) {
@@ -56,7 +61,7 @@ export function ReportScreen() {
                 setRebuilding(false);
             }
         },
-        [client, date],
+        [client, rangeFrom, rangeTo],
     );
 
     useEffect(() => {
@@ -65,25 +70,28 @@ export function ReportScreen() {
 
     // ── Date navigation ───────────────────────────────────────────────────────
 
-    const goTo = useCallback((delta: number) => {
-        setDate((d) => offsetDate(d, delta));
-        setReport(null);
-    }, []);
+    const goTo = useCallback(
+        (delta: number) => {
+            setDate((d) => offsetDate(d, rangeMode === "week" ? delta * 7 : delta));
+            setReport(null);
+        },
+        [rangeMode],
+    );
 
     const isToday = date === todayString();
 
-    // Clear filter whenever the date or report changes so a stale project name
-    // doesn't linger after a rebuild that removed that project.
+    // Clear filter on date or range mode change.
     useEffect(() => {
         setProjectFilter("");
         setFilterOpen(false);
-    }, [date]);
+    }, [date, rangeMode]);
 
+    // Clear filter if the selected project disappears from the report.
     useEffect(() => {
-        if (projectFilter && report && !(projectFilter in (report.days[date] ?? {}))) {
-            setProjectFilter("");
-        }
-    }, [report, date, projectFilter]);
+        if (!projectFilter || !report) return;
+        const allProjects = new Set(Object.values(report.days).flatMap((d) => Object.keys(d)));
+        if (!allProjects.has(projectFilter)) setProjectFilter("");
+    }, [report, projectFilter]);
 
     // ── Date jump (tap-to-edit) ───────────────────────────────────────────────
 
@@ -194,11 +202,17 @@ export function ReportScreen() {
                     ) : (
                         <Pressable
                             onPress={() => {
-                                setDateEditing(true);
-                                setDateInput(date);
+                                if (rangeMode === "day") {
+                                    setDateEditing(true);
+                                    setDateInput(date);
+                                }
                             }}
                         >
-                            <Text style={styles.dateLabel}>{fmtDisplay(date)}</Text>
+                            <Text style={styles.dateLabel}>
+                                {rangeMode === "week"
+                                    ? `${fmtDisplay(rangeFrom)} – ${fmtDisplay(date)}`
+                                    : fmtDisplay(date)}
+                            </Text>
                         </Pressable>
                     )}
                     {!isToday && !dateEditing && (
@@ -250,7 +264,23 @@ export function ReportScreen() {
                         })()}
                     </Text>
                 )}
-                {report && Object.keys(report.days[date] ?? {}).length > 1 && (
+                <View style={styles.modeToggle}>
+                    {(["day", "week"] as const).map((m) => (
+                        <Pressable
+                            key={m}
+                            onPress={() => {
+                                setRangeMode(m);
+                                setReport(null);
+                            }}
+                            style={[styles.modeBtn, rangeMode === m && styles.modeBtnActive]}
+                        >
+                            <Text style={[styles.modeBtnText, rangeMode === m && styles.modeBtnActiveText]}>
+                                {m === "day" ? "Day" : "Week"}
+                            </Text>
+                        </Pressable>
+                    ))}
+                </View>
+                {report && Object.keys(Object.assign({}, ...Object.values(report.days))).length > 1 && (
                     <Pressable
                         onPress={() => setFilterOpen((o) => !o)}
                         style={[styles.toolbarBtn, styles.filterBtn, projectFilter ? styles.filterBtnActive : null]}
@@ -322,13 +352,17 @@ export function ReportScreen() {
                     </Pressable>
                 </View>
             ) : report ? (
-                <DayView
-                    date={date}
-                    report={report}
-                    projectFilter={projectFilter}
-                    onGenerateSummary={handleGenerateSummary}
-                    generatingSummary={generating}
-                />
+                rangeMode === "week" ? (
+                    <RangeView report={report} projectFilter={projectFilter} />
+                ) : (
+                    <DayView
+                        date={date}
+                        report={report}
+                        projectFilter={projectFilter}
+                        onGenerateSummary={handleGenerateSummary}
+                        generatingSummary={generating}
+                    />
+                )
             ) : null}
         </View>
     );
@@ -420,6 +454,21 @@ const styles = StyleSheet.create({
     filterItemTextSelected: { color: Brand.terracotta, fontWeight: "600" },
     cacheBadge: { fontSize: 11, color: "#999", marginLeft: "auto" },
     btnDisabled: { opacity: 0.4 },
+    modeToggle: {
+        flexDirection: "row",
+        borderWidth: 1,
+        borderColor: "#bbb",
+        borderRadius: 4,
+        overflow: "hidden",
+    },
+    modeBtn: {
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        backgroundColor: "transparent",
+    },
+    modeBtnActive: { backgroundColor: Brand.ink },
+    modeBtnText: { fontSize: 12, color: "#555" },
+    modeBtnActiveText: { color: Brand.paper, fontWeight: "600" },
     dateInput: {
         fontSize: 14,
         fontWeight: "600",
