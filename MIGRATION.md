@@ -127,6 +127,38 @@ If you remove the cron job, clicking **↺ Rebuild** in the desktop app will sti
 
 ---
 
+## Apple Intelligence in the PHP web UI
+
+The PHP web UI can use on-device Apple Intelligence as an LLM provider without the
+desktop app open. It requires a one-time build of the standalone server binary:
+
+```bash
+cd tools/apple-intelligence-server
+swift build -c release
+```
+
+After that, `composer serve` (or any PHP LLM call) will automatically start the server
+the first time it needs Apple Intelligence — no manual steps. To select it:
+
+```bash
+# Explicit selection
+TIMESHEETS_LLM="Apple Intelligence (on-device)" php activity-report.php
+
+# Or put it first in config.json integrations.llm to make it the default
+```
+
+The server runs on `127.0.0.1:57911` — the same port the desktop app uses — so
+`config.json` needs only a single entry for both surfaces.
+
+**One-shot CLI testing with apfel:** If you have apfel installed (`brew install apfel`),
+you can also test Apple Intelligence interactively without the server:
+
+```bash
+echo "Summarise what 3h of ActivityWatch time on a project looks like" | apfel
+```
+
+---
+
 ## Packaging for distribution (Phase 6)
 
 If you want to distribute the app as a signed `.app` bundle (so it runs without the
