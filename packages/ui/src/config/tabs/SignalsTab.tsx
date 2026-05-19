@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import type { Config } from "../configSchema";
 import { useSidecar } from "../../SidecarContext";
 import { Brand } from "../../brand";
@@ -52,8 +52,7 @@ function applySignalToDraft(
     }
 
     const proj = (draft.projects ?? {})[project];
-    if (!proj) return;
-    const p = proj as Record<string, unknown>;
+    const p = (proj ?? {}) as Record<string, unknown>;
 
     switch (kind) {
         case "vscode":
@@ -103,6 +102,7 @@ export function SignalsTab({ draft, setField }: Props) {
     const [suggesting, setSuggesting] = useState(false);
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [suggestionError, setSuggestionError] = useState<string | null>(null);
+    const [newProjectInputs, setNewProjectInputs] = useState<Record<string, string>>({}); // "kind:value" → draft name
 
     const today = todayIso();
 
@@ -129,14 +129,27 @@ export function SignalsTab({ draft, setField }: Props) {
     const signalKey = (kind: string, value: string) => `${kind}:${value}`;
 
     const handleAssign = async (kind: string, value: string) => {
-        const project = selections[signalKey(kind, value)];
-        if (!project || !client) return;
         const key = signalKey(kind, value);
+        const isNew = selections[key] === "__new__";
+        const newName = isNew ? (newProjectInputs[key] ?? "").trim() : "";
+        const project = isNew ? newName : selections[key];
+        if (!project || !client) return;
         setAssigning((s) => new Set(s).add(key));
         try {
-            await client.reassignSignal(kind, value, project);
+            if (isNew) {
+                await client.reassignSignal(kind, value, newName, true);
+                setField(`projects.${newName}`, {});
+            } else {
+                await client.reassignSignal(kind, value, project);
+            }
             applySignalToDraft(draft, setField, kind, value, project);
             setDismissed((s) => new Set(s).add(key));
+            if (isNew)
+                setNewProjectInputs((prev) => {
+                    const next = { ...prev };
+                    delete next[key];
+                    return next;
+                });
         } catch (e) {
             // leave signal in place; user can retry
         } finally {
@@ -303,10 +316,18 @@ export function SignalsTab({ draft, setField }: Props) {
                                             </Pressable>
                                             <Pressable
                                                 onPress={() => handleAssign(kind, value)}
-                                                disabled={!selected || busy}
+                                                disabled={
+                                                    !selected ||
+                                                    busy ||
+                                                    (selected === "__new__" && !(newProjectInputs[key] ?? "").trim())
+                                                }
                                                 style={[
                                                     styles.assignBtn,
-                                                    (!selected || busy) && styles.assignBtnDisabled,
+                                                    (!selected ||
+                                                        busy ||
+                                                        (selected === "__new__" &&
+                                                            !(newProjectInputs[key] ?? "").trim())) &&
+                                                        styles.assignBtnDisabled,
                                                 ]}
                                             >
                                                 <Text style={styles.assignBtnText}>{busy ? "…" : "Assign"}</Text>
@@ -391,7 +412,34 @@ export function SignalsTab({ draft, setField }: Props) {
                                                         </Text>
                                                     </Pressable>
                                                 ))}
+                                                <Pressable
+                                                    onPress={() => {
+                                                        setSelections((prev) => ({ ...prev, [key]: "__new__" }));
+                                                        setPickerOpen(null);
+                                                    }}
+                                                    style={[styles.dropdownItem, styles.dropdownItemSpecial]}
+                                                >
+                                                    <Text
+                                                        style={[
+                                                            styles.dropdownItemText,
+                                                            styles.dropdownItemSpecialText,
+                                                        ]}
+                                                    >
+                                                        + New project…
+                                                    </Text>
+                                                </Pressable>
                                             </View>
+                                        )}
+                                        {selected === "__new__" && (
+                                            <TextInput
+                                                value={newProjectInputs[key] ?? ""}
+                                                onChangeText={(t) =>
+                                                    setNewProjectInputs((prev) => ({ ...prev, [key]: t }))
+                                                }
+                                                placeholder="New project name…"
+                                                style={styles.newProjectInput}
+                                                autoFocus
+                                            />
                                         )}
                                     </View>
                                 );
@@ -543,4 +591,15 @@ const styles = StyleSheet.create({
     dropdownItemText: { fontSize: 12, color: "#333" },
     dropdownItemTextSelected: { color: Brand.terracotta, fontWeight: "600" },
     dropdownItemSpecialText: { color: "#666", fontStyle: "italic" },
+    newProjectInput: {
+        borderWidth: 1,
+        borderColor: Brand.terracotta,
+        borderRadius: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        fontSize: 12,
+        color: "#222",
+        backgroundColor: "#fff",
+        marginTop: 4,
+    },
 });
