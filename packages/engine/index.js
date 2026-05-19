@@ -239,16 +239,30 @@ class TimesheetsEngine {
             `Summarize my work on ${date}:\n${lines.join("\n")}\n\n` +
             "Write 2-3 concise sentences. Focus on what was accomplished, not the time.";
 
-        // Call the OpenAI-compatible chat completions endpoint.
+        // Resolve model: use config value, or discover from /models endpoint.
         const baseUrl = llm.base_url.replace(/\/$/, "");
+        const authHeaders = {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${llm.api_key ?? "sk-no-key"}`,
+        };
+        let model = llm.model;
+        if (!model) {
+            const modelsRes = await fetch(`${baseUrl}/models`, {
+                headers: authHeaders,
+                signal: AbortSignal.timeout((llm.timeout ?? 30) * 1000),
+            });
+            if (!modelsRes.ok) throw new Error(`Could not fetch model list: ${modelsRes.status}`);
+            const modelsData = /** @type {any} */ (await modelsRes.json());
+            model = modelsData?.data?.[0]?.id;
+            if (!model) throw new Error("LLM /models returned no models");
+        }
+
+        // Call the OpenAI-compatible chat completions endpoint.
         const res = await fetch(`${baseUrl}/chat/completions`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${llm.api_key ?? "sk-no-key"}`,
-            },
+            headers: authHeaders,
             body: JSON.stringify({
-                model: llm.model ?? "gpt-4o-mini",
+                model,
                 messages: [{ role: "user", content: prompt }],
                 max_tokens: 200,
             }),
