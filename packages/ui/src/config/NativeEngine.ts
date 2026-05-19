@@ -14,6 +14,8 @@ type NativeEngineModule = {
     getEngineScriptPath(): Promise<string | null>;
     setEngineScriptPath(path: string): Promise<string>;
     pickEngineScript(): Promise<string | null>;
+    // Apple Intelligence on-device LLM shim (macOS 26+)
+    getAppleIntelligencePort(): Promise<number>;
 };
 
 const native = NativeModules.TimesheetsEngine as NativeEngineModule | undefined;
@@ -56,5 +58,8 @@ export const NativeEngine = {
     },
     pickEngineScript(): Promise<string | null> {
         return assertNative().pickEngineScript();
+    },
+    getAppleIntelligencePort(): Promise<number> {
+        return assertNative().getAppleIntelligencePort();
     },
 };
