@@ -127,6 +127,10 @@
                 "base_url": "http://localhost:11434/v1",
                 "api_key": "ollama",
                 "model": "llama3"
+            },
+            {
+                "name": "Apple Intelligence (on-device)",
+                "base_url": "http://127.0.0.1:57911/v1"
             }
         ],
         "clockify": [
