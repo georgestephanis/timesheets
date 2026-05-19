@@ -1,14 +1,20 @@
-# activity-report
+<p align="center">
+  <img src="branding/svg/timesheets-icon-dark.svg#gh-light-mode-only"
+       width="128" height="128" alt="timesheets" />
+  <img src="branding/svg/timesheets-icon-light.svg#gh-dark-mode-only"
+       width="128" height="128" alt="timesheets" />
+</p>
+<h1 align="center">timesheets</h1>
 
 A local-first activity reporting tool with multiple UI surfaces sharing a common data store. All surfaces read the same [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional integration data; produce the same `config.json`-driven project report; and write to the same `reports/` cache directory.
 
-**Current UI surfaces:**
+**UI surfaces:**
 
-- **PHP CLI** (`activity-report.php`) — primary interface; backfills daily reports, generates Markdown/JSON/TSV output, LLM-assisted signal tuning
+- **React Native macOS desktop** (`apps/desktop/`) — native app with full report viewing, config editing, signal assignment, and LLM features; see [NATIVE.md](NATIVE.md)
+- **PHP CLI** (`activity-report.php`) — backfills daily reports, generates Markdown/JSON/TSV output, LLM-assisted signal tuning
 - **PHP web UI** (`apps/web/`) — local browser interface; report browsing, Harvest sidebar, rebuild, config panel
-- **React Native macOS desktop** (`apps/desktop/`) — in progress; see [NATIVE.md](NATIVE.md)
 
-The desktop app is built on a TypeScript engine (`packages/engine/`) that will eventually replace the PHP core while keeping the same `config.json` shape and `reports/` cache layout. Switching between the PHP and native interfaces does not require any data migration.
+The desktop app is built on a TypeScript engine (`packages/engine/`) that shares the same `config.json` shape and `reports/` cache layout as the PHP implementation. All three surfaces can run against the same local data simultaneously — no data migration required.
 
 ## A Recommendation on Building your `config.json`
 
@@ -21,8 +27,8 @@ All UI surfaces converge on the same local data stores:
 ```
 ┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────────┐
 │   PHP CLI           │   │   PHP Web UI         │   │   React Native Desktop  │
-│   activity-report   │   │   apps/web/ + api.php     │   │   apps/desktop/         │
-│   .php              │   │                      │   │   (in progress)         │
+│   activity-report   │   │   apps/web/ + api.php│   │   apps/desktop/         │
+│   .php              │   │                      │   │                         │
 └──────────┬──────────┘   └──────────┬───────────┘   └────────────┬────────────┘
            │                         │                             │
            │              ┌──────────┴───────────┐                │
@@ -458,7 +464,7 @@ apps/
     static/
       app.css             — all styles
       app.js              — client-side renderer, admin panel, timeline, day summary
-  desktop/                — @timesheets/desktop: React Native macOS app (Phase 5; fully functional)
+  desktop/                — @timesheets/desktop: React Native macOS app (Phase 5 complete)
 src/
   config.php              — saveConfigWithBackup(), applySignalToProject(), parseSlackSignal()
   helpers.php             — expandPath(), fmtDur(), appLog(), warning()
