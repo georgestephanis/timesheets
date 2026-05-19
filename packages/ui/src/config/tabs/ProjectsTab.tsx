@@ -1,19 +1,8 @@
 import React, { useState } from "react";
-import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-} from "react-native";
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { ProjectDrawer } from "./ProjectDrawer";
 import type { Config } from "../configSchema";
-import { NativeEngine } from "../NativeEngine";
-import { EngineClient } from "../../report/EngineClient";
+import { useSidecar } from "../../SidecarContext";
 import { Brand } from "../../brand";
 
 type Props = {
@@ -35,6 +24,8 @@ export function ProjectsTab({ draft, setField }: Props) {
     const [repoPickerOpen, setRepoPickerOpen] = useState<string | null>(null); // repo path
     const [repoSelections, setRepoSelections] = useState<Record<string, string>>({}); // path → project
     const [addingRepo, setAddingRepo] = useState<Set<string>>(new Set());
+
+    const { client } = useSidecar();
 
     const projects = Object.entries(draft.projects ?? {});
     const projectNames = Object.keys(draft.projects ?? {}).sort();
@@ -71,16 +62,14 @@ export function ProjectsTab({ draft, setField }: Props) {
     };
 
     const handleDiscover = async () => {
+        if (!client) {
+            setDiscoverError("Engine is not running yet. Please wait and try again.");
+            return;
+        }
         setDiscovering(true);
         setDiscoverError(null);
         setRepos(null);
         try {
-            const port = await NativeEngine.getSidecarPort();
-            if (!port) {
-                setDiscoverError("Engine sidecar is not running. Open Reports first.");
-                return;
-            }
-            const client = new EngineClient(port);
             const result = await client.discoverRepos();
             setRepos(result.repos);
         } catch (e) {

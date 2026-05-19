@@ -18,6 +18,10 @@ export type {
 } from "./config/configSchema";
 export { NativeEngine } from "./config/NativeEngine";
 
+// Sidecar lifecycle
+export { SidecarProvider, useSidecar } from "./SidecarContext";
+export type { SidecarState } from "./SidecarContext";
+
 // Report UI
 export { ReportScreen } from "./report/ReportScreen";
 export { EngineClient } from "./report/EngineClient";

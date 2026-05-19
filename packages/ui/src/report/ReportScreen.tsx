@@ -1,13 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator, Alert, StyleSheet } from "react-native";
-import { NativeEngine } from "../config/NativeEngine";
-import { EngineClient } from "./EngineClient";
+import { useSidecar } from "../SidecarContext";
 import type { Report } from "./EngineClient";
 import { DayView } from "./DayView";
 import { WarningBanner } from "./WarningBanner";
 import { Brand } from "../brand";
-
-type SidecarState = "idle" | "starting" | "running" | "no-script" | "error";
 
 function todayString(): string {
     return new Intl.DateTimeFormat("en-CA").format(new Date());
@@ -25,9 +22,7 @@ function fmtDisplay(dateStr: string): string {
 }
 
 export function ReportScreen() {
-    const [sidecarState, setSidecarState] = useState<SidecarState>("idle");
-    const [sidecarError, setSidecarError] = useState("");
-    const clientRef = useRef<EngineClient | null>(null);
+    const { state: sidecarState, error: sidecarError, client, locateAndStart } = useSidecar();
 
     const [date, setDate] = useState(todayString);
     const [report, setReport] = useState<Report | null>(null);
@@ -36,51 +31,16 @@ export function ReportScreen() {
     const [rebuilding, setRebuilding] = useState(false);
     const [generating, setGenerating] = useState(false);
 
-    // ── Start sidecar ─────────────────────────────────────────────────────────
-
-    const startSidecar = useCallback(async () => {
-        setSidecarState("starting");
-        setSidecarError("");
-        try {
-            // Check if already running.
-            const existing = await NativeEngine.getSidecarPort();
-            if (existing > 0) {
-                clientRef.current = new EngineClient(existing);
-                setSidecarState("running");
-                return;
-            }
-            // Check script is configured.
-            const scriptPath = await NativeEngine.getEngineScriptPath();
-            if (!scriptPath) {
-                setSidecarState("no-script");
-                return;
-            }
-            const port = await NativeEngine.startSidecar();
-            clientRef.current = new EngineClient(port);
-            setSidecarState("running");
-        } catch (e: unknown) {
-            setSidecarError(e instanceof Error ? e.message : String(e));
-            setSidecarState("error");
-        }
-    }, []);
-
-    useEffect(() => {
-        startSidecar();
-        return () => {
-            // Leave sidecar running; the OS kills it when the app exits.
-        };
-    }, [startSidecar]);
-
     // ── Load report ───────────────────────────────────────────────────────────
 
     const loadReport = useCallback(
         async (rebuild = false) => {
-            if (!clientRef.current) return;
+            if (!client) return;
             setLoadState("loading");
             setLoadError("");
             if (rebuild) setRebuilding(true);
             try {
-                const r = await clientRef.current.getReport(date, date, rebuild);
+                const r = await client.getReport(date, date, rebuild);
                 setReport(r);
                 setLoadState("idle");
             } catch (e: unknown) {
@@ -90,7 +50,7 @@ export function ReportScreen() {
                 setRebuilding(false);
             }
         },
-        [date],
+        [client, date],
     );
 
     useEffect(() => {
@@ -109,28 +69,17 @@ export function ReportScreen() {
     // ── Generate LLM summary ──────────────────────────────────────────────────
 
     const handleGenerateSummary = useCallback(async () => {
-        if (!clientRef.current) return;
+        if (!client) return;
         setGenerating(true);
         try {
-            await clientRef.current.generateSummary(date);
+            await client.generateSummary(date);
             await loadReport();
         } catch (e: unknown) {
             Alert.alert("Summary Error", e instanceof Error ? e.message : String(e));
         } finally {
             setGenerating(false);
         }
-    }, [date, loadReport]);
-
-    // ── Locate engine script ──────────────────────────────────────────────────
-
-    const handleLocateScript = async () => {
-        try {
-            const path = await NativeEngine.pickEngineScript();
-            if (path) await startSidecar();
-        } catch (e: unknown) {
-            Alert.alert("Error", e instanceof Error ? e.message : String(e));
-        }
-    };
+    }, [client, date, loadReport]);
 
     // ── Render states ─────────────────────────────────────────────────────────
 
@@ -151,7 +100,7 @@ export function ReportScreen() {
                     Locate <Text style={styles.code}>engine-server.js</Text> inside your Timesheets repository at{" "}
                     <Text style={styles.code}>apps/desktop/engine-server.js</Text>
                 </Text>
-                <Pressable onPress={handleLocateScript} style={styles.primaryBtn}>
+                <Pressable onPress={locateAndStart} style={styles.primaryBtn}>
                     <Text style={styles.primaryBtnText}>Locate engine-server.js…</Text>
                 </Pressable>
             </View>
@@ -165,7 +114,7 @@ export function ReportScreen() {
                 <Text style={styles.body} selectable>
                     {sidecarError}
                 </Text>
-                <Pressable onPress={() => startSidecar()} style={styles.primaryBtn}>
+                <Pressable onPress={locateAndStart} style={styles.primaryBtn}>
                     <Text style={styles.primaryBtnText}>Retry</Text>
                 </Pressable>
             </View>

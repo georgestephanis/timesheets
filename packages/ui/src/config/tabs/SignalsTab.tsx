@@ -1,8 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Config } from "../configSchema";
-import { NativeEngine } from "../NativeEngine";
-import { EngineClient } from "../../report/EngineClient";
+import { useSidecar } from "../../SidecarContext";
 import { Brand } from "../../brand";
 
 type Props = {
@@ -77,7 +76,8 @@ function applySignalToDraft(
 }
 
 export function SignalsTab({ draft, setField }: Props) {
-    const [loading, setLoading] = useState(true);
+    const { state: sidecarState, client } = useSidecar();
+    const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [unmatched, setUnmatched] = useState<Record<string, Record<string, number>>>({});
     const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -87,32 +87,26 @@ export function SignalsTab({ draft, setField }: Props) {
     const [suggesting, setSuggesting] = useState(false);
     const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
     const [suggestionError, setSuggestionError] = useState<string | null>(null);
-    const clientRef = useRef<EngineClient | null>(null);
 
     const today = todayIso();
 
     const load = useCallback(async () => {
+        if (!client) return;
         setLoading(true);
         setError(null);
         try {
-            const port = await NativeEngine.getSidecarPort();
-            if (!port) {
-                setError("Engine sidecar is not running. Open the Reports tab first to start it.");
-                return;
-            }
-            clientRef.current = new EngineClient(port);
-            const report = await clientRef.current.getReport(today, today);
+            const report = await client.getReport(today, today);
             setUnmatched(report.unmatched ?? {});
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         } finally {
             setLoading(false);
         }
-    }, [today]);
+    }, [client, today]);
 
     useEffect(() => {
-        load();
-    }, [load]);
+        if (sidecarState === "running") load();
+    }, [sidecarState, load]);
 
     const projectNames = Object.keys(draft.projects ?? {}).sort();
 
@@ -120,11 +114,11 @@ export function SignalsTab({ draft, setField }: Props) {
 
     const handleAssign = async (kind: string, value: string) => {
         const project = selections[signalKey(kind, value)];
-        if (!project || !clientRef.current) return;
+        if (!project || !client) return;
         const key = signalKey(kind, value);
         setAssigning((s) => new Set(s).add(key));
         try {
-            await clientRef.current.reassignSignal(kind, value, project);
+            await client.reassignSignal(kind, value, project);
             applySignalToDraft(draft, setField, kind, value, project);
             setDismissed((s) => new Set(s).add(key));
         } catch (e) {
@@ -139,12 +133,12 @@ export function SignalsTab({ draft, setField }: Props) {
     };
 
     const handleSuggest = async () => {
-        if (!clientRef.current) return;
+        if (!client) return;
         setSuggesting(true);
         setSuggestions([]);
         setSuggestionError(null);
         try {
-            const result = await clientRef.current.suggestAssignments(today);
+            const result = await client.suggestAssignments(today);
             setSuggestions(result.suggestions);
             if (result.suggestions.length === 0) setSuggestionError("No confident suggestions found.");
         } catch (e) {
@@ -161,11 +155,13 @@ export function SignalsTab({ draft, setField }: Props) {
         setSuggestions((prev) => prev.filter((x) => x.kind !== s.kind || x.value !== s.value));
     };
 
-    if (loading) {
+    if (sidecarState === "idle" || sidecarState === "starting" || (sidecarState === "running" && loading)) {
         return (
             <View style={styles.center}>
                 <ActivityIndicator size="large" color={Brand.terracotta} />
-                <Text style={styles.loadingText}>Loading today's signals…</Text>
+                <Text style={styles.loadingText}>
+                    {sidecarState !== "running" ? "Starting engine…" : "Loading today's signals…"}
+                </Text>
             </View>
         );
     }
