@@ -19,7 +19,7 @@ Legend: ✅ present · ⚠️ partial/different · ❌ absent · 🔒 intentiona
 | Grouping filter               | ✅ group dropdown            | ❌                            | ❌                                        |
 | Timeline visualization        | ✅ interactive color bars    | ❌                            | ⚠️ read-only, 7am–9pm                     |
 | Segment detail on hover       | ✅ tooltip                   | ❌                            | ❌                                        |
-| Caching indicator             | ✅ badge (cached/generated)  | ❌                            | ✅ "cached · Xh Ym ago" badge in toolbar  |
+| Caching indicator             | ✅ badge (cached/generated)  | ❌                            | ✅ "rebuilt Xh ago" badge in toolbar      |
 | Warning banner                | ✅ amber banner              | ✅ STDERR                     | ✅ amber banner                           |
 | Rebuild from source           | ✅ button                    | ✅ (every run)                | ✅ button                                 |
 | Backfill prior 7 days         | ❌                           | ✅ (no-arg default, cron)     | ✅ toolbar button (rebuilds prior 7 days) |
@@ -135,10 +135,7 @@ The following are desktop gaps worth addressing, roughly ordered by user impact:
 
 ### Lower impact / nice-to-have
 
-1. **Cron / backfill status** — No visibility into whether daily backfill has run. A
-   small "last updated" timestamp in the Reports header would surface this.
-
-2. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
+1. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
    sheet or export action in the Reports toolbar would unlock the spreadsheet/invoice
    workflow from the desktop.
 
