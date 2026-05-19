@@ -1,7 +1,8 @@
 import { useCallback } from "react";
 
-function getNestedValue(obj: unknown, path: string): unknown {
-    return path.split(".").reduce((curr: unknown, key) => {
+function getNestedValue(obj: unknown, path: string | string[]): unknown {
+    const segments = Array.isArray(path) ? path : path.split(".");
+    return segments.reduce((curr: unknown, key) => {
         if (curr == null || typeof curr !== "object") return undefined;
         return (curr as Record<string, unknown>)[key];
     }, obj);
@@ -13,8 +14,8 @@ export type FieldPathOptions = {
 
 export function useFieldPath(
     draft: object | null,
-    path: string,
-    setField: (path: string, value: unknown) => void,
+    path: string | string[],
+    setField: (path: string | string[], value: unknown) => void,
     opts: FieldPathOptions = {},
 ) {
     const rawValue = draft ? getNestedValue(draft, path) : undefined;

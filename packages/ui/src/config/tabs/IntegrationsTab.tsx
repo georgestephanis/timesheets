@@ -15,7 +15,7 @@ import type {
 
 type Props = {
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
 };
 
 function HarvestCard({
@@ -28,7 +28,7 @@ function HarvestCard({
     idx: number;
     conn: HarvestConnection;
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
     onRemove: () => void;
 }) {
     const b = `integrations.harvest.${idx}`;
@@ -57,7 +57,7 @@ function ClickUpCard({
     idx: number;
     conn: ClickUpConnection;
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
     onRemove: () => void;
 }) {
     const b = `integrations.clickup.${idx}`;
@@ -86,7 +86,7 @@ function GitHubCard({
     idx: number;
     conn: GitHubConnection;
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
     onRemove: () => void;
 }) {
     const b = `integrations.github.${idx}`;
@@ -127,7 +127,7 @@ function LlmCard({
     idx: number;
     conn: LlmConnection;
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
     onRemove: () => void;
 }) {
     const b = `integrations.llm.${idx}`;
@@ -158,7 +158,7 @@ function ClockifyCard({
     idx: number;
     conn: ClockifyConnection;
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
     onRemove: () => void;
 }) {
     const b = `integrations.clockify.${idx}`;

@@ -7,13 +7,13 @@ import type { Config } from "../configSchema";
 
 type Props = {
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
 };
 
 type GroupingCardProps = {
     name: string;
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
     onRemove: () => void;
 };
 

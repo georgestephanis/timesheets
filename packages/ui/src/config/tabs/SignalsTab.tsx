@@ -6,7 +6,7 @@ import { Brand } from "../../brand";
 
 type Props = {
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
 };
 
 type Suggestion = { kind: string; value: string; project: string; reason: string };
@@ -30,7 +30,7 @@ function addUnique(arr: string[], value: string): string[] {
 
 function applySignalToDraft(
     draft: Config,
-    setField: (path: string, value: unknown) => void,
+    setField: (path: string | string[], value: unknown) => void,
     kind: string,
     value: string,
     project: string,
@@ -56,11 +56,11 @@ function applySignalToDraft(
 
     switch (kind) {
         case "vscode":
-            setField(`projects.${project}.vscode_dirs`, addUnique((p.vscode_dirs as string[]) ?? [], value));
+            setField(["projects", project, "vscode_dirs"], addUnique((p.vscode_dirs as string[]) ?? [], value));
             break;
         case "browser":
             if (!value || value === "(no url)") break;
-            setField(`projects.${project}.domains`, addUnique((p.domains as string[]) ?? [], value));
+            setField(["projects", project, "domains"], addUnique((p.domains as string[]) ?? [], value));
             break;
         case "slack": {
             const idx = value.indexOf(" / ");
@@ -77,14 +77,17 @@ function applySignalToDraft(
                     ex.workspace === rule.workspace &&
                     (ex.channel_glob ?? undefined) === (rule.channel_glob ?? undefined),
             );
-            if (!dup) setField(`projects.${project}.slack`, [...existing, rule]);
+            if (!dup) setField(["projects", project, "slack"], [...existing, rule]);
             break;
         }
         case "apps":
             if (value.startsWith("ssh:")) {
-                setField(`projects.${project}.ssh_hosts`, addUnique((p.ssh_hosts as string[]) ?? [], value.slice(4)));
+                setField(
+                    ["projects", project, "ssh_hosts"],
+                    addUnique((p.ssh_hosts as string[]) ?? [], value.slice(4)),
+                );
             } else {
-                setField(`projects.${project}.apps`, addUnique((p.apps as string[]) ?? [], value));
+                setField(["projects", project, "apps"], addUnique((p.apps as string[]) ?? [], value));
             }
             break;
     }
@@ -138,7 +141,7 @@ export function SignalsTab({ draft, setField }: Props) {
         try {
             if (isNew) {
                 await client.reassignSignal(kind, value, newName, true);
-                setField(`projects.${newName}`, {});
+                setField(["projects", newName], {});
             } else {
                 await client.reassignSignal(kind, value, project);
             }

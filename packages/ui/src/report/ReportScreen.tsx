@@ -55,6 +55,12 @@ export function ReportScreen() {
                 const r = await client.getReport(rangeFrom, rangeTo, rebuild);
                 setReport(r);
                 setLoadState("idle");
+                if (rebuild) {
+                    client
+                        .getLastRebuildTime()
+                        .then(({ mtime }) => setLastRebuildTime(mtime))
+                        .catch(() => {});
+                }
             } catch (e: unknown) {
                 setLoadError(e instanceof Error ? e.message : String(e));
                 setLoadState("error");
@@ -134,6 +140,10 @@ export function ReportScreen() {
         }
         setBackfilling(false);
         setBackfillProgress(0);
+        client
+            .getLastRebuildTime()
+            .then(({ mtime }) => setLastRebuildTime(mtime))
+            .catch(() => {});
     }, [client]);
 
     // ── Generate LLM summary ──────────────────────────────────────────────────
@@ -319,7 +329,7 @@ export function ReportScreen() {
                             All projects
                         </Text>
                     </Pressable>
-                    {Object.keys(report.days[date] ?? {})
+                    {Object.keys(Object.assign({}, ...Object.values(report.days)))
                         .sort()
                         .map((p) => (
                             <Pressable

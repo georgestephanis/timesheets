@@ -8,32 +8,32 @@ import type { Config } from "../configSchema";
 type Props = {
     name: string;
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
     onClose: () => void;
     onDelete: (name: string) => void;
     onRename: (oldName: string, newName: string) => void;
 };
 
-const base = (name: string) => `projects.${name}`;
+const base = (name: string): string[] => ["projects", name];
 
 export function ProjectDrawer({ name, draft, setField, onClose, onDelete, onRename }: Props) {
     const b = base(name);
     const groupings = Object.keys(draft.groupings ?? {});
 
-    const grouping = useFieldPath(draft, `${b}.grouping`, setField);
-    const repos = useFieldPath(draft, `${b}.repos`, setField, { arrayAsTextarea: true });
-    const vscodeDirs = useFieldPath(draft, `${b}.vscode_dirs`, setField, { arrayAsTextarea: true });
-    const domains = useFieldPath(draft, `${b}.domains`, setField, { arrayAsTextarea: true });
-    const sshHosts = useFieldPath(draft, `${b}.ssh_hosts`, setField, { arrayAsTextarea: true });
-    const apps = useFieldPath(draft, `${b}.apps`, setField, { arrayAsTextarea: true });
-    const harvestProjects = useFieldPath(draft, `${b}.harvest_projects`, setField, {
+    const grouping = useFieldPath(draft, [...b, "grouping"], setField);
+    const repos = useFieldPath(draft, [...b, "repos"], setField, { arrayAsTextarea: true });
+    const vscodeDirs = useFieldPath(draft, [...b, "vscode_dirs"], setField, { arrayAsTextarea: true });
+    const domains = useFieldPath(draft, [...b, "domains"], setField, { arrayAsTextarea: true });
+    const sshHosts = useFieldPath(draft, [...b, "ssh_hosts"], setField, { arrayAsTextarea: true });
+    const apps = useFieldPath(draft, [...b, "apps"], setField, { arrayAsTextarea: true });
+    const harvestProjects = useFieldPath(draft, [...b, "harvest_projects"], setField, {
         arrayAsTextarea: true,
     });
-    const harvestClient = useFieldPath(draft, `${b}.harvest_client`, setField);
-    const clickupTasks = useFieldPath(draft, `${b}.clickup_tasks`, setField, {
+    const harvestClient = useFieldPath(draft, [...b, "harvest_client"], setField);
+    const clickupTasks = useFieldPath(draft, [...b, "clickup_tasks"], setField, {
         arrayAsTextarea: true,
     });
-    const clockifyProjects = useFieldPath(draft, `${b}.clockify_projects`, setField, {
+    const clockifyProjects = useFieldPath(draft, [...b, "clockify_projects"], setField, {
         arrayAsTextarea: true,
     });
 

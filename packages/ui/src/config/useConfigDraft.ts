@@ -9,22 +9,25 @@ type State = {
 
 type Action =
     | { type: "RESET"; config: Config }
-    | { type: "SET_FIELD"; path: string; value: unknown }
+    | { type: "SET_FIELD"; path: string | string[]; value: unknown }
     | { type: "DISCARD" }
     | { type: "SAVED"; savedConfig: Config };
 
-function setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): Record<string, unknown> {
-    const dot = path.indexOf(".");
-    if (dot === -1) {
+function setNestedValue(
+    obj: Record<string, unknown>,
+    path: string | string[],
+    value: unknown,
+): Record<string, unknown> {
+    const segments = Array.isArray(path) ? path : path.split(".");
+    const [head, ...rest] = segments;
+    if (rest.length === 0) {
         if (value === undefined) {
             const next = { ...obj };
-            delete next[path];
+            delete next[head];
             return next;
         }
-        return { ...obj, [path]: value };
+        return { ...obj, [head]: value };
     }
-    const head = path.slice(0, dot);
-    const rest = path.slice(dot + 1);
     const child = (obj[head] as Record<string, unknown>) ?? {};
     return { ...obj, [head]: setNestedValue(child, rest, value) };
 }
@@ -62,7 +65,7 @@ export function useConfigDraft() {
         dispatch({ type: "RESET", config });
     }, []);
 
-    const setField = useCallback((path: string, value: unknown) => {
+    const setField = useCallback((path: string | string[], value: unknown) => {
         dispatch({ type: "SET_FIELD", path, value });
     }, []);
 

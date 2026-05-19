@@ -7,7 +7,7 @@ import { Brand } from "../../brand";
 
 type Props = {
     draft: Config;
-    setField: (path: string, value: unknown) => void;
+    setField: (path: string | string[], value: unknown) => void;
 };
 
 type DiscoveredRepo = { path: string; name: string; recent: boolean; assigned: string | null };
@@ -87,7 +87,7 @@ export function ProjectsTab({ draft, setField }: Props) {
             const proj = (draft.projects ?? {})[project] as Record<string, unknown> | undefined;
             const existing = (proj?.repos as string[]) ?? [];
             if (!existing.includes(repoPath)) {
-                setField(`projects.${project}.repos`, [...existing, repoPath]);
+                setField(["projects", project, "repos"], [...existing, repoPath]);
             }
             // Mark as assigned in local state
             setRepos((prev) => prev?.map((r) => (r.path === repoPath ? { ...r, assigned: project } : r)) ?? null);

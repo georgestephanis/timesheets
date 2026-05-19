@@ -136,6 +136,8 @@ Tier 2 (Node.js sidecar HTTP):
   GET  /status                                              → { ok: true }
   GET  /report?from=YYYY-MM-DD&to=YYYY-MM-DD[&rebuild=1]   → Report
   GET  /discover-repos                                      → Record<path, { name, recent, last_commit_ts }>
+  GET  /last-rebuild-time                                   → { mtime: number }  (ms epoch; 0 if no cache)
+  GET  /integration-catalog                                 → { harvest: string[]; clickup: string[] }
   POST /reassign-signal   { type, key, project }           → { ok: true }
   POST /set-grouping      { project, grouping }            → { ok: true }
   POST /flag-ignored      { projects[], ignored }          → { ok: true }
@@ -156,9 +158,11 @@ web UI. Split into two layers:
 **Logic layer** — framework-agnostic, importable from any JS context:
 
 - `useConfigDraft(initial: Config)` — draft state, dirty tracking, field path mutation,
-  discard/reset
-- `useFieldPath(draft, path)` — reads and writes a value at a dotted path like
-  `"projects.MyProject.repos"`, handling array ↔ textarea conversions
+  discard/reset; `setField(path: string | string[], value)` accepts either a dot-separated
+  string or an explicit string array (required for project names that contain dots)
+- `useFieldPath(draft, path)` — reads and writes a value at a `string | string[]` path
+  like `"paths.activitywatch"` or `["projects", "natterbox.com Support", "domains"]`;
+  handles array ↔ textarea conversions
 - `configSchema` — zod schema for `Config` (validates before save)
 - `projectSchema`, `groupingSchema`, `integrationSchema` — per-section zod schemas
 
@@ -343,7 +347,7 @@ Applied the brand identity from `branding/` across all three UI surfaces:
 - [x] `AppIcon.appiconset/Contents.json` — all 10 macOS icon sizes wired to filenames;
       dark-colorway PNGs (icon-16 through icon-1024) copied from `branding/png/dark/`
 
-### Phase 5: Advanced Features _(in progress)_
+### Phase 5: Advanced Features _(complete)_
 
 After Phase 3 and 4 are complete:
 
@@ -358,8 +362,24 @@ After Phase 3 and 4 are complete:
    discovery panel in ProjectsTab shows unassigned repos with inline project assignment
 4. **Improved integration badges** _(complete)_ — ProjectCard shows human-readable counts
    for GitHub commits, Harvest entries, ClickUp tasks, Clockify entries
-5. **Unlogged-time suggestions** — call sidecar `/suggest-logging`, display in Signals tab
-   _(deferred: Harvest-specific, lower priority)_
+5. **Week/day range mode** _(complete)_ — Day/Week toggle in Reports toolbar; week mode
+   requests 7-day range, `RangeView` shows per-project totals + per-day breakdown;
+   project filter correctly covers all days in the range
+6. **Harvest gap detection panel** _(complete)_ — `HarvestPanel` above project cards in
+   `DayView`; sums `detail.harvest[*]` seconds from all projects; shows unlogged gap badge
+   (terracotta) when ≥ 15 min gap; collapses; null-renders when no Harvest data
+7. **Last-rebuild-time badge** _(complete)_ — `GET /last-rebuild-time` sidecar endpoint
+   stats per-day source cache files (up to 10 days); toolbar shows "rebuilt Xh Ym ago"
+   or "rebuilt Xd ago"; refreshed after manual rebuild, backfill, and app start
+8. **Harvest/ClickUp integration catalog sync** _(complete)_ — `GET /integration-catalog`
+   sidecar endpoint; "Sync projects from Harvest / ClickUp" button in Integrations tab
+   merges catalog names into the config draft as `harvest_projects`/`clickup_tasks` stubs
+9. **Dotted project name fix** _(complete)_ — `setField` and `useFieldPath` now accept
+   `string | string[]` paths; `ProjectDrawer`, `SignalsTab`, `ProjectsTab` use explicit
+   array paths for project-scoped mutations (prevents names like "natterbox.com Support"
+   from being split on `.`)
+10. **Unlogged-time suggestions** — call sidecar `/suggest-logging`, display in Signals tab
+    _(deferred: Harvest-specific, lower priority)_
 
 ### Phase 6: Packaging and Cutover _(in progress)_
 
