@@ -10,28 +10,28 @@ Legend: ✅ present · ⚠️ partial/different · ❌ absent · 🔒 intentiona
 
 ## Report viewing
 
-| Feature                       | PHP web UI                   | PHP CLI                       | Desktop app                        |
-| ----------------------------- | ---------------------------- | ----------------------------- | ---------------------------------- |
-| Day navigation (prev/next)    | ✅ keyboard + buttons        | ✅ `--from`/`--to` flags      | ✅ buttons                         |
-| Date range (multi-day)        | ✅ from/to picker            | ✅ `--days`, `--from`, `--to` | ❌ single day only                 |
-| Jump to specific date         | ✅ date picker input         | ✅ flags                      | ❌ no calendar picker              |
-| Project filter                | ✅ client-side dropdown      | ✅ `--project NAME`           | ❌ no filter                       |
-| Grouping filter               | ✅ group dropdown            | ❌                            | ❌                                 |
-| Timeline visualization        | ✅ interactive color bars    | ❌                            | ⚠️ read-only, 7am–9pm              |
-| Segment detail on hover       | ✅ tooltip                   | ❌                            | ❌                                 |
-| Caching indicator             | ✅ badge (cached/generated)  | ❌                            | ❌                                 |
-| Warning banner                | ✅ amber banner              | ✅ STDERR                     | ✅ amber banner                    |
-| Rebuild from source           | ✅ button                    | ✅ (every run)                | ✅ button                          |
-| Backfill prior 7 days         | ❌                           | ✅ (no-arg default, cron)     | ❌                                 |
-| Per-project activity bar      | ❌                           | ❌                            | ✅ input % bar                     |
-| Commits list                  | ✅                           | ✅ inline                     | ✅ collapsible (up to 8)           |
-| Integration badges            | ❌ (sidebar replaces)        | ✅ entry counts in text       | ✅ Harvest/ClickUp/GitHub/Clockify |
-| Harvest time-tracking sidebar | ✅ sticky right panel        | ❌                            | ❌                                 |
-| Harvest gap detection         | ✅ highlights unlogged hours | ❌                            | ❌                                 |
-| LLM day summary               | ✅ on-demand button          | ✅ auto on single-day run     | ✅ on-demand button                |
-| Export (md/json/tsv)          | ❌                           | ✅ `--format`                 | ❌                                 |
-| `--show-unmatched` debug      | ❌                           | ✅                            | ❌                                 |
-| `--list-projects`             | ❌                           | ✅                            | ⚠️ Config → Projects tab           |
+| Feature                       | PHP web UI                   | PHP CLI                       | Desktop app                               |
+| ----------------------------- | ---------------------------- | ----------------------------- | ----------------------------------------- |
+| Day navigation (prev/next)    | ✅ keyboard + buttons        | ✅ `--from`/`--to` flags      | ✅ buttons                                |
+| Date range (multi-day)        | ✅ from/to picker            | ✅ `--days`, `--from`, `--to` | ❌ single day only                        |
+| Jump to specific date         | ✅ date picker input         | ✅ flags                      | ✅ tap date label → YYYY-MM-DD input      |
+| Project filter                | ✅ client-side dropdown      | ✅ `--project NAME`           | ✅ toolbar dropdown                       |
+| Grouping filter               | ✅ group dropdown            | ❌                            | ❌                                        |
+| Timeline visualization        | ✅ interactive color bars    | ❌                            | ⚠️ read-only, 7am–9pm                     |
+| Segment detail on hover       | ✅ tooltip                   | ❌                            | ❌                                        |
+| Caching indicator             | ✅ badge (cached/generated)  | ❌                            | ❌                                        |
+| Warning banner                | ✅ amber banner              | ✅ STDERR                     | ✅ amber banner                           |
+| Rebuild from source           | ✅ button                    | ✅ (every run)                | ✅ button                                 |
+| Backfill prior 7 days         | ❌                           | ✅ (no-arg default, cron)     | ✅ toolbar button (rebuilds prior 7 days) |
+| Per-project activity bar      | ❌                           | ❌                            | ✅ input % bar                            |
+| Commits list                  | ✅                           | ✅ inline                     | ✅ collapsible (up to 8)                  |
+| Integration badges            | ❌ (sidebar replaces)        | ✅ entry counts in text       | ✅ Harvest/ClickUp/GitHub/Clockify        |
+| Harvest time-tracking sidebar | ✅ sticky right panel        | ❌                            | ❌                                        |
+| Harvest gap detection         | ✅ highlights unlogged hours | ❌                            | ❌                                        |
+| LLM day summary               | ✅ on-demand button          | ✅ auto on single-day run     | ✅ on-demand button                       |
+| Export (md/json/tsv)          | ❌                           | ✅ `--format`                 | ❌                                        |
+| `--show-unmatched` debug      | ❌                           | ✅                            | ❌                                        |
+| `--list-projects`             | ❌                           | ✅                            | ⚠️ Config → Projects tab                  |
 
 ---
 
@@ -62,18 +62,18 @@ Legend: ✅ present · ⚠️ partial/different · ❌ absent · 🔒 intentiona
 
 ## Signal management
 
-| Feature                           | PHP web UI                                 | PHP CLI                          | Desktop app                        |
-| --------------------------------- | ------------------------------------------ | -------------------------------- | ---------------------------------- |
-| View unmatched signals            | ⚠️ config panel (current report)           | ✅ `--show-unmatched`            | ✅ Signals tab (today)             |
-| Reassign signal to project        | ✅ per-signal dropdown                     | ✅ `--suggest` interactive       | ✅ per-signal picker + Assign      |
-| Mark signal personal              | ✅ `__personal__` target                   | ❌                               | ❌ no personal bucket target       |
-| Mark signal correlated            | ✅ `__correlated__` target                 | ❌                               | ❌                                 |
-| Create new project from reassign  | ✅ inline                                  | ❌                               | ❌ must create project first       |
-| LLM batch suggestions             | ❌                                         | ✅ `--suggest` (interactive CLI) | ✅ "Suggest with AI" batch display |
-| Draft sync on assign              | ❌                                         | ✅ writes config immediately     | ✅ updates draft + calls sidecar   |
-| Signal date (only today)          | ❌                                         | ✅ any date                      | ⚠️ today only                      |
-| Browse/edit existing signal rules | ⚠️ limited in config panel                 | ❌ manual edit                   | ⚠️ via ProjectDrawer fields        |
-| Harvest time-logging suggestions  | ⚠️ via LLM button (`suggest_time_logging`) | ❌                               | ❌ deferred                        |
+| Feature                           | PHP web UI                                 | PHP CLI                          | Desktop app                           |
+| --------------------------------- | ------------------------------------------ | -------------------------------- | ------------------------------------- |
+| View unmatched signals            | ⚠️ config panel (current report)           | ✅ `--show-unmatched`            | ✅ Signals tab (today)                |
+| Reassign signal to project        | ✅ per-signal dropdown                     | ✅ `--suggest` interactive       | ✅ per-signal picker + Assign         |
+| Mark signal personal              | ✅ `__personal__` target                   | ❌                               | ✅ Personal (ignore) option in picker |
+| Mark signal correlated            | ✅ `__correlated__` target                 | ❌                               | ✅ Correlated option in picker        |
+| Create new project from reassign  | ✅ inline                                  | ❌                               | ❌ must create project first          |
+| LLM batch suggestions             | ❌                                         | ✅ `--suggest` (interactive CLI) | ✅ "Suggest with AI" batch display    |
+| Draft sync on assign              | ❌                                         | ✅ writes config immediately     | ✅ updates draft + calls sidecar      |
+| Signal date (only today)          | ❌                                         | ✅ any date                      | ⚠️ today only                         |
+| Browse/edit existing signal rules | ⚠️ limited in config panel                 | ❌ manual edit                   | ⚠️ via ProjectDrawer fields           |
+| Harvest time-logging suggestions  | ⚠️ via LLM button (`suggest_time_logging`) | ❌                               | ❌ deferred                           |
 
 ---
 
@@ -140,54 +140,34 @@ The following are desktop gaps worth addressing, roughly ordered by user impact:
    reports are the primary use case for review/invoicing. Adding a week/range mode to
    `ReportScreen` would close the biggest functional gap.
 
-2. **Project filter** — Power users routinely filter to a single project. A filter
-   dropdown in the Reports toolbar would be a small addition with high daily-use value.
-
-3. **Harvest gap detection** — The web UI's sticky Harvest sidebar with logged-vs-tracked
+2. **Harvest gap detection** — The web UI's sticky Harvest sidebar with logged-vs-tracked
    comparison is a key accountability feature. The desktop shows Harvest badge counts but
    no gap analysis. Adding a collapsible Harvest summary panel to `DayView` would close
    this.
 
-4. **`__personal__` signal target** — Signal reassignment in the desktop can only assign
-   to a named project; there is no equivalent of flagging a signal as personal/ignored.
-   `reassign-signal` should accept a `__personal__` target and the Signals tab should
-   offer "Mark as personal" alongside the project picker.
-
 ### Medium impact
 
-5. **Backfill trigger** — No way to trigger the PHP-style "backfill last 7 days" workflow
-   from the desktop. A "Backfill recent days" button in Reports (calling
-   `GET /report?rebuild=1` for each of the prior 7 days sequentially) would make the
-   desktop usable as a standalone daily driver without needing the cron job.
-
-6. **Inline new project creation from Signals** — When assigning an unmatched signal, the
+3. **Inline new project creation from Signals** — When assigning an unmatched signal, the
    user must first go to the Projects tab, add the project, save, then return to Signals.
    An inline "New project…" option in the signal's project picker would close this.
 
-7. **Harvest/ClickUp sync tool in UI** — `sync-integration-projects.php` is the main
+4. **Harvest/ClickUp sync tool in UI** — `sync-integration-projects.php` is the main
    onboarding accelerator for integration users. A "Sync projects from Harvest/ClickUp"
    button in the Integrations tab (calling a new sidecar endpoint) would remove the CLI
    dependency for a common setup task.
 
-8. **Date picker / calendar** — The desktop relies on prev/next buttons only. A tappable
-   date label that opens a date picker (or at minimum a text entry) would match the web
-   UI's navigation flexibility.
-
 ### Lower impact / nice-to-have
 
-9. **Cache status indicator** — Web UI shows a badge for cached vs. freshly generated
+5. **Cache status indicator** — Web UI shows a badge for cached vs. freshly generated
    reports. A subtle subtitle in the Reports header ("cached · 2h ago") would add
    transparency.
 
-10. **Cron / backfill status** — No visibility into whether daily backfill has run. A
-    small "last updated" timestamp in the Reports header would surface this.
+6. **Cron / backfill status** — No visibility into whether daily backfill has run. A
+   small "last updated" timestamp in the Reports header would surface this.
 
-11. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
-    sheet or export action in the Reports toolbar would unlock the spreadsheet/invoice
-    workflow from the desktop.
-
-12. **`correlated` signal target** — Same gap as `__personal__`: the desktop Signals tab
-    cannot mark a signal as correlated. Low-frequency but needed for parity.
+7. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
+   sheet or export action in the Reports toolbar would unlock the spreadsheet/invoice
+   workflow from the desktop.
 
 ---
 
