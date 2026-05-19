@@ -96,7 +96,7 @@ tools/
   cleanup-integration-projects.php — merges high-confidence integration stubs into existing projects
   sync-repo-remotes.php          — snapshots git remote URLs into projects[*].repo_remotes
   ensure-github-integration.php  — adds default integrations.github entry (gh-auth) if absent
-packages/                        — TypeScript workspace; shared data layer for non-PHP surfaces (see NATIVE.md)
+packages/                        — TypeScript workspace; shared data layer for non-PHP surfaces (see docs/NATIVE.md)
   contracts/                     — @timesheets/contracts: JS type definitions mirroring PHP JSON output + config schema
   engine/                        — @timesheets/engine: Node.js engine (generateReport, saveConfig, reassignSignal,
                                    generateSummary, suggestAssignments, discoverRepos, getLastRebuildTime,
@@ -120,7 +120,7 @@ config.schema.json               — JSON Schema (draft 2020-12) for both config
 phpcs.xml.dist                   — PHP_CodeSniffer ruleset (PSR-12 + CLI exceptions)
 composer.json                    — dev dep: squizlabs/php_codesniffer ^3.9
 package.json                     — dev dep: prettier ^3.0
-NATIVE.md                        — native desktop migration plan and phased roadmap
+docs/NATIVE.md                   — native desktop migration plan and phased roadmap
 ```
 
 `vendor/` and `node_modules/` are installed locally but not committed. The root `package.json` declares `"workspaces": ["packages/*", "apps/*"]` — run `npm install` from the repo root to link the packages to each other.
@@ -547,7 +547,7 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 
 ## Multi-UI architecture and native desktop migration
 
-The long-term goal is a common data layer shared by all UIs: PHP CLI, PHP web, and native desktop. The TypeScript engine (`packages/engine/`) is the shared foundation for non-PHP surfaces. See `NATIVE.md` for the full migration plan; current state is **Phase 5 complete + Phase 6 packaging in progress**.
+The long-term goal is a common data layer shared by all UIs: PHP CLI, PHP web, and native desktop. The TypeScript engine (`packages/engine/`) is the shared foundation for non-PHP surfaces. See `docs/NATIVE.md` for the full migration plan; current state is **Phase 5 complete + Phase 6 packaging in progress**.
 
 ### Shared data contract (all UIs must respect this)
 
@@ -571,6 +571,6 @@ The long-term goal is a common data layer shared by all UIs: PHP CLI, PHP web, a
 
 - **PHP remains the behavior oracle** until parity tests pass. Do not remove PHP entrypoints.
 - **Keep `config.json` and `reports/` layout compatible** with the existing PHP app so users can run PHP and native interfaces against the same local data simultaneously.
-- **The engine boundary is narrow.** Expose report generation via the IPC surface in NATIVE.md; don't let UI components read databases or config files directly.
+- **The engine boundary is narrow.** Expose report generation via the IPC surface in docs/NATIVE.md; don't let UI components read databases or config files directly.
 - **macOS first.** `react-native-macos` is the initial target. `react-native-windows` is deferred until macOS is stable.
 - **Format changes are phase-2.** Do not change `config.json` shape or `reports/` layout in phase-1 work — compatibility first, cleanup later.

@@ -10,7 +10,7 @@ A local-first activity reporting tool with multiple UI surfaces sharing a common
 
 **UI surfaces:**
 
-- **React Native macOS desktop** (`apps/desktop/`) — native app with full report viewing, config editing, signal assignment, and LLM features; see [NATIVE.md](NATIVE.md)
+- **React Native macOS desktop** (`apps/desktop/`) — native app with full report viewing, config editing, signal assignment, and LLM features; see [docs/NATIVE.md](docs/NATIVE.md)
 - **PHP CLI** (`activity-report.php`) — backfills daily reports, generates Markdown/JSON/TSV output, LLM-assisted signal tuning
 - **PHP web UI** (`apps/web/`) — local browser interface; report browsing, Harvest sidebar, rebuild, config panel
 
@@ -496,7 +496,7 @@ tools/
   ensure-github-integration.php
   prune-config-backups.php
   reset-cache.php
-packages/                 — TypeScript monorepo workspace; shared by all non-PHP surfaces (see NATIVE.md)
+packages/                 — TypeScript monorepo workspace; shared by all non-PHP surfaces (see docs/NATIVE.md)
   contracts/              — @timesheets/contracts: JS type definitions matching PHP JSON output shape
   engine/                 — @timesheets/engine: TypeScript engine (replaces PHP core; same config.json + reports/ layout)
   ui/                     — @timesheets/ui: React Native components (peerDep on react-native-macos)
@@ -511,9 +511,14 @@ config.json               — your local config (gitignored)
 config.example.json       — safe-to-commit template
 config.schema.json        — JSON Schema for editor validation
 AGENTS.md                 — architecture guide for contributors and AI agents
-NATIVE.md                 — native desktop migration plan (React Native + TypeScript engine)
 SECURITY.md               — local threat model and token-handling notes
-TROUBLESHOOTING.md        — common failures and fixes
+docs/
+  NATIVE.md               — native desktop migration plan (React Native + TypeScript engine)
+  MIGRATION.md            — first-time setup, config path, packaging steps
+  TROUBLESHOOTING.md      — common failures and fixes
+  APP-vs-PHP.md           — feature parity table across all three UI surfaces
+  TODO.md                 — backlog and deferred items
+  CLOCKIFY.md             — Clockify integration notes
 ```
 
 ## License
