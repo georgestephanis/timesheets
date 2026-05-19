@@ -12,7 +12,13 @@
 import path from "path";
 import { loadConfig, saveConfigWithBackup, applySignalToProject, applySignalToSpecialTarget } from "./lib/config.js";
 import { clearWarnings, getWarnings } from "./lib/helpers.js";
-import { loadSourcesForRange, loadCachedLlmSummary, saveCachedLlmSummary, sourceCacheMtime } from "./lib/cache.js";
+import {
+    loadSourcesForRange,
+    loadCachedLlmSummary,
+    saveCachedLlmSummary,
+    sourceCacheMtime,
+    mostRecentCacheMtime,
+} from "./lib/cache.js";
 import { classifyAndAggregate } from "./lib/classifiers.js";
 import { buildReport } from "./lib/renderer.js";
 import { makeLoadFreshFn } from "./lib/loaders.js";
@@ -47,6 +53,7 @@ export {
     saveCachedSources,
     saveDailyCachedSources,
     sourceCacheMtime,
+    mostRecentCacheMtime,
     loadCachedLlmSummary,
     saveCachedLlmSummary,
     mergeSourceBundles,
@@ -466,6 +473,17 @@ class TimesheetsEngine {
                 projectNames.includes(s.project) &&
                 (signalSet[s.kind] ?? []).includes(s.value),
         );
+    }
+
+    /**
+     * Returns the mtime (ms) of the most recently written source cache file
+     * within the past 10 days, or 0 if no cache files exist.
+     * @returns {Promise<number>}
+     */
+    async getLastRebuildTime() {
+        if (!this.config) await this.loadConfig();
+        const cfg = /** @type {import('@timesheets/contracts').Config} */ (this.config);
+        return mostRecentCacheMtime(this.projectRoot, cfg.timezone ?? "UTC");
     }
 
     /**

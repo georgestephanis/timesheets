@@ -67,6 +67,12 @@ if (!configPath) {
         json(res, 200, {repos});
       } else if (
         req.method === 'GET' &&
+        url.pathname === '/last-rebuild-time'
+      ) {
+        const mtime = await engine.getLastRebuildTime();
+        json(res, 200, {mtime});
+      } else if (
+        req.method === 'GET' &&
         url.pathname === '/integration-catalog'
       ) {
         const catalog = await engine.fetchIntegrationCatalog();

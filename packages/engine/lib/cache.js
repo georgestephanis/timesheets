@@ -168,6 +168,25 @@ export async function sourceCacheMtime(projectRoot, day, timezone) {
 }
 
 /**
+ * Returns the most recent mtime (in ms) across the past `lookbackDays` days of
+ * source cache files, or 0 if no cache files exist in that window.
+ * @param {string} projectRoot
+ * @param {string} timezone
+ * @param {number} [lookbackDays]
+ * @returns {Promise<number>}
+ */
+export async function mostRecentCacheMtime(projectRoot, timezone, lookbackDays = 10) {
+    const now = Date.now();
+    let latest = 0;
+    for (let i = 0; i <= lookbackDays; i++) {
+        const day = new Date(now - i * 86_400_000);
+        const mtime = await sourceCacheMtime(projectRoot, day, timezone);
+        if (mtime > latest) latest = mtime;
+    }
+    return latest;
+}
+
+/**
  * Loads a cached LLM day summary, validating it against the source fingerprint.
  * Returns null when absent, stale, or malformed.
  * Mirrors PHP loadCachedLlmSummary().

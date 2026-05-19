@@ -38,6 +38,7 @@ export function ReportScreen() {
     const [projectFilter, setProjectFilter] = useState("");
     const [filterOpen, setFilterOpen] = useState(false);
     const [rangeMode, setRangeMode] = useState<"day" | "week">("day");
+    const [lastRebuildTime, setLastRebuildTime] = useState<number>(0);
 
     // ── Load report ───────────────────────────────────────────────────────────
 
@@ -67,6 +68,15 @@ export function ReportScreen() {
     useEffect(() => {
         if (sidecarState === "running") loadReport();
     }, [sidecarState, loadReport]);
+
+    useEffect(() => {
+        if (sidecarState === "running" && client) {
+            client
+                .getLastRebuildTime()
+                .then(({ mtime }) => setLastRebuildTime(mtime))
+                .catch(() => {});
+        }
+    }, [sidecarState, client]);
 
     // ── Date navigation ───────────────────────────────────────────────────────
 
@@ -253,14 +263,15 @@ export function ReportScreen() {
                         {backfilling ? `Backfilling ${backfillProgress}/7…` : "⟳ Backfill 7 days"}
                     </Text>
                 </Pressable>
-                {report?.cachedAt && (
+                {lastRebuildTime > 0 && (
                     <Text style={styles.cacheBadge}>
-                        cached ·{" "}
                         {(() => {
-                            const ageMs = Date.now() - report.cachedAt;
+                            const ageMs = Date.now() - lastRebuildTime;
                             const h = Math.floor(ageMs / 3_600_000);
                             const m = Math.floor((ageMs % 3_600_000) / 60_000);
-                            return h > 0 ? `${h}h ${m}m ago` : `${m}m ago`;
+                            const d = Math.floor(ageMs / 86_400_000);
+                            if (d >= 1) return `rebuilt ${d}d ago`;
+                            return `rebuilt ${h > 0 ? `${h}h ` : ""}${m}m ago`;
                         })()}
                     </Text>
                 )}

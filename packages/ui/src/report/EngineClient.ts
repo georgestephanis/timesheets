@@ -76,6 +76,10 @@ export class EngineClient {
         return this.post("/suggest-assignments", { date, llmIndex: this.activeLlmIndex });
     }
 
+    async getLastRebuildTime(): Promise<{ mtime: number }> {
+        return this.get("/last-rebuild-time");
+    }
+
     async getIntegrationCatalog(): Promise<{ harvest: string[]; clickup: string[] }> {
         return this.get("/integration-catalog");
     }
