@@ -10,6 +10,9 @@ let package = Package(
         .executableTarget(
             name: "apple-intelligence-server",
             path: "Sources",
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+            ],
             linkerSettings: [
                 .linkedFramework("FoundationModels"),
                 .linkedFramework("Network"),
