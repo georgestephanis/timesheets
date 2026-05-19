@@ -153,9 +153,12 @@ RCT_EXPORT_METHOD(getEngineScriptPath:(RCTPromiseResolveBlock)resolve
   NSString *stored = [[NSUserDefaults standardUserDefaults] stringForKey:kEngineScriptKey];
   if (stored.length) { resolve(stored); return; }
 
-  // 2. Check app bundle Resources.
+  // 2. Bundle fallback — only usable when node_modules are bundled alongside
+  //    (i.e. a packaged production build). In development the bundle has
+  //    engine-server.js but no node_modules, so return null to prompt the user
+  //    to locate the dev workspace copy via pickEngineScript.
   NSString *bundled = [[NSBundle mainBundle] pathForResource:@"engine-server" ofType:@"js"];
-  if (bundled) { resolve(bundled); return; }
+  if (bundled && [self findNodeModulesForScript:bundled]) { resolve(bundled); return; }
 
   resolve([NSNull null]);
 }
@@ -191,6 +194,28 @@ RCT_EXPORT_METHOD(pickEngineScript:(RCTPromiseResolveBlock)resolve
       resolve([NSNull null]);
     }
   });
+}
+
+// ── findNodeModulesForScript ──────────────────────────────────────────────────
+// Walks up from the script's directory until it finds a node_modules folder
+// containing @timesheets/engine. Returns nil if none found.
+
+- (NSString *)findNodeModulesForScript:(NSString *)scriptPath
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *dir = [scriptPath stringByDeletingLastPathComponent];
+
+  while (dir.length > 1) {
+    NSString *candidate = [[dir stringByAppendingPathComponent:@"node_modules"]
+                                stringByAppendingPathComponent:@"@timesheets/engine"];
+    if ([fm fileExistsAtPath:candidate]) {
+      return [dir stringByAppendingPathComponent:@"node_modules"];
+    }
+    NSString *parent = [dir stringByDeletingLastPathComponent];
+    if ([parent isEqualToString:dir]) break; // reached filesystem root
+    dir = parent;
+  }
+  return nil;
 }
 
 // ── resolveNodeBinary ─────────────────────────────────────────────────────────
@@ -231,7 +256,11 @@ RCT_EXPORT_METHOD(pickEngineScript:(RCTPromiseResolveBlock)resolve
 {
   NSString *stored = [[NSUserDefaults standardUserDefaults] stringForKey:kEngineScriptKey];
   if (stored.length) return stored;
-  return [[NSBundle mainBundle] pathForResource:@"engine-server" ofType:@"js"];
+
+  // Bundle copy only usable when packaged with adjacent node_modules.
+  NSString *bundled = [[NSBundle mainBundle] pathForResource:@"engine-server" ofType:@"js"];
+  if (bundled && [self findNodeModulesForScript:bundled]) return bundled;
+  return nil;
 }
 
 // ── startSidecar ──────────────────────────────────────────────────────────────
@@ -268,6 +297,18 @@ RCT_EXPORT_METHOD(startSidecar:(RCTPromiseResolveBlock)resolve
   NSTask *task = [NSTask new];
   task.launchPath = nodePath;
   task.arguments = @[scriptPath, configPath];
+
+  // Ensure node can find workspace packages (e.g. @timesheets/engine) by
+  // setting NODE_PATH to the nearest node_modules that contains them.
+  NSString *nodeModules = [self findNodeModulesForScript:scriptPath];
+  if (nodeModules) {
+    NSMutableDictionary *env = [NSProcessInfo.processInfo.environment mutableCopy];
+    NSString *existing = env[@"NODE_PATH"];
+    env[@"NODE_PATH"] = existing.length
+      ? [NSString stringWithFormat:@"%@:%@", nodeModules, existing]
+      : nodeModules;
+    task.environment = env;
+  }
 
   NSPipe *outPipe = [NSPipe pipe];
   NSPipe *errPipe = [NSPipe pipe];
