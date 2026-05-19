@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>timesheets — icon package</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            :root {
+                --ts-ink: #16130f;
+                --ts-paper: #f6f2ea;
+                --ts-amber: #f6b84a;
+                --ts-terracotta: #c25e2a;
+                --bg: #ece6db;
+                --muted: #6b645b;
+                --rule: #d9d2c3;
+            }
+            * {
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                background: var(--bg);
+                color: var(--ts-ink);
+                font-family: "Inter", system-ui, sans-serif;
+            }
+            .mono {
+                font-family: "JetBrains Mono", ui-monospace, monospace;
+            }
+            .page {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 64px 48px 96px;
+            }
+            header {
+                display: flex;
+                align-items: center;
+                gap: 28px;
+                margin-bottom: 64px;
+            }
+            header img {
+                width: 120px;
+                height: 120px;
+                display: block;
+                filter: drop-shadow(0 14px 28px rgba(28, 24, 20, 0.18));
+            }
+            header h1 {
+                font-family: "JetBrains Mono";
+                font-weight: 700;
+                font-size: 56px;
+                letter-spacing: -0.025em;
+                margin: 0;
+                line-height: 1;
+            }
+            header p {
+                margin: 8px 0 0;
+                color: var(--muted);
+                font-size: 17px;
+                max-width: 540px;
+                line-height: 1.5;
+            }
+
+            section {
+                margin-top: 72px;
+            }
+            section > h2 {
+                font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 0.12em;
+                color: var(--muted);
+                margin: 0 0 24px;
+                font-weight: 600;
+            }
+
+            /* Colorway hero */
+            .ways {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+            }
+            .way {
+                border-radius: 24px;
+                padding: 36px;
+                display: flex;
+                flex-direction: column;
+                gap: 22px;
+                min-height: 380px;
+                position: relative;
+                overflow: hidden;
+            }
+            .way.dark {
+                background: var(--ts-ink);
+                color: var(--ts-paper);
+            }
+            .way.light {
+                background: var(--ts-paper);
+                color: var(--ts-ink);
+            }
+            .way header {
+                margin: 0;
+            }
+            .way .label {
+                display: flex;
+                justify-content: space-between;
+                align-items: baseline;
+            }
+            .way .label .name {
+                font-size: 22px;
+                font-weight: 600;
+                letter-spacing: -0.01em;
+            }
+            .way .label .kind {
+                font-size: 11px;
+                opacity: 0.6;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+            }
+            .way .icon-stage {
+                flex: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 14px 0;
+            }
+            .way .icon-stage img {
+                width: 220px;
+                height: 220px;
+                filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.25));
+            }
+            .swatches {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px;
+            }
+            .sw {
+                padding: 12px 14px;
+                border-radius: 12px;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+            }
+            .way.dark .sw {
+                background: rgba(246, 242, 234, 0.06);
+            }
+            .way.light .sw {
+                background: rgba(28, 19, 15, 0.04);
+            }
+            .sw .chip {
+                width: 100%;
+                height: 28px;
+                border-radius: 6px;
+                margin-bottom: 8px;
+                box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+            }
+            .sw .role {
+                font-size: 11px;
+                opacity: 0.65;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+            }
+            .sw .hex {
+                font-family: "JetBrains Mono";
+                font-size: 13px;
+                font-weight: 500;
+            }
+
+            /* sizes */
+            .sizes {
+                display: grid;
+                grid-template-columns: max-content 1fr;
+                gap: 28px;
+                align-items: center;
+                padding: 24px;
+                border-radius: 18px;
+                background: #fbf8f1;
+            }
+            .sizes + .sizes {
+                margin-top: 14px;
+            }
+            .sizes .head {
+                font-weight: 600;
+                font-size: 14px;
+            }
+            .sizes .row {
+                display: flex;
+                align-items: center;
+                gap: 22px;
+                flex-wrap: wrap;
+            }
+            .sizes .cell {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+            .sizes .cell img {
+                display: block;
+            }
+            .sizes .cell .num {
+                font-family: "JetBrains Mono";
+                font-size: 10px;
+                color: var(--muted);
+            }
+
+            /* contexts */
+            .contexts {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 20px;
+            }
+            .ctx {
+                border-radius: 18px;
+                overflow: hidden;
+                aspect-ratio: 5/3;
+                position: relative;
+            }
+            .ctx .tag {
+                position: absolute;
+                top: 14px;
+                left: 16px;
+                font-family: "JetBrains Mono";
+                font-size: 11px;
+                padding: 4px 8px;
+                border-radius: 6px;
+                background: rgba(0, 0, 0, 0.5);
+                color: #fff;
+                letter-spacing: 0.04em;
+            }
+            .ctx.dock-light {
+                background: linear-gradient(155deg, #ffd0a4 0%, #ff85a8 45%, #6c66e3 100%);
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 26px;
+            }
+            .ctx.dock-dark {
+                background: linear-gradient(155deg, #1a1c30 0%, #2d2356 45%, #1a4373 100%);
+                display: flex;
+                align-items: flex-end;
+                justify-content: center;
+                padding-bottom: 26px;
+            }
+            .dock-tray {
+                padding: 10px 14px;
+                background: rgba(255, 255, 255, 0.32);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                border-radius: 24px;
+                border: 1px solid rgba(255, 255, 255, 0.4);
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                box-shadow: 0 22px 60px rgba(20, 10, 40, 0.4);
+            }
+            .dock-dark .dock-tray {
+                background: rgba(255, 255, 255, 0.18);
+                border-color: rgba(255, 255, 255, 0.18);
+            }
+            .dock-tray .a {
+                width: 56px;
+                height: 56px;
+                border-radius: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: 700;
+                font-size: 22px;
+                box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+            }
+            .dock-tray img {
+                width: 72px;
+                height: 72px;
+                filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.3));
+            }
+
+            .ctx.tab {
+                background: #e7e1d3;
+                padding: 22px;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .ctx.tab.darkbg {
+                background: #1f1a14;
+                color: #e6dccc;
+            }
+            .tabstrip {
+                display: flex;
+                align-items: flex-end;
+                gap: 4px;
+                height: 36px;
+            }
+            .tabstrip .tab1 {
+                height: 34px;
+                padding: 0 14px;
+                border-radius: 10px 10px 0 0;
+                background: #fbf8f1;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                min-width: 220px;
+                font-size: 12px;
+            }
+            .ctx.tab.darkbg .tab1 {
+                background: #0d1117;
+                color: #e6edf3;
+            }
+            .tabstrip img {
+                width: 16px;
+                height: 16px;
+            }
+            .urlbar {
+                background: #fbf8f1;
+                border-radius: 10px;
+                height: 34px;
+                display: flex;
+                align-items: center;
+                padding: 0 14px;
+                gap: 10px;
+                font-family: "JetBrains Mono";
+                font-size: 12px;
+                color: var(--muted);
+            }
+            .ctx.tab.darkbg .urlbar {
+                background: #0d1117;
+                color: #7d8590;
+            }
+
+            pre {
+                background: #16130f;
+                color: #f6f2ea;
+                padding: 18px 22px;
+                border-radius: 12px;
+                overflow: auto;
+                font-size: 13px;
+                line-height: 1.6;
+                font-family: "JetBrains Mono";
+            }
+            pre .c {
+                color: #9a8f7e;
+            }
+            pre .k {
+                color: #f6b84a;
+            }
+            pre .s {
+                color: #e8a579;
+            }
+
+            footer {
+                margin-top: 96px;
+                padding-top: 28px;
+                border-top: 1px solid var(--rule);
+                display: flex;
+                justify-content: space-between;
+                color: var(--muted);
+                font-size: 13px;
+            }
+        </style>
+    </head>
+    <body>
+        <main class="page">
+            <header>
+                <img src="svg/timesheets-icon-dark.svg" alt="timesheets icon" />
+                <div>
+                    <h1>timesheets</h1>
+                    <p>
+                        Icon package — the <span class="mono">{ time }</span> mark, in dark and light colorways, with
+                        vector source and rasters for every place this app will show up.
+                    </p>
+                </div>
+            </header>
+
+            <section>
+                <h2>Colorways</h2>
+                <div class="ways">
+                    <!-- DARK -->
+                    <div class="way dark">
+                        <div class="label">
+                            <span class="name">Dark</span>
+                            <span class="kind">default · on light surfaces</span>
+                        </div>
+                        <div class="icon-stage">
+                            <img src="svg/timesheets-icon-dark.svg" alt="dark colorway" />
+                        </div>
+                        <div class="swatches">
+                            <div class="sw">
+                                <div class="chip" style="background: #16130f"></div>
+                                <div class="role">Ink · bg</div>
+                                <div class="hex">#16130F</div>
+                            </div>
+                            <div class="sw">
+                                <div class="chip" style="background: #f6f2ea"></div>
+                                <div class="role">Paper · glyph</div>
+                                <div class="hex">#F6F2EA</div>
+                            </div>
+                            <div class="sw">
+                                <div class="chip" style="background: #f6b84a"></div>
+                                <div class="role">Amber · accent</div>
+                                <div class="hex">#F6B84A</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- LIGHT -->
+                    <div class="way light">
+                        <div class="label">
+                            <span class="name">Light</span>
+                            <span class="kind">on dark surfaces · print</span>
+                        </div>
+                        <div class="icon-stage">
+                            <img src="svg/timesheets-icon-light.svg" alt="light colorway" />
+                        </div>
+                        <div class="swatches">
+                            <div class="sw">
+                                <div class="chip" style="background: #f6f2ea"></div>
+                                <div class="role">Paper · bg</div>
+                                <div class="hex">#F6F2EA</div>
+                            </div>
+                            <div class="sw">
+                                <div class="chip" style="background: #16130f"></div>
+                                <div class="role">Ink · glyph</div>
+                                <div class="hex">#16130F</div>
+                            </div>
+                            <div class="sw">
+                                <div class="chip" style="background: #c25e2a"></div>
+                                <div class="role">Terracotta · accent</div>
+                                <div class="hex">#C25E2A</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2>Sizes — dark</h2>
+                <div class="sizes">
+                    <div class="head mono">PNG · dark</div>
+                    <div class="row">
+                        <div class="cell">
+                            <img src="png/dark/icon-16.png" />
+                            <div class="num">16</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/dark/icon-32.png" />
+                            <div class="num">32</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/dark/icon-48.png" />
+                            <div class="num">48</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/dark/icon-64.png" />
+                            <div class="num">64</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/dark/icon-128.png" />
+                            <div class="num">128</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/dark/icon-256.png" width="128" />
+                            <div class="num">256</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/dark/icon-512.png" width="128" />
+                            <div class="num">512</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/dark/icon-1024.png" width="128" />
+                            <div class="num">1024</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sizes">
+                    <div class="head mono">PNG · light</div>
+                    <div class="row">
+                        <div class="cell">
+                            <img src="png/light/icon-16.png" />
+                            <div class="num">16</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/light/icon-32.png" />
+                            <div class="num">32</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/light/icon-48.png" />
+                            <div class="num">48</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/light/icon-64.png" />
+                            <div class="num">64</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/light/icon-128.png" />
+                            <div class="num">128</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/light/icon-256.png" width="128" />
+                            <div class="num">256</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/light/icon-512.png" width="128" />
+                            <div class="num">512</div>
+                        </div>
+                        <div class="cell">
+                            <img src="png/light/icon-1024.png" width="128" />
+                            <div class="num">1024</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2>In context</h2>
+                <div class="contexts">
+                    <div class="ctx dock-light">
+                        <div class="tag">macOS dock · light</div>
+                        <div class="dock-tray">
+                            <div class="a" style="background: #1d6ad6">⌘</div>
+                            <div class="a" style="background: #fff; color: #16130f">✶</div>
+                            <img src="png/dark/icon-256.png" alt="" />
+                            <div class="a" style="background: #34c759">✉</div>
+                            <div class="a" style="background: #5856d6">♫</div>
+                        </div>
+                    </div>
+                    <div class="ctx dock-dark">
+                        <div class="tag">macOS dock · dark</div>
+                        <div class="dock-tray">
+                            <div class="a" style="background: #1d6ad6">⌘</div>
+                            <div class="a" style="background: #fff; color: #16130f">✶</div>
+                            <img src="png/light/icon-256.png" alt="" />
+                            <div class="a" style="background: #34c759">✉</div>
+                            <div class="a" style="background: #5856d6">♫</div>
+                        </div>
+                    </div>
+                    <div class="ctx tab">
+                        <div class="tag">browser tab · light</div>
+                        <div class="tabstrip">
+                            <div class="tab1">
+                                <img src="png/dark/icon-32.png" />
+                                <span>timesheets — today</span>
+                            </div>
+                        </div>
+                        <div class="urlbar">
+                            <span
+                                style="
+                                    width: 10px;
+                                    height: 10px;
+                                    background: #34c759;
+                                    border-radius: 99px;
+                                    display: inline-block;
+                                "
+                            ></span>
+                            app.timesheets.dev / today
+                        </div>
+                    </div>
+                    <div class="ctx tab darkbg">
+                        <div class="tag">browser tab · dark</div>
+                        <div class="tabstrip">
+                            <div class="tab1">
+                                <img src="png/light/icon-32.png" />
+                                <span>timesheets — today</span>
+                            </div>
+                        </div>
+                        <div class="urlbar">
+                            <span
+                                style="
+                                    width: 10px;
+                                    height: 10px;
+                                    background: #34c759;
+                                    border-radius: 99px;
+                                    display: inline-block;
+                                "
+                            ></span>
+                            app.timesheets.dev / today
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <h2>HTML — favicon snippet</h2>
+                <pre><span class="c">&lt;!-- adaptive favicon: SVG that flips with system theme --&gt;</span>
+<span class="k">&lt;link</span> <span class="s">rel</span>=<span class="s">"icon"</span>
+      <span class="s">href</span>=<span class="s">"/package/svg/timesheets-icon-dark.svg"</span>
+      <span class="s">media</span>=<span class="s">"(prefers-color-scheme: light)"</span><span class="k"> /&gt;</span>
+<span class="k">&lt;link</span> <span class="s">rel</span>=<span class="s">"icon"</span>
+      <span class="s">href</span>=<span class="s">"/package/svg/timesheets-icon-light.svg"</span>
+      <span class="s">media</span>=<span class="s">"(prefers-color-scheme: dark)"</span><span class="k"> /&gt;</span>
+
+<span class="c">&lt;!-- raster fallbacks --&gt;</span>
+<span class="k">&lt;link</span> <span class="s">rel</span>=<span class="s">"icon"</span>             <span class="s">sizes</span>=<span class="s">"32x32"</span>  <span class="s">href</span>=<span class="s">"/package/favicon/favicon-dark-32.png"</span><span class="k"> /&gt;</span>
+<span class="k">&lt;link</span> <span class="s">rel</span>=<span class="s">"icon"</span>             <span class="s">sizes</span>=<span class="s">"16x16"</span>  <span class="s">href</span>=<span class="s">"/package/favicon/favicon-dark-16.png"</span><span class="k"> /&gt;</span>
+<span class="k">&lt;link</span> <span class="s">rel</span>=<span class="s">"apple-touch-icon"</span> <span class="s">sizes</span>=<span class="s">"180x180"</span> <span class="s">href</span>=<span class="s">"/package/favicon/favicon-dark-180.png"</span><span class="k"> /&gt;</span></pre>
+            </section>
+
+            <footer>
+                <div>timesheets · brand</div>
+                <div class="mono">v1.0 · 2026</div>
+            </footer>
+        </main>
+    </body>
+</html>

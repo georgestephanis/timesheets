@@ -1,0 +1,44 @@
+{
+    "$schema": "./config.schema.json",
+    "timezone": "America/New_York",
+    "paths": {
+        "activitywatch": "~/.local/share/activitywatch",
+        "chrome": "~/Library/Application Support/Google/Chrome",
+        "chrome_profiles": null
+    },
+    "git_authors": ["dev@example.com"],
+    "discover_repos": "github_desktop",
+    "chrome_correlation_window_seconds": 120,
+    "min_event_seconds_to_show": 30,
+    "projects": {
+        "Acme Corp": {
+            "grouping": "Acme",
+            "repos": ["~/code/acme-api", "~/code/acme-frontend"],
+            "vscode_dirs": ["acme-api", "acme-frontend"],
+            "domains": ["app.acmecorp.com", "staging.acmecorp.com"],
+            "slack": [{ "workspace": "Acme" }]
+        }
+    },
+    "personal_hosts": ["www.reddit.com", "news.ycombinator.com"],
+    "personal_apps": ["Discord"],
+    "correlated_apps": [],
+    "project_gap_window_seconds": 300,
+    "timeline_merge_gap_seconds": 300,
+    "timeline_min_seconds": 60,
+    "groupings": {
+        "Acme": {
+            "color": "#0055cc",
+            "time_tracking": "harvest",
+            "harvest_connection": "acme-harvest"
+        }
+    },
+    "integrations": {
+        "harvest": [
+            {
+                "name": "acme-harvest",
+                "account_id": "12345",
+                "token": "example-token"
+            }
+        ]
+    }
+}

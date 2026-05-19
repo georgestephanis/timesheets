@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Caching layer: persists raw source data and generated reports to reports/YYYY-MM/DD/.
  *
- * Uses PROJECT_ROOT (defined in the entry-point activity-report.php) so that paths
+ * Uses PROJECT_ROOT (defined in the entry-point apps/cli/activity-report.php) so that paths
  * resolve correctly regardless of which directory this file is included from.
  */
 

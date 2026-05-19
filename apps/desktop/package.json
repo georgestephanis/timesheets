@@ -1,0 +1,42 @@
+{
+    "name": "@timesheets/desktop",
+    "version": "0.0.1",
+    "private": true,
+    "scripts": {
+        "start": "react-native-macos start",
+        "macos": "react-native-macos run-macos",
+        "lint": "eslint .",
+        "test": "jest"
+    },
+    "dependencies": {
+        "@react-native-macos/virtualized-lists": "^0.81.7",
+        "@timesheets/contracts": "*",
+        "@timesheets/engine": "*",
+        "@timesheets/ui": "*",
+        "react": "19.1.4",
+        "react-native": "0.81.6",
+        "react-native-macos": "^0.81.7"
+    },
+    "devDependencies": {
+        "@babel/core": "^7.25.2",
+        "@babel/preset-env": "^7.25.3",
+        "@babel/runtime": "^7.25.0",
+        "@react-native-community/cli": "20.0.0",
+        "@react-native-community/cli-platform-apple": "20.0.0",
+        "@react-native-community/cli-platform-ios": "20.0.0",
+        "@react-native/babel-preset": "0.81.6",
+        "@react-native/eslint-config": "0.81.6",
+        "@react-native/metro-config": "0.81.6",
+        "@react-native/typescript-config": "0.81.6",
+        "@types/react": "^19.1.4",
+        "@types/react-test-renderer": "^19.1.0",
+        "babel-jest": "^29.6.3",
+        "eslint": "^8.19.0",
+        "jest": "^29.6.3",
+        "react-test-renderer": "19.1.4",
+        "typescript": "^5.8.3"
+    },
+    "engines": {
+        "node": ">=20"
+    }
+}

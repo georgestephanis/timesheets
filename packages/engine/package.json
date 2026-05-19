@@ -1,0 +1,20 @@
+{
+    "name": "@timesheets/engine",
+    "version": "1.0.0",
+    "type": "module",
+    "exports": {
+        ".": "./index.js"
+    },
+    "scripts": {
+        "test": "node --test index.test.js",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "@types/better-sqlite3": "^7.6.13",
+        "@types/node": "^25.9.0",
+        "typescript": "^5.0.0"
+    },
+    "dependencies": {
+        "better-sqlite3": "^12.10.0"
+    }
+}

@@ -1,0 +1,21 @@
+// Copy this file to signing.xcconfig (gitignored) and fill in your values.
+// Xcode reads signing.xcconfig as the base configuration for all project-level
+// build configurations, so team / provisioning settings are never committed.
+//
+// To set up:
+//   cp apps/desktop/macos/signing.xcconfig.example apps/desktop/macos/signing.xcconfig
+//   # then edit signing.xcconfig with your Apple Developer credentials
+
+// 10-character Apple Developer Team ID (find it at developer.apple.com → Membership)
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+
+// Code signing identity for local debug builds. "Sign to Run Locally" (-) works for
+// development without a provisioning profile; use "Apple Development" for device builds.
+CODE_SIGN_IDENTITY = -
+
+// For distribution builds, set to "Apple Distribution" and supply a profile name:
+// CODE_SIGN_IDENTITY = Apple Distribution
+// PROVISIONING_PROFILE_SPECIFIER = Timesheets Distribution
+
+// Bundle identifier — replace the React Native placeholder before signing
+// PRODUCT_BUNDLE_IDENTIFIER = com.example.timesheets

@@ -6,7 +6,15 @@ Context file for AI agents and future contributors. Keep this up to date when th
 
 ## What this project is
 
-A PHP CLI tool + local web UI that aggregates local activity data from four source categories and produces a project-attributed time report:
+A local-first activity reporting tool with **multiple UI surfaces that share a common data store**:
+
+- **PHP CLI** (`apps/cli/activity-report.php`) — the primary, stable interface
+- **PHP web UI** (`apps/web/`) — browser-based report viewer served by `php -S`
+- **React Native macOS desktop** (`apps/desktop/`) — in progress; built on `packages/engine/`
+
+All surfaces read the same local data, write to the same `reports/` cache directory, and use the same `config.json`. The PHP implementation is the behavior oracle during migration; the TypeScript engine is developed in parallel with compatibility as a hard constraint.
+
+The reporting engine aggregates data from four source categories:
 
 | Source                   | Data                                                                              | Location                                                                                                                |
 | ------------------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -22,7 +30,21 @@ Events are classified into named **projects** by matching signals (VSCode window
 ## File map
 
 ```
-activity-report.php              — entry point: config load, PROJECT_ROOT, require_once, main()
+activity-report.php              — root wrapper; delegates to apps/cli/activity-report.php
+apps/
+  cli/
+    activity-report.php          — CLI entry point: defines PROJECT_ROOT, loads config, requires src/, calls main()
+  web/
+    index.php                    — router for `php -S localhost:8000 apps/web/index.php`
+    api.php                      — JSON data endpoint; GET = fetch/rebuild report,
+                                   POST = config mutations (flag_projects_personal,
+                                   reassign_signal, set_project_grouping)
+    report_renderer.php          — HTML shell + static asset references;
+                                   non-HTML formats also served here via full PHP pipeline
+    static/
+      app.css                    — all styles
+      app.js                     — client-side report renderer, admin panel, nav
+  desktop/                       — @timesheets/desktop: React Native macOS app (Phase 5 complete + Phase 6 packaging in progress)
 src/
   cli.php                        — main(), parseArgs(), printHelp(), printProjects(),
                                    resolveDateRange(), generateReport(),
@@ -64,17 +86,9 @@ src/
   renderers.php                  — renderProjectEntry(), renderMarkdown(),
                                    renderJson(bucket, unmatched, from, to, tz, warnings=[], timeline=[]),
                                    renderTsv()
-www/
-  index.php                      — router for `php -S localhost:8000 www/index.php`
-  api.php                        — JSON data endpoint; GET = fetch/rebuild report,
-                                   POST = config mutations (flag_projects_personal,
-                                   reassign_signal, set_project_grouping)
-  report_renderer.php            — HTML shell + static asset references;
-                                   non-HTML formats also served here via full PHP pipeline
-  static/
-    app.css                      — all styles
-    app.js                       — client-side report renderer, admin panel, nav
 tools/
+  serve.php                      — invoked by `composer serve`; finds the first free port in 8000–8999,
+                                   echoes the URL, opens it in the default browser, then execs the PHP server
   list-github-desktop-repos.php  — lists GitHub Desktop repos sorted by last commit;
                                    --apply adds unconfigured ones to config.json with backup
   sync-integration-projects.php  — pulls Harvest/ClickUp catalogs → harvest_projects/clickup_tasks mappings
@@ -82,21 +96,40 @@ tools/
   cleanup-integration-projects.php — merges high-confidence integration stubs into existing projects
   sync-repo-remotes.php          — snapshots git remote URLs into projects[*].repo_remotes
   ensure-github-integration.php  — adds default integrations.github entry (gh-auth) if absent
+packages/                        — TypeScript workspace; shared data layer for non-PHP surfaces (see docs/NATIVE.md)
+  contracts/                     — @timesheets/contracts: JS type definitions mirroring PHP JSON output + config schema
+  engine/                        — @timesheets/engine: Node.js engine (generateReport, saveConfig, reassignSignal,
+                                   generateSummary, suggestAssignments, discoverRepos, getLastRebuildTime,
+                                   fetchIntegrationCatalog); same config.json + reports/ layout as PHP
+  engine/index.js                — engine entry point; all methods exported
+  engine/engine-server.js        — HTTP sidecar wrapper (symlink from apps/desktop/engine-server.js)
+  ui/                            — @timesheets/ui: React Native macOS components (peerDep)
+  ui/src/SidecarContext.tsx      — SidecarProvider (auto-start on mount) + useSidecar() hook
+  ui/src/config/ConfigScreen.tsx — tabbed config editor (General, Projects, Signals, Integrations)
+  ui/src/config/tabs/SignalsTab.tsx — unmatched signal assignment with LLM suggestions
+  ui/src/config/tabs/ProjectsTab.tsx — project list with GitHub Desktop repo discovery
+  ui/src/report/ReportScreen.tsx — day/week navigation, project activity, commits, LLM summary, rebuild badge
+  ui/src/report/DayView.tsx      — per-day project cards + HarvestPanel gap detection
+  ui/src/report/RangeView.tsx    — 7-day week summary with per-project totals + per-day breakdown
+  ui/src/report/HarvestPanel.tsx — collapsible Harvest gap detection panel (null-renders when no Harvest data)
+  ui/src/report/EngineClient.ts  — fetch-based IPC client for all engine-server endpoints
+  test-fixtures/                 — @timesheets/test-fixtures: golden fixtures for PHP–TypeScript parity tests
 config.json                      — local config, gitignored, never committed
 config.example.json              — safe-to-commit template with dummy data
 config.schema.json               — JSON Schema (draft 2020-12) for both config files
 phpcs.xml.dist                   — PHP_CodeSniffer ruleset (PSR-12 + CLI exceptions)
 composer.json                    — dev dep: squizlabs/php_codesniffer ^3.9
 package.json                     — dev dep: prettier ^3.0
+docs/NATIVE.md                   — native desktop migration plan and phased roadmap
 ```
 
-`vendor/` and `node_modules/` are installed locally but not committed.
+`vendor/` and `node_modules/` are installed locally but not committed. The root `package.json` declares `"workspaces": ["packages/*", "apps/*"]` — run `npm install` from the repo root to link the packages to each other.
 
 ---
 
 ## Architecture
 
-Logic is split across `src/` includes with no classes. All code is plain functions grouped by concern. `activity-report.php` is a thin entry point that loads config, defines `PROJECT_ROOT`, requires all includes, and calls `main()`.
+Logic is split across `src/` includes with no classes. All code is plain functions grouped by concern. `apps/cli/activity-report.php` is a thin entry point that loads config, defines `PROJECT_ROOT`, requires all includes, and calls `main()`.
 
 | File                                    | Key functions                                                                                                                                                                                                                                                                                                                             |
 | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -118,7 +151,7 @@ Logic is split across `src/` includes with no classes. All code is plain functio
 | `src/classifiers.php`                   | `classifyVscode`, `classifySlack`, `classifySsh`, `projectForSignals`, `projectForExternal`, `isAfkAt`, `activeInputSecondsDuring`, `classifyAndAggregate`                                                                                                                                                                                |
 | `src/renderers.php`                     | `renderProjectEntry`, `renderMarkdown`, `renderJson`, `renderTsv`                                                                                                                                                                                                                                                                         |
 
-`PROJECT_ROOT` is defined as `__DIR__` in `activity-report.php`. Cache functions in `src/cache.php` use `PROJECT_ROOT` so `reports/` always resolves to the project root regardless of include depth.
+`PROJECT_ROOT` is set via `define('PROJECT_ROOT', dirname(__DIR__, 2))` in `apps/cli/activity-report.php` — two levels up from `apps/cli/` to reach the project root. `const` cannot be used here because `dirname()` is a function call, not a compile-time constant expression. Cache functions in `src/cache.php` use `PROJECT_ROOT` so `reports/` always resolves to the project root regardless of include depth.
 
 ### Data flow
 
@@ -128,7 +161,7 @@ Logic is split across `src/` includes with no classes. All code is plain functio
                         └─────────────────────────────┬───────────────────────────┘
                                                        │
                         ┌─ Web path ──────────────────┐│
-                        │  www/index.php → api.php     ││
+                        │  apps/web/index.php → api.php     ││
                         └─────────────────────────────┬┘
                                                        │
                               loadSourcesForRange()    │
@@ -390,9 +423,9 @@ No args               Backfill prior 7 completed days (skips days already curren
 
 ## Web UI
 
-Served by `php -S localhost:8000 www/index.php`. `www/index.php` routes all requests to `www/report_renderer.php`.
+Served by `composer serve` (`tools/serve.php` finds the first free port in 8000–8999, opens the browser, then execs `php -S localhost:<port> apps/web/index.php`). `apps/web/index.php` routes all requests to `apps/web/report_renderer.php`.
 
-- **HTML requests** (`?format=html`, the default): `report_renderer.php` returns a static HTML shell with an inline `SITE` config object and `<link>`/`<script>` tags pointing to `www/static/app.css` and `www/static/app.js`. Data is fetched async from `api.php`.
+- **HTML requests** (`?format=html`, the default): `report_renderer.php` returns a static HTML shell with an inline `SITE` config object and `<link>`/`<script>` tags pointing to `apps/web/static/app.css` and `apps/web/static/app.js`. Data is fetched async from `api.php`.
 - **Non-HTML requests** (`?format=json|md|tsv`): the full PHP pipeline runs server-side and streams the result directly.
 - **`api.php` GET**: accepts `from`, `to`, `days`, `project`, `rebuild`. Serves cached JSON with `X-Report-Source: cached` when available; generates fresh data with `X-Report-Source: generated` otherwise. `rebuild=1` bypasses both the report cache and per-day source caches.
 - **`api.php` POST**: `action` field dispatches to `flag_projects_personal`, `reassign_signal`, or `set_project_grouping`, all of which mutate `config.json` with a backup.
@@ -425,7 +458,7 @@ const SITE = {
 ### PHP linting + analysis
 
 ```bash
-composer lint        # phpcs — PSR-12 across src/, www/, tools/
+composer lint        # phpcs — PSR-12 across src/, apps/web/, tools/
 composer lint:fix    # phpcbf auto-fix
 composer analyze     # phpstan level 5 (phpstan.neon + phpstan-baseline.neon)
 composer check       # lint + analyze together
@@ -500,7 +533,7 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 ## Conventions
 
 - **No classes.** Plain functions only. Introduce a class only if complexity genuinely demands it after discussion.
-- **No autoloader.** Runtime is dependency-free (`vendor/` contains only dev tools). New modules go in `src/` with a `require_once` in `activity-report.php`.
+- **No autoloader.** Runtime is dependency-free (`vendor/` contains only dev tools). New modules go in `src/` with a `require_once` in `apps/cli/activity-report.php`.
 - **Schema stays in sync.** Whenever a config key is added or its shape changes, update `config.schema.json` and `config.example.json` in the same commit.
 - **Run linters before committing.** `composer lint` must exit 0. `npm run format:check` must exit 0.
 - **`config.json` is never committed.** It contains real email addresses, tokens, repo paths, and workspace names. It is in `.gitignore`.
@@ -509,3 +542,35 @@ All tools in `tools/` back up `config.json` to `reports/config/config.<tool>.<ti
 - **Rebuild clears source caches.** Pass `rebuild=true` to `loadSourcesForRange` whenever the caller intends a full refresh. This ensures per-day source caches can't silently persist stale or empty data indefinitely.
 - **Cache stays flat JSON, not SQLite.** Raw source caches are per-day JSON files under `reports/YYYY-MM/DD/`. Wider date ranges compose daily buckets rather than writing range-wide source caches. Files are transparent, trivially inspectable, and selectively invalidated with `rm -rf reports/YYYY-MM/DD/`. If cross-range aggregate queries become a priority, build a thin read layer over existing report files rather than introducing SQLite for raw event storage.
 - **GitHub integration is CLI-only.** `loadGitHubActivity` is skipped when `PHP_SAPI !== 'cli'` to avoid blocking web page loads. Rely on the daily cron job or direct CLI invocation to populate GitHub data into per-day source caches.
+
+---
+
+## Multi-UI architecture and native desktop migration
+
+The long-term goal is a common data layer shared by all UIs: PHP CLI, PHP web, and native desktop. The TypeScript engine (`packages/engine/`) is the shared foundation for non-PHP surfaces. See `docs/NATIVE.md` for the full migration plan; current state is **Phase 5 complete + Phase 6 packaging in progress**.
+
+### Shared data contract (all UIs must respect this)
+
+| Artifact              | How all UIs use it                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `config.json`         | Single config for all surfaces; same JSON Schema; same backup convention (`reports/config/config.<source>.<ts>.json`)            |
+| `reports/YYYY-MM/DD/` | Per-day source caches (activitywatch, chrome, commits, integrations) — read and written by PHP and TypeScript engine alike       |
+| Report JSON shape     | `{from, to, tz, days: {date: {project: ProjectReport}}, timelines, unmatched, warnings}` — all surfaces produce and consume this |
+
+### What exists in `packages/`
+
+| Package                   | npm name                    | Status | Purpose                                                                                                                                                                                                                                                    |
+| ------------------------- | --------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/contracts/`     | `@timesheets/contracts`     | Active | JS type definitions mirroring the PHP JSON output shape and config schema (`Report`, `Config`, `ProjectConfig`, all connection types, IPC payload types)                                                                                                   |
+| `packages/engine/`        | `@timesheets/engine`        | Active | Node.js engine — reads ActivityWatch, Chrome, Git, integrations; writes `reports/`; implements `generateReport`, `saveConfig`, `reassignSignal`, `generateSummary`, `suggestAssignments`, `discoverRepos`, `getLastRebuildTime`, `fetchIntegrationCatalog` |
+| `packages/ui/`            | `@timesheets/ui`            | Active | React Native macOS UI; exports `ConfigScreen`, `ReportScreen`, `SidecarProvider`, `useSidecar`; `peerDependencies` on `react` and `react-native-macos`                                                                                                     |
+| `packages/test-fixtures/` | `@timesheets/test-fixtures` | Empty  | Will hold golden report JSON and config fixtures for PHP–TypeScript parity tests (Phase 0 capture)                                                                                                                                                         |
+| `apps/desktop/`           | `@timesheets/desktop`       | Active | React Native macOS app (Phase 5); Home + Reports + Config screens; sidecar auto-starts via `SidecarProvider` on app mount                                                                                                                                  |
+
+### Guiding constraints for all UI work
+
+- **PHP remains the behavior oracle** until parity tests pass. Do not remove PHP entrypoints.
+- **Keep `config.json` and `reports/` layout compatible** with the existing PHP app so users can run PHP and native interfaces against the same local data simultaneously.
+- **The engine boundary is narrow.** Expose report generation via the IPC surface in docs/NATIVE.md; don't let UI components read databases or config files directly.
+- **macOS first.** `react-native-macos` is the initial target. `react-native-windows` is deferred until macOS is stable.
+- **Format changes are phase-2.** Do not change `config.json` shape or `reports/` layout in phase-1 work — compatibility first, cleanup later.

@@ -169,7 +169,7 @@ function generateReport(
         $date = $from->format('Y-m-d');
         if (!isset($summaries[$date])) {
             fwrite(STDERR, "Generating daily summary via LLM for $date...\n");
-            $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz, $fullTimeline[$date] ?? []);
+            $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz, $fullTimeline[$date] ?? [], PROJECT_ROOT . '/config.json');
             if ($summary !== null) {
                 $summaries[$date] = $summary;
             }
@@ -439,7 +439,7 @@ function runLlmSuggest(array $config, array $opts, DateTimeZone $tz, DateTimeImm
     fwrite(STDOUT, "\nAsking LLM to suggest project assignments for $total unmatched signal(s)...\n");
 
     try {
-        $suggestions = llmSuggestAssignments($unmatched, $config);
+        $suggestions = llmSuggestAssignments($unmatched, $config, PROJECT_ROOT . '/config.json');
     } catch (\Throwable $e) {
         fwrite(STDERR, 'LLM error: ' . $e->getMessage() . "\n");
         return;

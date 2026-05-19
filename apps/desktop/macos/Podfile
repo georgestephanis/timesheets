@@ -1,0 +1,64 @@
+require 'pathname'
+
+ws_dir = Pathname.new(__dir__)
+ws_dir = ws_dir.parent until
+  File.exist?("#{ws_dir}/node_modules/react-native-macos/scripts/react_native_pods.rb") ||
+  ws_dir.expand_path.to_s == '/'
+ws_dir = ws_dir.expand_path
+
+# Path from this Podfile's directory to react-native-macos (works regardless of hoisting)
+rn_macos_path = (ws_dir + 'node_modules/react-native-macos')
+  .relative_path_from(Pathname.new(__dir__).expand_path)
+  .to_s
+
+require "#{ws_dir}/node_modules/react-native-macos/scripts/react_native_pods.rb"
+
+prepare_react_native_project!
+
+target 'TimesheetsDesktop-macOS' do
+  platform :macos, '14.0'
+
+  # No third-party native modules to autolink; call link_native_modules! directly
+  # to set reactNativePath without needing the CLI's iOS project detection.
+  link_native_modules!({
+    ios_packages: [],
+    ios_project_root_path: File.expand_path(__dir__),
+    react_native_path: "#{rn_macos_path}"
+  })
+
+  use_react_native!(
+    :path => rn_macos_path,
+    :fabric_enabled => ENV['RCT_NEW_ARCH_ENABLED'] == '1',
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  post_install do |installer|
+    react_native_post_install(installer)
+
+    # react-native-macos does not install a `react-native` alias in node_modules,
+    # but the hermes-engine pod hardcodes REACT_NATIVE_PATH to ../node_modules/react-native.
+    # Patch the project-level build configurations to point to react-native-macos instead.
+    installer.pods_project.build_configurations.each do |config|
+      val = config.build_settings['REACT_NATIVE_PATH']
+      if val.is_a?(String) && val.include?('node_modules/react-native') && !val.include?('react-native-macos')
+        config.build_settings['REACT_NATIVE_PATH'] = val.gsub('node_modules/react-native', 'node_modules/react-native-macos')
+      end
+    end
+    installer.pods_project.save
+
+    # fmt 11.0.2: Apple Clang 21+ (Xcode 26+) rejects consteval with non-type
+    # template args. Patch fmt/base.h to treat Clang 21+ like Clang < 14
+    # (broken consteval) rather than relying on -D flags, which source #defines
+    # override.
+    fmt_base_h = "#{installer.sandbox.root}/fmt/include/fmt/base.h"
+    if File.exist?(fmt_base_h)
+      content = File.read(fmt_base_h)
+      patched = content.gsub(
+        '#elif defined(__apple_build_version__) && __apple_build_version__ < 14000029L',
+        '#elif defined(__apple_build_version__) && (__apple_build_version__ < 14000029L || __apple_build_version__ >= 21000000L)'
+      )
+      File.write(fmt_base_h, patched) if patched != content
+    end
+  end
+end

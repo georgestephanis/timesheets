@@ -18,18 +18,125 @@ declare(strict_types=1);
 function llmGetConnection(array $config): ?array
 {
     $list = $config['integrations']['llm'] ?? [];
-    return is_array($list) && !empty($list) ? $list[0] : null;
+    if (!is_array($list) || empty($list)) {
+        return null;
+    }
+
+    // Allow selecting a provider by name:
+    //   TIMESHEETS_LLM="Apple Intelligence (on-device)" php activity-report.php
+    $conn = null;
+    $preferName = getenv('TIMESHEETS_LLM') ?: null;
+    if ($preferName !== null) {
+        foreach ($list as $entry) {
+            if (($entry['name'] ?? '') === $preferName) {
+                $conn = $entry;
+                break;
+            }
+        }
+        // Named provider not found — fall through to default
+    }
+
+    $conn = $conn ?? $list[0];
+
+    // If the selected provider is the local Apple Intelligence shim, ensure
+    // the server is running (starts the standalone binary if the desktop app
+    // is not open). This is a no-op when the server is already up.
+    llmEnsureAppleIntelligenceServer((string)($conn['base_url'] ?? ''));
+
+    return $conn;
+}
+
+/**
+ * Ensures the Apple Intelligence HTTP server is running on 127.0.0.1:57911.
+ *
+ * Called automatically by llmGetConnection() whenever the Apple Intelligence
+ * provider is selected.  Tries to start the standalone binary from
+ * tools/apple-intelligence-server/.build/release/ if neither the desktop app
+ * nor a previously spawned instance is already listening.
+ *
+ * Safe to call repeatedly — the fsockopen probe is sub-millisecond when the
+ * server is running, and the PID file prevents duplicate spawns.
+ */
+function llmEnsureAppleIntelligenceServer(string $baseUrl): void
+{
+    if (
+        !str_contains($baseUrl, '127.0.0.1:57911') &&
+        !str_contains($baseUrl, 'localhost:57911')
+    ) {
+        return;
+    }
+
+    // Fast path — server already accepting connections.
+    if (llmIsPortOpen('127.0.0.1', 57911)) {
+        return;
+    }
+
+    // Locate the pre-built standalone binary.
+    $repoRoot = dirname(dirname(__DIR__));
+    $binary   = "$repoRoot/tools/apple-intelligence-server/.build/release/apple-intelligence-server";
+
+    if (!file_exists($binary) || !is_executable($binary)) {
+        // Binary not built yet — let the HTTP request fail with a clear error.
+        return;
+    }
+
+    // Prevent duplicate spawns via a PID file.
+    $pidFile = sys_get_temp_dir() . '/timesheets-apple-intelligence.pid';
+    if (file_exists($pidFile)) {
+        $pid = (int)file_get_contents($pidFile);
+        if ($pid > 0 && posix_kill($pid, 0)) {
+            // Process exists but port not open yet — wait briefly.
+            llmWaitForPort('127.0.0.1', 57911, 2.0);
+            return;
+        }
+        unlink($pidFile);
+    }
+
+    // Spawn detached.
+    $escaped = escapeshellarg($binary);
+    $pid     = (int)shell_exec("($escaped > /dev/null 2>&1 & echo \$!)");
+    if ($pid > 0) {
+        file_put_contents($pidFile, $pid);
+    }
+
+    llmWaitForPort('127.0.0.1', 57911, 3.0);
+}
+
+/** @internal */
+function llmIsPortOpen(string $host, int $port): bool
+{
+    $sock = @fsockopen($host, $port, $errno, $errstr, 0.3);
+    if ($sock !== false) {
+        fclose($sock);
+        return true;
+    }
+    return false;
+}
+
+/** @internal */
+function llmWaitForPort(string $host, int $port, float $timeoutSec): void
+{
+    $deadline = microtime(true) + $timeoutSec;
+    while (microtime(true) < $deadline) {
+        if (llmIsPortOpen($host, $port)) {
+            return;
+        }
+        usleep(100_000); // 100 ms
+    }
 }
 
 /**
  * Resolves the model to use for a connection.
  *
- * Returns the configured model name, or queries /models and returns the ID of
- * the first available model when no model is explicitly configured.
+ * Returns the configured model name if set. Otherwise queries /models, writes
+ * the discovered name back to $config (and saves the file when $configPath is
+ * provided) so future calls skip the extra round-trip.
  *
- * @param array<string, mixed> $conn
+ * @param array<string, mixed>  $conn        The LLM connection entry (by reference so model is updated).
+ * @param array<string, mixed>  $config      Full config array (by reference).
+ * @param string|null           $configPath  Path to config.json; when provided the update is persisted.
  */
-function llmResolveModel(array $conn): string
+function llmResolveModel(array &$conn, array &$config, ?string $configPath = null): string
 {
     if (!empty($conn['model'])) {
         return (string)$conn['model'];
@@ -56,6 +163,19 @@ function llmResolveModel(array $conn): string
     if (!is_string($model) || $model === '') {
         throw new RuntimeException("No models available at $baseUrl");
     }
+
+    // Persist the discovered model so future calls skip /models.
+    $conn['model'] = $model;
+    foreach ($config['integrations']['llm'] ?? [] as $i => $entry) {
+        if (($entry['base_url'] ?? '') === ($conn['base_url'] ?? '')) {
+            $config['integrations']['llm'][$i]['model'] = $model;
+            break;
+        }
+    }
+    if ($configPath !== null && function_exists('saveConfigWithBackup')) {
+        saveConfigWithBackup($config, $configPath, 'llm');
+    }
+
     return $model;
 }
 
@@ -132,9 +252,10 @@ function llmDailySummary(
     string $date,
     array $dayBucket,
     array $external,
-    array $config,
+    array &$config,
     DateTimeZone $tz,
-    array $dayTimeline = []
+    array $dayTimeline = [],
+    string $configPath = ''
 ): ?string {
     $conn = llmGetConnection($config);
     if ($conn === null) {
@@ -311,15 +432,34 @@ function llmDailySummary(
     appLog('INFO', 'llm', "[$date] sending request to $baseUrl — prompt length: " . mb_strlen($userPrompt) . " chars");
 
     try {
-        $model = llmResolveModel($conn);
+        $pathArg = $configPath !== '' ? $configPath : null;
+        $model   = llmResolveModel($conn, $config, $pathArg);
         appLog('INFO', 'llm', "[$date] model: $model");
-        $response = llmPostJson($conn, '/chat/completions', [
-            'model'    => $model,
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user',   'content' => $userPrompt],
-            ],
-        ]);
+        try {
+            $response = llmPostJson($conn, '/chat/completions', [
+                'model'    => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user',   'content' => $userPrompt],
+                ],
+            ]);
+        } catch (RuntimeException $e) {
+            if (str_contains($e->getMessage(), 'HTTP 404')) {
+                // Model gone — clear it, rediscover, and retry once.
+                unset($conn['model']);
+                $model    = llmResolveModel($conn, $config, $pathArg);
+                appLog('INFO', 'llm', "[$date] model refreshed to: $model");
+                $response = llmPostJson($conn, '/chat/completions', [
+                    'model'    => $model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => $systemPrompt],
+                        ['role' => 'user',   'content' => $userPrompt],
+                    ],
+                ]);
+            } else {
+                throw $e;
+            }
+        }
     } catch (RuntimeException $e) {
         appLog('ERROR', 'llm', "[$date] request failed: " . $e->getMessage());
         return null;
@@ -403,7 +543,8 @@ function llmSuggestTimeLogging(
     string $date,
     array $dayBucket,
     array $external,
-    array $config
+    array &$config,
+    string $configPath = ''
 ): array {
     $conn = llmGetConnection($config);
     if ($conn === null) {
@@ -607,14 +748,31 @@ function llmSuggestTimeLogging(
     appLog('INFO', 'llm', "[$date] suggest_time_logging: " . count($gaps) . " gaps, sending request");
 
     try {
-        $model    = llmResolveModel($conn);
-        $response = llmPostJson($conn, '/chat/completions', [
-            'model'    => $model,
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user',   'content' => $userPrompt],
-            ],
-        ]);
+        $pathArg = $configPath !== '' ? $configPath : null;
+        $model   = llmResolveModel($conn, $config, $pathArg);
+        try {
+            $response = llmPostJson($conn, '/chat/completions', [
+                'model'    => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user',   'content' => $userPrompt],
+                ],
+            ]);
+        } catch (RuntimeException $e) {
+            if (str_contains($e->getMessage(), 'HTTP 404')) {
+                unset($conn['model']);
+                $model    = llmResolveModel($conn, $config, $pathArg);
+                $response = llmPostJson($conn, '/chat/completions', [
+                    'model'    => $model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => $systemPrompt],
+                        ['role' => 'user',   'content' => $userPrompt],
+                    ],
+                ]);
+            } else {
+                throw $e;
+            }
+        }
     } catch (RuntimeException $e) {
         appLog('ERROR', 'llm', "[$date] suggest_time_logging failed: " . $e->getMessage());
         return [];
@@ -702,7 +860,7 @@ function llmSuggestTimeLogging(
  * @param  array<string, mixed>              $config
  * @return list<array{kind: string, value: string, project: string, reason: string}>
  */
-function llmSuggestAssignments(array $unmatched, array $config): array
+function llmSuggestAssignments(array $unmatched, array &$config, string $configPath = ''): array
 {
     $conn = llmGetConnection($config);
     if ($conn === null) {
@@ -756,7 +914,8 @@ function llmSuggestAssignments(array $unmatched, array $config): array
         return [];
     }
 
-    $model = llmResolveModel($conn);
+    $pathArg = $configPath !== '' ? $configPath : null;
+    $model   = llmResolveModel($conn, $config, $pathArg);
 
     $systemPrompt = 'You are a time-tracking assistant. Map unclassified computer-activity signals to the '
         . 'correct project based on naming patterns. Be conservative: only suggest when confident. '

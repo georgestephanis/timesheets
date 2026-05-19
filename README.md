@@ -1,10 +1,60 @@
-# activity-report
+<p align="center">
+  <img src="branding/svg/timesheets-icon-dark.svg#gh-light-mode-only"
+       width="128" height="128" alt="timesheets" />
+  <img src="branding/svg/timesheets-icon-light.svg#gh-dark-mode-only"
+       width="128" height="128" alt="timesheets" />
+</p>
+<h1 align="center">timesheets</h1>
 
-A PHP reporting tool (CLI + local web UI) that aggregates local activity data from [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional Harvest/ClickUp/Clockify/GitHub APIs into a project-attributed time report — with optional LLM-generated daily accomplishment summaries.
+A local-first activity reporting tool with multiple UI surfaces sharing a common data store. All surfaces read the same [ActivityWatch](https://activitywatch.net/), Chrome history, Git, and optional integration data; produce the same `config.json`-driven project report; and write to the same `reports/` cache directory.
+
+**UI surfaces:**
+
+- **React Native macOS desktop** (`apps/desktop/`) — native app with full report viewing, config editing, signal assignment, and LLM features; see [docs/NATIVE.md](docs/NATIVE.md)
+- **PHP CLI** (`activity-report.php`) — backfills daily reports, generates Markdown/JSON/TSV output, LLM-assisted signal tuning
+- **PHP web UI** (`apps/web/`) — local browser interface; report browsing, Harvest sidebar, rebuild, config panel
+
+The desktop app is built on a TypeScript engine (`packages/engine/`) that shares the same `config.json` shape and `reports/` cache layout as the PHP implementation. All three surfaces can run against the same local data simultaneously — no data migration required.
 
 ## A Recommendation on Building your `config.json`
 
 The config is a somewhat long and detailed JSON object. Both a `config.example.json` and `config.schema.json` are provided to describe how it should look, but writing it manually is tedious. It is recommended to work with an LLM / AI provider to have it populate the `config.json` for you, describing what you'd like to configure and what credentials you'd like to add.
+
+## Architecture
+
+All UI surfaces converge on the same local data stores:
+
+```
+┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────────┐
+│   PHP CLI           │   │   PHP Web UI         │   │   React Native Desktop  │
+│   activity-report   │   │   apps/web/ + api.php│   │   apps/desktop/         │
+│   .php              │   │                      │   │                         │
+└──────────┬──────────┘   └──────────┬───────────┘   └────────────┬────────────┘
+           │                         │                             │
+           │              ┌──────────┴───────────┐                │
+           └──────────────►   PHP core (src/)    │   ┌────────────▼────────────┐
+                          │   config, cache,      │   │  TypeScript engine      │
+                          │   loaders, classifiers│   │  packages/engine/       │
+                          └──────────┬────────────┘   └────────────┬────────────┘
+                                     │                              │
+                          ┌──────────▼──────────────────────────────▼────────────┐
+                          │                  Shared data stores                   │
+                          │                                                        │
+                          │  config.json  ·  reports/YYYY-MM/DD/  ·  ActivityWatch │
+                          │  Chrome history  ·  Git repos  ·  External APIs        │
+                          └────────────────────────────────────────────────────────┘
+```
+
+The shared contract between all surfaces:
+
+| Artifact              | Role                                                                                      |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `config.json`         | Single source of truth for projects, signals, and integration credentials                 |
+| `reports/YYYY-MM/DD/` | Per-day source caches (activitywatch, chrome, commits, integrations)                      |
+| Report JSON shape     | All outputs conform to the same structure (`from`, `to`, `days`, `timelines`, `warnings`) |
+| `reports/config/`     | Timestamped config backups — written by every surface that mutates `config.json`          |
+
+The TypeScript engine (`packages/engine/`) is being developed in parallel as the data layer for the native desktop app. It keeps `config.json` and `reports/` layout compatible with the PHP app so both can run against the same local data without conflict.
 
 ## Quick start
 
@@ -14,10 +64,10 @@ composer install
 npm install
 
 # Start the web UI
-php -S localhost:8000 www/index.php
+composer serve
 ```
 
-Then open [http://localhost:8000](http://localhost:8000). The UI loads today's activity, lets you page through previous days, rebuild stale data, and cross-reference what you've logged in Harvest for each day.
+The server picks the first free port starting at 8000, prints the URL, and opens it in your default browser. The UI loads today's activity, lets you page through previous days, rebuild stale data, and cross-reference what you've logged in Harvest for each day.
 
 ### Recommended cron job
 
@@ -290,10 +340,10 @@ chmod +x activity-report.php
 ## Web UI
 
 ```bash
-php -S localhost:8000 www/index.php
+composer serve
 ```
 
-The web UI is a single-page app that fetches JSON from `www/api.php` and renders it client-side. Features:
+`composer serve` finds the first available port starting at 8000, echoes the URL, and opens it in your default browser automatically. The web UI is a single-page app that fetches JSON from `apps/web/api.php` and renders it client-side. Features:
 
 - **Navigation** — page through days or date ranges; jump to any date with the date picker; `←`/`→` keyboard shortcuts for Prev/Next
 - **Project filter** — filter to a single project or group; filtering is client-side (no re-fetch)
@@ -319,6 +369,7 @@ All tools live in `tools/` and write a timestamped backup to `reports/config/` b
 
 | Tool                               | What it does                                                                                    |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `serve.php`                        | Called by `composer serve`; finds a free port (8000–8999) and opens the browser automatically   |
 | `list-github-desktop-repos.php`    | Lists repos from GitHub Desktop; `--apply` adds unconfigured ones to `config.json`              |
 | `sync-integration-projects.php`    | Pulls Harvest/ClickUp project catalogs and creates `harvest_projects`/`clickup_tasks` mappings  |
 | `set-integration-groupings.php`    | Assigns `grouping` to projects based on `groupings_map` rules in `config.json`                  |
@@ -361,6 +412,17 @@ tail -20 reports/app.jsonl | jq .
 
 ## Development
 
+### Running the app
+
+```bash
+composer serve                              # PHP web UI — picks a free port starting at 8000, opens browser
+composer report                             # PHP CLI (no args = backfill last 7 days)
+composer report -- --days 3                 # pass flags after --
+composer report -- --from 2026-05-08        # explicit date
+npm run desktop:start                       # React Native metro bundler
+npm run desktop:macos                       # build and run macOS desktop app
+```
+
 ### Linting and static analysis
 
 ```bash
@@ -368,13 +430,14 @@ composer lint        # PHP_CodeSniffer (PSR-12)
 composer lint:fix    # auto-fix what phpcbf can fix
 composer analyze     # PHPStan at level 5
 composer test        # PHPUnit (87 tests)
-composer check       # lint + analyze + test + Prettier format check in one shot
+composer check       # lint + analyze + tests + Prettier format check in one shot
+npm run check        # same as composer check (entry point for npm users)
 ```
 
-### JavaScript
+### JavaScript / TypeScript
 
 ```bash
-npm run lint:js       # ESLint on www/static/app.js
+npm run lint:js       # ESLint on apps/web/static/app.js
 npm run format        # reformat JSON/Markdown files with Prettier
 npm run format:check  # dry-run check (used in CI)
 ```
@@ -390,7 +453,18 @@ A pre-commit hook (`.githooks/pre-commit`) runs the same checks locally. It is i
 ## Project structure
 
 ```
-activity-report.php       — CLI entry point
+activity-report.php       — root wrapper (delegates to apps/cli/activity-report.php)
+apps/
+  cli/
+    activity-report.php   — CLI entry point: defines PROJECT_ROOT, loads config, calls main()
+  web/
+    index.php             — router for php -S
+    api.php               — JSON endpoint: report generation + config mutations + generate_summary
+    report_renderer.php   — HTML shell + static asset references; non-HTML formats served here
+    static/
+      app.css             — all styles
+      app.js              — client-side renderer, admin panel, timeline, day summary
+  desktop/                — @timesheets/desktop: React Native macOS app (Phase 5 complete)
 src/
   config.php              — saveConfigWithBackup(), applySignalToProject(), parseSlackSignal()
   helpers.php             — expandPath(), fmtDur(), appLog(), warning()
@@ -413,14 +487,8 @@ src/
     clockify-catalog.php  — clockifyFetchProjectNames() (for future sync tooling)
     github.php            — CLI-only; githubFetchCommits/PullRequests/Issues/Comments
     llm.php               — llmSuggestAssignments(), llmDailySummary()
-www/
-  index.php               — router for php -S
-  api.php                 — JSON endpoint: report generation + config mutations + generate_summary
-  report_renderer.php     — HTML shell + static asset references; non-HTML formats served here
-  static/
-    app.css               — all styles
-    app.js                — client-side renderer, admin panel, timeline, day summary
 tools/
+  serve.php                 — used by `composer serve`; finds free port, opens browser
   list-github-desktop-repos.php
   sync-integration-projects.php
   cleanup-integration-projects.php
@@ -428,6 +496,11 @@ tools/
   ensure-github-integration.php
   prune-config-backups.php
   reset-cache.php
+packages/                 — TypeScript monorepo workspace; shared by all non-PHP surfaces (see docs/NATIVE.md)
+  contracts/              — @timesheets/contracts: JS type definitions matching PHP JSON output shape
+  engine/                 — @timesheets/engine: TypeScript engine (replaces PHP core; same config.json + reports/ layout)
+  ui/                     — @timesheets/ui: React Native components (peerDep on react-native-macos)
+  test-fixtures/          — @timesheets/test-fixtures: golden fixture data for PHP–TypeScript parity tests
 reports/                  — gitignored; all generated data lives here
   app.jsonl               — structured application log (all subsystems)
   cache-data.jsonl        — index of per-day source cache files
@@ -439,7 +512,13 @@ config.example.json       — safe-to-commit template
 config.schema.json        — JSON Schema for editor validation
 AGENTS.md                 — architecture guide for contributors and AI agents
 SECURITY.md               — local threat model and token-handling notes
-TROUBLESHOOTING.md        — common failures and fixes
+docs/
+  NATIVE.md               — native desktop migration plan (React Native + TypeScript engine)
+  MIGRATION.md            — first-time setup, config path, packaging steps
+  TROUBLESHOOTING.md      — common failures and fixes
+  APP-vs-PHP.md           — feature parity table across all three UI surfaces
+  TODO.md                 — backlog and deferred items
+  CLOCKIFY.md             — Clockify integration notes
 ```
 
 ## License

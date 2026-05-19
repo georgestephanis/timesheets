@@ -2,8 +2,8 @@
 <ruleset name="timesheets">
     <description>Coding standards for activity-report.php (PSR-12 with CLI-script exceptions).</description>
 
-    <file>activity-report.php</file>
-    <file>www/</file>
+    <file>apps/cli/activity-report.php</file>
+    <file>apps/web/</file>
     <file>src/</file>
     <file>tools/</file>
     <arg name="extensions" value="php"/>

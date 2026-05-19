@@ -1,0 +1,20 @@
+{
+    "name": "@timesheets/ui",
+    "version": "1.0.0",
+    "main": "src/index.ts",
+    "scripts": {
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "zod": "^3.25.76"
+    },
+    "peerDependencies": {
+        "react": ">=19",
+        "react-native": ">=0.81"
+    },
+    "devDependencies": {
+        "@react-native/typescript-config": "*",
+        "@types/react": "^19.1.4",
+        "typescript": "^5.0.0"
+    }
+}

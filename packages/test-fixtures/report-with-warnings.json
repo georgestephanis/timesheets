@@ -1,0 +1,39 @@
+{
+    "from": "2024-01-15T00:00:00-05:00",
+    "to": "2024-01-15T23:59:59-05:00",
+    "tz": "America/New_York",
+    "days": {
+        "2024-01-15": {
+            "Acme Corp": {
+                "grouping": "Acme",
+                "seconds": 7200,
+                "active_seconds": 6480,
+                "activity_ratio": 0.9,
+                "external": [],
+                "detail": {
+                    "vscode": {
+                        "acme-api": 7200
+                    }
+                },
+                "commits": []
+            }
+        }
+    },
+    "unmatched": {
+        "vscode": {},
+        "browser": {},
+        "slack": {},
+        "apps": {},
+        "harvest": {},
+        "clickup": {},
+        "clockify": {},
+        "github": {}
+    },
+    "warnings": [
+        "Harvest: authentication failed for connection \"acme-harvest\" — check your token",
+        "ClickUp: API rate limit exceeded, skipping integration data"
+    ],
+    "timelines": {
+        "2024-01-15": [{ "s": 32400, "e": 39600, "p": "Acme Corp", "g": "Acme" }]
+    }
+}

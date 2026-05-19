@@ -14,6 +14,11 @@
         "phpunit/phpunit": "^13.1"
     },
     "scripts": {
+        "serve": [
+            "@putenv COMPOSER_PROCESS_TIMEOUT=0",
+            "@php tools/serve.php"
+        ],
+        "report": "@php apps/cli/activity-report.php",
         "lint": "phpcs",
         "lint:json": "npm run format:check",
         "lint:fix": "phpcbf",
@@ -27,6 +32,16 @@
         ],
         "post-install-cmd": "git config core.hooksPath .githooks || true",
         "post-update-cmd": "git config core.hooksPath .githooks || true"
+    },
+    "scripts-descriptions": {
+        "serve": "Start the PHP web UI at http://localhost:8000",
+        "report": "Run the CLI report (pass flags after --: composer report -- --days 3 --from 2026-05-01)",
+        "lint": "Check PHP code style (PSR-12 via phpcs)",
+        "lint:json": "Check JSON/Markdown formatting (via Prettier)",
+        "lint:fix": "Auto-fix PHP code style issues (via phpcbf)",
+        "analyze": "Run PHPStan static analysis at level 5",
+        "test": "Run PHPUnit tests",
+        "check": "Run all checks: PHP lint, JSON format, PHPStan, and PHPUnit"
     },
     "config": {
         "optimize-autoloader": true
