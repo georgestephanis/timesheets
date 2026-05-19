@@ -65,6 +65,12 @@ if (!configPath) {
       } else if (req.method === 'GET' && url.pathname === '/discover-repos') {
         const repos = await engine.discoverRepos();
         json(res, 200, {repos});
+      } else if (
+        req.method === 'GET' &&
+        url.pathname === '/integration-catalog'
+      ) {
+        const catalog = await engine.fetchIntegrationCatalog();
+        json(res, 200, catalog);
       } else {
         json(res, 404, {error: 'not found'});
       }

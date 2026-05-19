@@ -71,6 +71,7 @@ export { loadActivityWatch } from "./lib/loader-activitywatch.js";
 export { loadChromeHistory, backfillChromeUrls } from "./lib/loader-chrome.js";
 export { loadGitCommits } from "./lib/loader-git.js";
 export { discoverGitHubDesktopRepos } from "./lib/loader-github-desktop.js";
+export { harvestProjectNames, clickupNames } from "./lib/integration-catalog.js";
 
 // ─── Engine class ─────────────────────────────────────────────────────────────
 
@@ -465,6 +466,32 @@ class TimesheetsEngine {
                 projectNames.includes(s.project) &&
                 (signalSet[s.kind] ?? []).includes(s.value),
         );
+    }
+
+    /**
+     * Fetches all Harvest project names and ClickUp space/folder/list names
+     * from the configured integrations. Returns raw name lists; the caller
+     * is responsible for merging into config.projects.
+     *
+     * @returns {Promise<{harvest: string[], clickup: string[]}>}
+     */
+    async fetchIntegrationCatalog() {
+        if (!this.config) await this.loadConfig();
+        const cfg = /** @type {import('@timesheets/contracts').Config} */ (this.config);
+        const timeoutMs = (cfg.integration_http_timeout_seconds ?? 20) * 1000;
+
+        const { harvestProjectNames, clickupNames } = await import("./lib/integration-catalog.js");
+
+        const [harvest, clickup] = await Promise.all([
+            Promise.all((cfg.integrations?.harvest ?? []).map((c) => harvestProjectNames(c, timeoutMs))).then(
+                (arrays) => [...new Set(arrays.flat())],
+            ),
+            Promise.all((cfg.integrations?.clickup ?? []).map((c) => clickupNames(c, timeoutMs))).then((arrays) => [
+                ...new Set(arrays.flat()),
+            ]),
+        ]);
+
+        return { harvest, clickup };
     }
 
     /**

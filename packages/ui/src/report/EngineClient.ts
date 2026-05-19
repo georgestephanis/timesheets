@@ -76,6 +76,10 @@ export class EngineClient {
         return this.post("/suggest-assignments", { date, llmIndex: this.activeLlmIndex });
     }
 
+    async getIntegrationCatalog(): Promise<{ harvest: string[]; clickup: string[] }> {
+        return this.get("/integration-catalog");
+    }
+
     async discoverRepos(): Promise<{
         repos: Array<{ path: string; name: string; recent: boolean; assigned: string | null }>;
     }> {

@@ -1,5 +1,5 @@
-import React from "react";
-import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { ScrollView, View, Text, Pressable, Alert, StyleSheet } from "react-native";
 import { useSidecar } from "../../SidecarContext";
 import { ConnectionCard } from "../components/ConnectionCard";
 import { FieldRow } from "../components/FieldRow";
@@ -187,8 +187,64 @@ function AddButton({ label, onPress }: { label: string; onPress: () => void }) {
 
 export function IntegrationsTab({ draft, setField }: Props) {
     const integrations = draft.integrations ?? {};
-    const { activeLlmIndex, setActiveLlmIndex } = useSidecar();
+    const { activeLlmIndex, setActiveLlmIndex, client } = useSidecar();
     const llmList = integrations.llm ?? [];
+    const [syncing, setSyncing] = useState(false);
+
+    const hasHarvestOrClickUp =
+        (integrations.harvest ?? []).some((c) => c.token && c.account_id) ||
+        (integrations.clickup ?? []).some((c) => c.token && c.team_id);
+
+    const handleSync = async () => {
+        if (!client) return;
+        setSyncing(true);
+        try {
+            const catalog = await client.getIntegrationCatalog();
+            const projects: Record<string, Record<string, unknown>> = { ...(draft.projects ?? {}) };
+            let added = 0;
+            let mappingsUpdated = 0;
+
+            for (const name of catalog.harvest) {
+                if (!projects[name]) {
+                    projects[name] = {};
+                    added++;
+                }
+                const proj = { ...projects[name] };
+                const existing = (proj.harvest_projects as string[] | undefined) ?? [];
+                if (!existing.includes(name)) {
+                    proj.harvest_projects = [...existing, name];
+                    mappingsUpdated++;
+                }
+                projects[name] = proj;
+            }
+
+            for (const name of catalog.clickup) {
+                if (name.length < 3) continue;
+                const glob = `*${name}*`;
+                if (!projects[name]) {
+                    projects[name] = {};
+                    added++;
+                }
+                const proj = { ...projects[name] };
+                const existing = (proj.clickup_tasks as string[] | undefined) ?? [];
+                if (!existing.includes(glob)) {
+                    proj.clickup_tasks = [...existing, glob];
+                    mappingsUpdated++;
+                }
+                projects[name] = proj;
+            }
+
+            setField("projects", projects);
+            Alert.alert(
+                "Sync Complete",
+                `Added ${added} project${added !== 1 ? "s" : ""}, updated ${mappingsUpdated} mapping${mappingsUpdated !== 1 ? "s" : ""}.`,
+            );
+        } catch (e: unknown) {
+            Alert.alert("Sync Failed", e instanceof Error ? e.message : String(e));
+        } finally {
+            setSyncing(false);
+        }
+    };
 
     const addHarvest = () => {
         const existing = integrations.harvest ?? [];
@@ -237,6 +293,23 @@ export function IntegrationsTab({ draft, setField }: Props) {
 
     return (
         <ScrollView contentContainerStyle={styles.container}>
+            {hasHarvestOrClickUp && (
+                <View style={styles.syncRow}>
+                    <Pressable
+                        onPress={handleSync}
+                        disabled={syncing || !client}
+                        style={[styles.syncBtn, (syncing || !client) && styles.syncBtnDisabled]}
+                    >
+                        <Text style={styles.syncBtnText}>
+                            {syncing ? "Syncing…" : "⟳ Sync projects from Harvest / ClickUp"}
+                        </Text>
+                    </Pressable>
+                    <Text style={styles.syncHint}>
+                        Adds project entries and harvest_projects / clickup_tasks globs to your config.
+                    </Text>
+                </View>
+            )}
+
             <View style={styles.section}>
                 <Text style={styles.sectionLabel}>HARVEST</Text>
                 {(integrations.harvest ?? []).map((conn, i) => (
@@ -408,5 +481,30 @@ const styles = StyleSheet.create({
     },
     llmPickerChipTextActive: {
         color: "#fff",
+    },
+    syncRow: {
+        marginHorizontal: 16,
+        marginTop: 16,
+        marginBottom: 4,
+        gap: 6,
+    },
+    syncBtn: {
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+        borderWidth: 1,
+        borderColor: "#007AFF",
+        borderRadius: 5,
+        alignSelf: "flex-start",
+    },
+    syncBtnDisabled: { opacity: 0.4 },
+    syncBtnText: {
+        fontSize: 13,
+        color: "#007AFF",
+        fontWeight: "500",
+    },
+    syncHint: {
+        fontSize: 11,
+        color: "#888",
+        lineHeight: 16,
     },
 });
