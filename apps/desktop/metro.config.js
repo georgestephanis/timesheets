@@ -6,16 +6,16 @@ const workspaceRoot = path.resolve(__dirname, '../..');
 const appRoot = __dirname;
 
 const config = {
-  watchFolders: [workspaceRoot],
+  // Only watch source packages that need hot-reload — not the entire workspace
+  // root (which would pull in node_modules and cause Watchman inode overflow).
+  watchFolders: [
+    path.resolve(workspaceRoot, 'packages/ui'),
+    path.resolve(workspaceRoot, 'packages/contracts'),
+  ],
   resolver: {
     nodeModulesPaths: [
       path.resolve(appRoot, 'node_modules'),
       path.resolve(workspaceRoot, 'node_modules'),
-    ],
-    blockList: [
-      // Don't watch node_modules trees — only source packages need watching.
-      new RegExp(`${workspaceRoot}/node_modules/.*`),
-      new RegExp(`${appRoot}/node_modules/.*`),
     ],
   },
 };
