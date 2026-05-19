@@ -18,7 +18,111 @@ declare(strict_types=1);
 function llmGetConnection(array $config): ?array
 {
     $list = $config['integrations']['llm'] ?? [];
-    return is_array($list) && !empty($list) ? $list[0] : null;
+    if (!is_array($list) || empty($list)) {
+        return null;
+    }
+
+    // Allow selecting a provider by name:
+    //   TIMESHEETS_LLM="Apple Intelligence (on-device)" php activity-report.php
+    $conn = null;
+    $preferName = getenv('TIMESHEETS_LLM') ?: null;
+    if ($preferName !== null) {
+        foreach ($list as $entry) {
+            if (($entry['name'] ?? '') === $preferName) {
+                $conn = $entry;
+                break;
+            }
+        }
+        // Named provider not found — fall through to default
+    }
+
+    $conn = $conn ?? $list[0];
+
+    // If the selected provider is the local Apple Intelligence shim, ensure
+    // the server is running (starts the standalone binary if the desktop app
+    // is not open). This is a no-op when the server is already up.
+    llmEnsureAppleIntelligenceServer((string)($conn['base_url'] ?? ''));
+
+    return $conn;
+}
+
+/**
+ * Ensures the Apple Intelligence HTTP server is running on 127.0.0.1:57911.
+ *
+ * Called automatically by llmGetConnection() whenever the Apple Intelligence
+ * provider is selected.  Tries to start the standalone binary from
+ * tools/apple-intelligence-server/.build/release/ if neither the desktop app
+ * nor a previously spawned instance is already listening.
+ *
+ * Safe to call repeatedly — the fsockopen probe is sub-millisecond when the
+ * server is running, and the PID file prevents duplicate spawns.
+ */
+function llmEnsureAppleIntelligenceServer(string $baseUrl): void
+{
+    if (
+        !str_contains($baseUrl, '127.0.0.1:57911') &&
+        !str_contains($baseUrl, 'localhost:57911')
+    ) {
+        return;
+    }
+
+    // Fast path — server already accepting connections.
+    if (llmIsPortOpen('127.0.0.1', 57911)) {
+        return;
+    }
+
+    // Locate the pre-built standalone binary.
+    $repoRoot = dirname(dirname(__DIR__));
+    $binary   = "$repoRoot/tools/apple-intelligence-server/.build/release/apple-intelligence-server";
+
+    if (!file_exists($binary) || !is_executable($binary)) {
+        // Binary not built yet — let the HTTP request fail with a clear error.
+        return;
+    }
+
+    // Prevent duplicate spawns via a PID file.
+    $pidFile = sys_get_temp_dir() . '/timesheets-apple-intelligence.pid';
+    if (file_exists($pidFile)) {
+        $pid = (int)file_get_contents($pidFile);
+        if ($pid > 0 && posix_kill($pid, 0)) {
+            // Process exists but port not open yet — wait briefly.
+            llmWaitForPort('127.0.0.1', 57911, 2.0);
+            return;
+        }
+        unlink($pidFile);
+    }
+
+    // Spawn detached.
+    $escaped = escapeshellarg($binary);
+    $pid     = (int)shell_exec("($escaped > /dev/null 2>&1 & echo \$!)");
+    if ($pid > 0) {
+        file_put_contents($pidFile, $pid);
+    }
+
+    llmWaitForPort('127.0.0.1', 57911, 3.0);
+}
+
+/** @internal */
+function llmIsPortOpen(string $host, int $port): bool
+{
+    $sock = @fsockopen($host, $port, $errno, $errstr, 0.3);
+    if ($sock !== false) {
+        fclose($sock);
+        return true;
+    }
+    return false;
+}
+
+/** @internal */
+function llmWaitForPort(string $host, int $port, float $timeoutSec): void
+{
+    $deadline = microtime(true) + $timeoutSec;
+    while (microtime(true) < $deadline) {
+        if (llmIsPortOpen($host, $port)) {
+            return;
+        }
+        usleep(100_000); // 100 ms
+    }
 }
 
 /**
