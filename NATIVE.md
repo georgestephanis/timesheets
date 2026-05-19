@@ -361,18 +361,26 @@ After Phase 3 and 4 are complete:
 5. **Unlogged-time suggestions** — call sidecar `/suggest-logging`, display in Signals tab
    _(deferred: Harvest-specific, lower priority)_
 
-### Phase 6: Packaging and Cutover _(not started)_
+### Phase 6: Packaging and Cutover _(in progress)_
 
-- [ ] signed macOS `.app` build (ad-hoc or Developer ID)
-- [ ] bundle Node.js binary for the engine sidecar (`pkg` or `node` framework)
+- [x] signing credential scaffold — `apps/desktop/macos/signing.xcconfig.example`
+      (gitignored `signing.xcconfig` wired as `baseConfigurationReference` in pbxproj;
+      `DEVELOPMENT_TEAM` / `CODE_SIGN_IDENTITY` / `PRODUCT_BUNDLE_IDENTIFIER` stay out
+      of the committed project file)
+- [x] entitlements updated for Developer ID distribution — removed `app-sandbox`
+      (blocked sidecar file I/O); added `cs.allow-jit` (Hermes + Node.js) and
+      `cs.disable-library-validation` (better-sqlite3 native module)
+- [x] bundle Node.js binary — `resolveNodeBinary` checks `Contents/Resources/engine/node`
+      first; `resolveEngineScriptPath` checks `Contents/Resources/engine/engine-server.js`;
+      `tools/bundle-engine.sh` downloads a universal macOS Node binary and assembles the
+      minimal `engine-bundle/` resource directory
 - [x] auto-start sidecar on launch, kill on quit
-- [ ] migration guide for existing `config.json` and `reports/` users
+- [x] migration guide — `MIGRATION.md` covers first-time setup, config path, PHP
+      feature gaps, packaging steps, and recommended workflow transition
+- [ ] add `engine-bundle/` as a folder reference in Xcode (manual step; see
+      `tools/bundle-engine.sh` output and `MIGRATION.md` for instructions)
+- [ ] set `PRODUCT_BUNDLE_IDENTIFIER` in `signing.xcconfig` and archive/notarize
 - [ ] remove PHP server entrypoints once the native engine has full test parity
-
-> **Signing note:** Move `DEVELOPMENT_TEAM` and provisioning profile settings out of
-> `project.pbxproj` and into a gitignored
-> `apps/desktop/macos/TimesheetsDesktop.xcodeproj/signing.xcconfig`. Reference it from
-> `.pbxproj` via `#include` so the project file stays credential-free.
 
 ## Technology Stack
 

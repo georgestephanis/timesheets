@@ -219,12 +219,23 @@ RCT_EXPORT_METHOD(pickEngineScript:(RCTPromiseResolveBlock)resolve
 }
 
 // ── resolveNodeBinary ─────────────────────────────────────────────────────────
-// Finds the node binary via `zsh -l -c "which node"`. Cached after first call.
+// Checks the app bundle first (packaged builds), then falls back to the login
+// shell's `which node` (development builds). Result is cached after first call.
 
 - (NSString *)resolveNodeBinary
 {
   if (_nodePath) return _nodePath;
 
+  // 1. Prefer bundled node binary (present in distribution builds after running
+  //    tools/bundle-engine.sh and adding the engine/ folder to Xcode resources).
+  NSString *bundledNode = [[[NSBundle mainBundle] resourcePath]
+                           stringByAppendingPathComponent:@"engine/node"];
+  if ([[NSFileManager defaultManager] isExecutableFileAtPath:bundledNode]) {
+    _nodePath = bundledNode;
+    return _nodePath;
+  }
+
+  // 2. Fall back to system node via login shell (development builds).
   NSTask *task = [NSTask new];
   task.launchPath = @"/bin/zsh";
   task.arguments = @[@"-l", @"-c", @"which node"];
@@ -257,9 +268,17 @@ RCT_EXPORT_METHOD(pickEngineScript:(RCTPromiseResolveBlock)resolve
   NSString *stored = [[NSUserDefaults standardUserDefaults] stringForKey:kEngineScriptKey];
   if (stored.length) return stored;
 
-  // Bundle copy only usable when packaged with adjacent node_modules.
+  // Check the engine/ subdirectory first — this is where bundle-engine.sh places
+  // the script alongside node_modules/ for distribution builds.
+  NSString *bundledInDir = [[NSBundle mainBundle] pathForResource:@"engine-server"
+                                                           ofType:@"js"
+                                                      inDirectory:@"engine"];
+  if (bundledInDir && [self findNodeModulesForScript:bundledInDir]) return bundledInDir;
+
+  // Flat bundle fallback (legacy single-file Xcode resource reference).
   NSString *bundled = [[NSBundle mainBundle] pathForResource:@"engine-server" ofType:@"js"];
   if (bundled && [self findNodeModulesForScript:bundled]) return bundled;
+
   return nil;
 }
 
