@@ -105,9 +105,8 @@ timestamped backup to `reports/config/` before modifying `config.json`.
 | `prune-config-backups.php`         | Caps `reports/config/` backups; trims JSONL indexes                              |
 | `reset-cache.php`                  | Removes per-day source caches by date range                                      |
 
-None of these have desktop equivalents yet. The most impactful gap is
-`sync-integration-projects.php` — without it, users must manually write
-`harvest_projects` and `clickup_tasks` globs.
+The most impactful of these (`sync-integration-projects.php`) now has a desktop equivalent
+via the "Sync projects from Harvest / ClickUp" button in the Integrations tab.
 
 ---
 
@@ -134,19 +133,12 @@ None of these have desktop equivalents yet. The most impactful gap is
 
 The following are desktop gaps worth addressing, roughly ordered by user impact:
 
-### High impact
-
-1. **Harvest/ClickUp sync tool in UI** — `sync-integration-projects.php` is the main
-   onboarding accelerator for integration users. A "Sync projects from Harvest/ClickUp"
-   button in the Integrations tab (calling a new sidecar endpoint) would remove the CLI
-   dependency for a common setup task.
-
 ### Lower impact / nice-to-have
 
-2. **Cron / backfill status** — No visibility into whether daily backfill has run. A
+1. **Cron / backfill status** — No visibility into whether daily backfill has run. A
    small "last updated" timestamp in the Reports header would surface this.
 
-3. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
+2. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
    sheet or export action in the Reports toolbar would unlock the spreadsheet/invoice
    workflow from the desktop.
 
