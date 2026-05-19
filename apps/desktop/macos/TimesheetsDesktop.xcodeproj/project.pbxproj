@@ -16,6 +16,8 @@
 		514201582437B4B40078DB4F /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 514201572437B4B40078DB4F /* main.m */; };
 		99DAC7C2689ADA3439AFB8AC /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C48625CF63C4F9538FF4C21F /* PrivacyInfo.xcprivacy */; };
 		AA0000020000000000000001 /* engine-server.js in Resources */ = {isa = PBXBuildFile; fileRef = AA0000020000000000000002 /* engine-server.js */; };
+		AA0003000000000000000002 /* FoundationModelsServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0003000000000000000001 /* FoundationModelsServer.swift */; };
+		AA0003000000000000000004 /* FoundationModels.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AA0003000000000000000003 /* FoundationModels.framework */; settings = {ATTRIBUTES = (Optional, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +38,8 @@
 		C48625CF63C4F9538FF4C21F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AA0000020000000000000002 /* engine-server.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "engine-server.js"; path = "../engine-server.js"; sourceTree = "<group>"; };
 		AA0002000000000000000001 /* signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = signing.xcconfig; sourceTree = SOURCE_ROOT; };
+		AA0003000000000000000001 /* FoundationModelsServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsServer.swift; sourceTree = "<group>"; };
+		AA0003000000000000000003 /* FoundationModels.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FoundationModels.framework; path = System/Library/Frameworks/FoundationModels.framework; sourceTree = SDKROOT; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -52,6 +56,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				46EE7BF852F223B4986FD8E6 /* libPods-TimesheetsDesktop-macOS.a in Frameworks */,
+				AA0003000000000000000004 /* FoundationModels.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -63,6 +68,7 @@
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
 				B6665FA3F95CEF4999D1DF66 /* libPods-TimesheetsDesktop-macOS.a */,
+				AA0003000000000000000003 /* FoundationModels.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -74,6 +80,7 @@
 				5142014C2437B4B30078DB4F /* AppDelegate.mm */,
 				AA0000010000000000000003 /* TimesheetsEngineModule.h */,
 				AA0000010000000000000002 /* TimesheetsEngineModule.mm */,
+				AA0003000000000000000001 /* FoundationModelsServer.swift */,
 				514201512437B4B40078DB4F /* Assets.xcassets */,
 				514201532437B4B40078DB4F /* Main.storyboard */,
 				514201562437B4B40078DB4F /* Info.plist */,
@@ -342,6 +349,7 @@
 				514201582437B4B40078DB4F /* main.m in Sources */,
 				5142014D2437B4B30078DB4F /* AppDelegate.mm in Sources */,
 				AA0000010000000000000001 /* TimesheetsEngineModule.mm in Sources */,
+				AA0003000000000000000002 /* FoundationModelsServer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

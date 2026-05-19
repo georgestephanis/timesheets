@@ -1,4 +1,5 @@
 #import "TimesheetsEngineModule.h"
+#import "TimesheetsDesktop-Swift.h"
 #import <React/RCTLog.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include <sys/select.h>
@@ -27,6 +28,16 @@ static NSString *defaultConfigPath(void)
 @implementation TimesheetsEngineModule
 
 RCT_EXPORT_MODULE(TimesheetsEngine);
+
+- (instancetype)init
+{
+  if ((self = [super init])) {
+    if (@available(macOS 26.0, *)) {
+      [FoundationModelsServer.shared start];
+    }
+  }
+  return self;
+}
 
 - (NSString *)resolvedConfigPath
 {
@@ -414,6 +425,20 @@ RCT_EXPORT_METHOD(stopSidecar:(RCTPromiseResolveBlock)resolve
     _sidecarPort = -1;
   }
   resolve(@YES);
+}
+
+// ── getAppleIntelligencePort ──────────────────────────────────────────────────
+// Returns port 57911 when running on macOS 26+ with Apple Intelligence
+// available; returns 0 otherwise.
+
+RCT_EXPORT_METHOD(getAppleIntelligencePort:(RCTPromiseResolveBlock)resolve
+                                    reject:(RCTPromiseRejectBlock)reject)
+{
+  if (@available(macOS 26.0, *)) {
+    resolve(@(FoundationModelsServer.shared.runningPort));
+  } else {
+    resolve(@0);
+  }
 }
 
 // ── getSidecarPort ────────────────────────────────────────────────────────────

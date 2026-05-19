@@ -1,2 +1,3 @@
 vendor/
 node_modules/
+tools/apple-intelligence-server/.build/
