@@ -131,7 +131,7 @@ export function ReportScreen() {
         return (
             <View style={styles.center}>
                 <Text style={styles.heading}>Engine Not Configured</Text>
-                <Text style={styles.body}>
+                <Text style={styles.body} selectable>
                     Locate <Text style={styles.code}>engine-server.js</Text> inside your Timesheets repository at{" "}
                     <Text style={styles.code}>apps/desktop/engine-server.js</Text>
                 </Text>
@@ -146,7 +146,9 @@ export function ReportScreen() {
         return (
             <View style={styles.center}>
                 <Text style={styles.heading}>Engine Error</Text>
-                <Text style={styles.body}>{sidecarError}</Text>
+                <Text style={styles.body} selectable>
+                    {sidecarError}
+                </Text>
                 <Pressable onPress={() => startSidecar()} style={styles.primaryBtn}>
                     <Text style={styles.primaryBtnText}>Retry</Text>
                 </Pressable>
@@ -205,7 +207,9 @@ export function ReportScreen() {
                 </View>
             ) : loadState === "error" ? (
                 <View style={styles.center}>
-                    <Text style={styles.errorText}>{loadError}</Text>
+                    <Text style={styles.errorText} selectable>
+                        {loadError}
+                    </Text>
                     <Pressable onPress={() => loadReport()} style={styles.primaryBtn}>
                         <Text style={styles.primaryBtnText}>Retry</Text>
                     </Pressable>

@@ -8,7 +8,7 @@ export function WarningBanner({ warnings }: Props) {
     return (
         <View style={styles.container}>
             {warnings.map((w, i) => (
-                <Text key={i} style={styles.text}>
+                <Text key={i} style={styles.text} selectable>
                     ⚠ {w}
                 </Text>
             ))}
