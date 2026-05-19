@@ -207,12 +207,12 @@ class TimesheetsEngine {
      * @param {string} date  YYYY-MM-DD
      * @returns {Promise<string>}
      */
-    async generateSummary(date) {
+    async generateSummary(date, { llmIndex = 0 } = {}) {
         if (!this.config) await this.loadConfig();
         const cfg = /** @type {import('@timesheets/contracts').Config} */ (this.config);
         const tz = cfg.timezone ?? "UTC";
 
-        const llm = cfg.integrations?.llm?.[0];
+        const llm = cfg.integrations?.llm?.[llmIndex] ?? cfg.integrations?.llm?.[0];
         if (!llm) throw new Error("No LLM connection configured in config.integrations.llm");
 
         const dayDate = new Date(date + "T12:00:00");
@@ -317,11 +317,11 @@ class TimesheetsEngine {
      * @param {string} date  YYYY-MM-DD
      * @returns {Promise<Array<{kind:string, value:string, project:string, reason:string}>>}
      */
-    async suggestAssignments(date) {
+    async suggestAssignments(date, { llmIndex = 0 } = {}) {
         if (!this.config) await this.loadConfig();
         const cfg = /** @type {import('@timesheets/contracts').Config} */ (this.config);
 
-        const llm = cfg.integrations?.llm?.[0];
+        const llm = cfg.integrations?.llm?.[llmIndex] ?? cfg.integrations?.llm?.[0];
         if (!llm) throw new Error("No LLM connection configured in config.integrations.llm");
 
         const report = await this.generateReport({ from: date, to: date });

@@ -44,23 +44,23 @@ if (!configPath) {
         req.method === 'POST' &&
         url.pathname === '/generate-summary'
       ) {
-        const {date} = await readJson(req);
+        const {date, llmIndex = 0} = await readJson(req);
         if (!date) {
           json(res, 400, {error: 'date required'});
           return;
         }
-        const summary = await engine.generateSummary(date);
+        const summary = await engine.generateSummary(date, {llmIndex});
         json(res, 200, {summary});
       } else if (
         req.method === 'POST' &&
         url.pathname === '/suggest-assignments'
       ) {
-        const {date} = await readJson(req);
+        const {date, llmIndex = 0} = await readJson(req);
         if (!date) {
           json(res, 400, {error: 'date required'});
           return;
         }
-        const suggestions = await engine.suggestAssignments(date);
+        const suggestions = await engine.suggestAssignments(date, {llmIndex});
         json(res, 200, {suggestions});
       } else if (req.method === 'GET' && url.pathname === '/discover-repos') {
         const repos = await engine.discoverRepos();

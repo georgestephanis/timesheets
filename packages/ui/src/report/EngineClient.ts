@@ -37,6 +37,7 @@ export type TimelineSegment = {
 
 export class EngineClient {
     private base: string;
+    activeLlmIndex = 0;
 
     constructor(port: number) {
         this.base = `http://127.0.0.1:${port}`;
@@ -65,13 +66,13 @@ export class EngineClient {
     }
 
     async generateSummary(date: string): Promise<{ summary: string }> {
-        return this.post("/generate-summary", { date });
+        return this.post("/generate-summary", { date, llmIndex: this.activeLlmIndex });
     }
 
     async suggestAssignments(
         date: string,
     ): Promise<{ suggestions: Array<{ kind: string; value: string; project: string; reason: string }> }> {
-        return this.post("/suggest-assignments", { date });
+        return this.post("/suggest-assignments", { date, llmIndex: this.activeLlmIndex });
     }
 
     async discoverRepos(): Promise<{
