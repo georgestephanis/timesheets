@@ -10,7 +10,7 @@
  */
 
 import path from "path";
-import { loadConfig, saveConfigWithBackup, applySignalToProject } from "./lib/config.js";
+import { loadConfig, saveConfigWithBackup, applySignalToProject, applySignalToSpecialTarget } from "./lib/config.js";
 import { clearWarnings, getWarnings } from "./lib/helpers.js";
 import { loadSourcesForRange, loadCachedLlmSummary, saveCachedLlmSummary } from "./lib/cache.js";
 import { classifyAndAggregate } from "./lib/classifiers.js";
@@ -19,7 +19,7 @@ import { makeLoadFreshFn } from "./lib/loaders.js";
 
 // ─── Re-exports (lib surface available to callers) ────────────────────────────
 
-export { loadConfig, saveConfigWithBackup, applySignalToProject } from "./lib/config.js";
+export { loadConfig, saveConfigWithBackup, applySignalToProject, applySignalToSpecialTarget } from "./lib/config.js";
 export {
     expandPath,
     fnmatchAny,
@@ -183,7 +183,11 @@ class TimesheetsEngine {
     async reassignSignal(payload) {
         if (!this.config) await this.loadConfig();
         const cfg = /** @type {import('@timesheets/contracts').Config} */ (this.config);
-        applySignalToProject(cfg, payload.type, payload.key, payload.project);
+        if (payload.project === "__personal__" || payload.project === "__correlated__") {
+            applySignalToSpecialTarget(cfg, payload.type, payload.key, payload.project);
+        } else {
+            applySignalToProject(cfg, payload.type, payload.key, payload.project);
+        }
         await this.saveConfig(cfg);
     }
 

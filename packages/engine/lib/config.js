@@ -130,3 +130,27 @@ export function applySignalToProject(config, kind, value, project) {
             break;
     }
 }
+
+/**
+ * Applies a signal to a pseudo-project target (__personal__ or __correlated__).
+ * Mirrors PHP api.php reassign_signal handling for these special targets.
+ *
+ * @param {import('@timesheets/contracts').Config} config  Mutated in place.
+ * @param {string} kind    'browser' | 'apps' (only supported kinds for these targets)
+ * @param {string} value   Signal value.
+ * @param {string} target  '__personal__' | '__correlated__'
+ */
+export function applySignalToSpecialTarget(config, kind, value, target) {
+    if (target === "__personal__") {
+        if (kind === "browser") {
+            if (!value || value === "(no url)") return;
+            addUniqueValue(config, "personal_hosts", value);
+        } else if (kind === "apps") {
+            addUniqueValue(config, "personal_apps", value.startsWith("ssh:") ? value.slice(4) : value);
+        }
+    } else if (target === "__correlated__") {
+        if (kind === "apps" && !value.startsWith("ssh:")) {
+            addUniqueValue(config, "correlated_apps", value);
+        }
+    }
+}

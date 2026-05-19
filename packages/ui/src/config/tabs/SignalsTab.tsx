@@ -35,6 +35,22 @@ function applySignalToDraft(
     value: string,
     project: string,
 ) {
+    if (project === "__personal__") {
+        if (kind === "browser" && value && value !== "(no url)") {
+            setField("personal_hosts", addUnique((draft.personal_hosts as string[]) ?? [], value));
+        } else if (kind === "apps") {
+            const appVal = value.startsWith("ssh:") ? value.slice(4) : value;
+            setField("personal_apps", addUnique((draft.personal_apps as string[]) ?? [], appVal));
+        }
+        return;
+    }
+    if (project === "__correlated__") {
+        if (kind === "apps" && !value.startsWith("ssh:")) {
+            setField("correlated_apps", addUnique((draft.correlated_apps as string[]) ?? [], value));
+        }
+        return;
+    }
+
     const proj = (draft.projects ?? {})[project];
     if (!proj) return;
     const p = proj as Record<string, unknown>;
@@ -298,6 +314,61 @@ export function SignalsTab({ draft, setField }: Props) {
                                         </View>
                                         {isOpen && (
                                             <View style={styles.dropdown}>
+                                                {(kind === "browser" || kind === "apps") && (
+                                                    <Pressable
+                                                        onPress={() => {
+                                                            setSelections((prev) => ({
+                                                                ...prev,
+                                                                [key]: "__personal__",
+                                                            }));
+                                                            setPickerOpen(null);
+                                                        }}
+                                                        style={[
+                                                            styles.dropdownItem,
+                                                            styles.dropdownItemSpecial,
+                                                            selected === "__personal__" && styles.dropdownItemSelected,
+                                                        ]}
+                                                    >
+                                                        <Text
+                                                            style={[
+                                                                styles.dropdownItemText,
+                                                                styles.dropdownItemSpecialText,
+                                                                selected === "__personal__" &&
+                                                                    styles.dropdownItemTextSelected,
+                                                            ]}
+                                                        >
+                                                            Personal (ignore)
+                                                        </Text>
+                                                    </Pressable>
+                                                )}
+                                                {kind === "apps" && !value.startsWith("ssh:") && (
+                                                    <Pressable
+                                                        onPress={() => {
+                                                            setSelections((prev) => ({
+                                                                ...prev,
+                                                                [key]: "__correlated__",
+                                                            }));
+                                                            setPickerOpen(null);
+                                                        }}
+                                                        style={[
+                                                            styles.dropdownItem,
+                                                            styles.dropdownItemSpecial,
+                                                            selected === "__correlated__" &&
+                                                                styles.dropdownItemSelected,
+                                                        ]}
+                                                    >
+                                                        <Text
+                                                            style={[
+                                                                styles.dropdownItemText,
+                                                                styles.dropdownItemSpecialText,
+                                                                selected === "__correlated__" &&
+                                                                    styles.dropdownItemTextSelected,
+                                                            ]}
+                                                        >
+                                                            Correlated (attribute to active project)
+                                                        </Text>
+                                                    </Pressable>
+                                                )}
                                                 {projectNames.map((p) => (
                                                     <Pressable
                                                         key={p}
@@ -468,6 +539,8 @@ const styles = StyleSheet.create({
         borderBottomColor: "#eee",
     },
     dropdownItemSelected: { backgroundColor: "#FFF4EE" },
+    dropdownItemSpecial: { backgroundColor: "#F5F5F5" },
     dropdownItemText: { fontSize: 12, color: "#333" },
     dropdownItemTextSelected: { color: Brand.terracotta, fontWeight: "600" },
+    dropdownItemSpecialText: { color: "#666", fontStyle: "italic" },
 });
