@@ -41,7 +41,7 @@ function GroupingCard({ name, draft, setField, onRemove }: GroupingCardProps) {
                     <Text style={styles.removeBtnText}>Remove</Text>
                 </Pressable>
             </View>
-            <FieldRow label="Color" value={color.value} onChange={color.onChange} placeholder="#4a90e2" />
+            <FieldRow label="Color" value={color.value} onChange={color.onChange} type="color" />
             <FieldRow label="Logo URL" value={logo.value} onChange={logo.onChange} type="url" />
             <FieldRow
                 label="Aliases"

@@ -1,7 +1,34 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Switch, Pressable, StyleSheet } from "react-native";
 
-export type FieldType = "text" | "number" | "checkbox" | "textarea" | "password" | "segment" | "url";
+export type FieldType = "text" | "number" | "checkbox" | "textarea" | "password" | "segment" | "url" | "color";
+
+const PRESET_COLORS = [
+    "#C25E2A",
+    "#F6B84A",
+    "#16130F",
+    "#F6F2EA",
+    "#E53E3E",
+    "#DD6B20",
+    "#D69E2E",
+    "#38A169",
+    "#3182CE",
+    "#805AD5",
+    "#D53F8C",
+    "#718096",
+    "#FC8181",
+    "#F6AD55",
+    "#FAF089",
+    "#9AE6B4",
+    "#90CDF4",
+    "#D6BCFA",
+    "#FED7E2",
+    "#BEE3F8",
+];
+
+function isValidHex(s: string): boolean {
+    return /^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/.test(s);
+}
 
 type Props = {
     label: string;
@@ -15,6 +42,7 @@ type Props = {
 
 export function FieldRow({ label, value, onChange, type = "text", options, placeholder, hint }: Props) {
     const [showPassword, setShowPassword] = useState(false);
+    const [showPalette, setShowPalette] = useState(false);
 
     const renderControl = () => {
         switch (type) {
@@ -84,6 +112,48 @@ export function FieldRow({ label, value, onChange, type = "text", options, place
                         placeholderTextColor="#aaa"
                     />
                 );
+
+            case "color": {
+                const hexStr = String(value ?? "");
+                const swatchColor = isValidHex(hexStr) ? hexStr : "#cccccc";
+                return (
+                    <View>
+                        <View style={styles.colorRow}>
+                            <Pressable
+                                onPress={() => setShowPalette((v) => !v)}
+                                style={[styles.colorSwatch, { backgroundColor: swatchColor }]}
+                            />
+                            <TextInput
+                                style={[styles.input, styles.colorInput]}
+                                value={hexStr}
+                                onChangeText={(t) => onChange(t)}
+                                placeholder="#rrggbb"
+                                placeholderTextColor="#aaa"
+                                autoCorrect={false}
+                                autoCapitalize="none"
+                            />
+                        </View>
+                        {showPalette && (
+                            <View style={styles.palette}>
+                                {PRESET_COLORS.map((c) => (
+                                    <Pressable
+                                        key={c}
+                                        style={[
+                                            styles.paletteChip,
+                                            { backgroundColor: c },
+                                            hexStr.toLowerCase() === c.toLowerCase() && styles.paletteChipSelected,
+                                        ]}
+                                        onPress={() => {
+                                            onChange(c);
+                                            setShowPalette(false);
+                                        }}
+                                    />
+                                ))}
+                            </View>
+                        )}
+                    </View>
+                );
+            }
 
             default:
                 return (
@@ -213,5 +283,45 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: "#888",
         marginTop: 2,
+    },
+    colorRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    colorSwatch: {
+        width: 28,
+        height: 28,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: "#ccc",
+        flexShrink: 0,
+    },
+    colorInput: {
+        flex: 1,
+        fontFamily: "Menlo",
+        fontSize: 12,
+    },
+    palette: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        gap: 6,
+        marginTop: 8,
+        padding: 8,
+        backgroundColor: "#f5f5f5",
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: "#e0e0e0",
+    },
+    paletteChip: {
+        width: 24,
+        height: 24,
+        borderRadius: 3,
+        borderWidth: 1,
+        borderColor: "rgba(0,0,0,0.15)",
+    },
+    paletteChipSelected: {
+        borderWidth: 2,
+        borderColor: "#333",
     },
 });
