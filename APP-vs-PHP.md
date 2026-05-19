@@ -13,13 +13,13 @@ Legend: ✅ present · ⚠️ partial/different · ❌ absent · 🔒 intentiona
 | Feature                       | PHP web UI                   | PHP CLI                       | Desktop app                               |
 | ----------------------------- | ---------------------------- | ----------------------------- | ----------------------------------------- |
 | Day navigation (prev/next)    | ✅ keyboard + buttons        | ✅ `--from`/`--to` flags      | ✅ buttons                                |
-| Date range (multi-day)        | ✅ from/to picker            | ✅ `--days`, `--from`, `--to` | ❌ single day only                        |
+| Date range (multi-day)        | ✅ from/to picker            | ✅ `--days`, `--from`, `--to` | ✅ Day/Week toggle, 7-day range           |
 | Jump to specific date         | ✅ date picker input         | ✅ flags                      | ✅ tap date label → YYYY-MM-DD input      |
 | Project filter                | ✅ client-side dropdown      | ✅ `--project NAME`           | ✅ toolbar dropdown                       |
 | Grouping filter               | ✅ group dropdown            | ❌                            | ❌                                        |
 | Timeline visualization        | ✅ interactive color bars    | ❌                            | ⚠️ read-only, 7am–9pm                     |
 | Segment detail on hover       | ✅ tooltip                   | ❌                            | ❌                                        |
-| Caching indicator             | ✅ badge (cached/generated)  | ❌                            | ❌                                        |
+| Caching indicator             | ✅ badge (cached/generated)  | ❌                            | ✅ "cached · Xh Ym ago" badge in toolbar  |
 | Warning banner                | ✅ amber banner              | ✅ STDERR                     | ✅ amber banner                           |
 | Rebuild from source           | ✅ button                    | ✅ (every run)                | ✅ button                                 |
 | Backfill prior 7 days         | ❌                           | ✅ (no-arg default, cron)     | ✅ toolbar button (rebuilds prior 7 days) |
@@ -68,7 +68,7 @@ Legend: ✅ present · ⚠️ partial/different · ❌ absent · 🔒 intentiona
 | Reassign signal to project        | ✅ per-signal dropdown                     | ✅ `--suggest` interactive       | ✅ per-signal picker + Assign         |
 | Mark signal personal              | ✅ `__personal__` target                   | ❌                               | ✅ Personal (ignore) option in picker |
 | Mark signal correlated            | ✅ `__correlated__` target                 | ❌                               | ✅ Correlated option in picker        |
-| Create new project from reassign  | ✅ inline                                  | ❌                               | ❌ must create project first          |
+| Create new project from reassign  | ✅ inline                                  | ❌                               | ✅ "+ New project…" inline in picker  |
 | LLM batch suggestions             | ❌                                         | ✅ `--suggest` (interactive CLI) | ✅ "Suggest with AI" batch display    |
 | Draft sync on assign              | ❌                                         | ✅ writes config immediately     | ✅ updates draft + calls sidecar      |
 | Signal date (only today)          | ❌                                         | ✅ any date                      | ⚠️ today only                         |
@@ -125,7 +125,7 @@ None of these have desktop equivalents yet. The most impactful gap is
 | Config path resolution        | cwd or `php -S` dir  | cwd                  | NSUserDefaults + picker                |
 | Reports cache location        | `reports/` under cwd | `reports/` under cwd | same as PHP (same path)                |
 | Per-day source cache          | ✅                   | ✅                   | ✅                                     |
-| Cache indicator to user       | ✅ badge             | ❌                   | ❌                                     |
+| Cache indicator to user       | ✅ badge             | ❌                   | ✅ "cached · Xh Ym ago" toolbar badge  |
 | App log (`reports/app.jsonl`) | ✅                   | ✅                   | ⚠️ engine writes; UI doesn't expose it |
 
 ---
@@ -136,36 +136,24 @@ The following are desktop gaps worth addressing, roughly ordered by user impact:
 
 ### High impact
 
-1. **Multi-day date range** — The desktop is day-by-day only. Weekly views and ranged
-   reports are the primary use case for review/invoicing. Adding a week/range mode to
-   `ReportScreen` would close the biggest functional gap.
-
-2. **Harvest gap detection** — The web UI's sticky Harvest sidebar with logged-vs-tracked
+1. **Harvest gap detection** — The web UI's sticky Harvest sidebar with logged-vs-tracked
    comparison is a key accountability feature. The desktop shows Harvest badge counts but
    no gap analysis. Adding a collapsible Harvest summary panel to `DayView` would close
    this.
 
 ### Medium impact
 
-3. **Inline new project creation from Signals** — When assigning an unmatched signal, the
-   user must first go to the Projects tab, add the project, save, then return to Signals.
-   An inline "New project…" option in the signal's project picker would close this.
-
-4. **Harvest/ClickUp sync tool in UI** — `sync-integration-projects.php` is the main
+2. **Harvest/ClickUp sync tool in UI** — `sync-integration-projects.php` is the main
    onboarding accelerator for integration users. A "Sync projects from Harvest/ClickUp"
    button in the Integrations tab (calling a new sidecar endpoint) would remove the CLI
    dependency for a common setup task.
 
 ### Lower impact / nice-to-have
 
-5. **Cache status indicator** — Web UI shows a badge for cached vs. freshly generated
-   reports. A subtle subtitle in the Reports header ("cached · 2h ago") would add
-   transparency.
-
-6. **Cron / backfill status** — No visibility into whether daily backfill has run. A
+3. **Cron / backfill status** — No visibility into whether daily backfill has run. A
    small "last updated" timestamp in the Reports header would surface this.
 
-7. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
+4. **Export from desktop** — `--format json|tsv|md` has no desktop equivalent. A share
    sheet or export action in the Reports toolbar would unlock the spreadsheet/invoice
    workflow from the desktop.
 
