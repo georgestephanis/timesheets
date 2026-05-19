@@ -2,6 +2,7 @@ import React from "react";
 import { ScrollView, View, Text, Pressable, StyleSheet } from "react-native";
 import { ProjectCard } from "./ProjectCard";
 import { TimelineView } from "./TimelineView";
+import { HarvestPanel } from "./HarvestPanel";
 import type { Report } from "./EngineClient";
 import { Brand } from "../brand";
 
@@ -63,6 +64,8 @@ export function DayView({ date, report, projectFilter, onGenerateSummary, genera
                     </Pressable>
                 </View>
             ) : null}
+
+            <HarvestPanel projects={projects} totalSeconds={totalSeconds} />
 
             {projects.map(([name, data]) => (
                 <ProjectCard key={name} name={name} data={data} />
