@@ -9,5 +9,8 @@ parameters:
     treatPhpDocTypesAsCertain: false
     # tools/ not included — they are standalone scripts that declare globals at top-level
     # which confuse PHPStan's scope model. Lint coverage via phpcs is sufficient there.
+    # PROJECT_ROOT is defined at runtime by entry-point files (activity-report.php, api.php, etc.)
+    bootstrapFiles:
+        - phpstan-bootstrap.php
 includes:
     - phpstan-baseline.neon

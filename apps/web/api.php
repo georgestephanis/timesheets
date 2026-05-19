@@ -347,7 +347,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $sumOpts
             );
 
-            $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz, $fullTimeline[$date] ?? []);
+            $summary = llmDailySummary($date, $fullBucket[$date] ?? [], $external, $config, $tz, $fullTimeline[$date] ?? [], $configFile);
             if ($summary === null) {
                 http_response_code(500);
                 echo json_encode(['error' => 'LLM returned no summary — check your LLM configuration and ensure there is activity data for this date']);
@@ -411,7 +411,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ];
             [$fullBucket] = classifyAndAggregate($events, $commits, $external, $config, $tz, $sumOpts);
 
-            $suggestions = llmSuggestTimeLogging($date, $fullBucket[$date] ?? [], $external, $config);
+            $suggestions = llmSuggestTimeLogging($date, $fullBucket[$date] ?? [], $external, $config, $configFile);
             echo json_encode(['ok' => true, 'suggestions' => $suggestions]);
             exit;
 

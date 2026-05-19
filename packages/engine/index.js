@@ -239,26 +239,36 @@ class TimesheetsEngine {
             `Summarize my work on ${date}:\n${lines.join("\n")}\n\n` +
             "Write 2-3 concise sentences. Focus on what was accomplished, not the time.";
 
-        // Resolve model: use config value, or discover from /models endpoint.
         const baseUrl = llm.base_url.replace(/\/$/, "");
         const authHeaders = {
             "Content-Type": "application/json",
             Authorization: `Bearer ${llm.api_key ?? "sk-no-key"}`,
         };
-        let model = llm.model;
-        if (!model) {
+        const timeout = (llm.timeout ?? 30) * 1000;
+
+        // Resolves the model to use, fetching /models if not set, and persists it
+        // back to config so future calls skip the extra round-trip.
+        const resolveModel = async () => {
+            if (llm.model) return llm.model;
             const modelsRes = await fetch(`${baseUrl}/models`, {
                 headers: authHeaders,
-                signal: AbortSignal.timeout((llm.timeout ?? 30) * 1000),
+                signal: AbortSignal.timeout(timeout),
             });
             if (!modelsRes.ok) throw new Error(`Could not fetch model list: ${modelsRes.status}`);
             const modelsData = /** @type {any} */ (await modelsRes.json());
-            model = modelsData?.data?.[0]?.id;
-            if (!model) throw new Error("LLM /models returned no models");
-        }
+            const discovered = modelsData?.data?.[0]?.id;
+            if (!discovered) throw new Error("LLM /models returned no models");
+            // Persist so subsequent calls use it directly.
+            llm.model = discovered;
+            await this.saveConfig(cfg);
+            return discovered;
+        };
 
-        // Call the OpenAI-compatible chat completions endpoint.
-        const res = await fetch(`${baseUrl}/chat/completions`, {
+        let model = await resolveModel();
+
+        // Call the OpenAI-compatible chat completions endpoint, retrying once if
+        // the model is no longer available (e.g. it was replaced on the server).
+        let res = await fetch(`${baseUrl}/chat/completions`, {
             method: "POST",
             headers: authHeaders,
             body: JSON.stringify({
@@ -266,8 +276,25 @@ class TimesheetsEngine {
                 messages: [{ role: "user", content: prompt }],
                 max_tokens: 200,
             }),
-            signal: AbortSignal.timeout((llm.timeout ?? 30) * 1000),
+            signal: AbortSignal.timeout(timeout),
         });
+
+        if (!res.ok && res.status === 404) {
+            // Model gone — clear it, rediscover, and retry once.
+            delete llm.model;
+            await this.saveConfig(cfg);
+            model = await resolveModel();
+            res = await fetch(`${baseUrl}/chat/completions`, {
+                method: "POST",
+                headers: authHeaders,
+                body: JSON.stringify({
+                    model,
+                    messages: [{ role: "user", content: prompt }],
+                    max_tokens: 200,
+                }),
+                signal: AbortSignal.timeout(timeout),
+            });
+        }
 
         if (!res.ok) {
             const text = await res.text().catch(() => "");

@@ -24,12 +24,15 @@ function llmGetConnection(array $config): ?array
 /**
  * Resolves the model to use for a connection.
  *
- * Returns the configured model name, or queries /models and returns the ID of
- * the first available model when no model is explicitly configured.
+ * Returns the configured model name if set. Otherwise queries /models, writes
+ * the discovered name back to $config (and saves the file when $configPath is
+ * provided) so future calls skip the extra round-trip.
  *
- * @param array<string, mixed> $conn
+ * @param array<string, mixed>  $conn        The LLM connection entry (by reference so model is updated).
+ * @param array<string, mixed>  $config      Full config array (by reference).
+ * @param string|null           $configPath  Path to config.json; when provided the update is persisted.
  */
-function llmResolveModel(array $conn): string
+function llmResolveModel(array &$conn, array &$config, ?string $configPath = null): string
 {
     if (!empty($conn['model'])) {
         return (string)$conn['model'];
@@ -56,6 +59,19 @@ function llmResolveModel(array $conn): string
     if (!is_string($model) || $model === '') {
         throw new RuntimeException("No models available at $baseUrl");
     }
+
+    // Persist the discovered model so future calls skip /models.
+    $conn['model'] = $model;
+    foreach ($config['integrations']['llm'] ?? [] as $i => $entry) {
+        if (($entry['base_url'] ?? '') === ($conn['base_url'] ?? '')) {
+            $config['integrations']['llm'][$i]['model'] = $model;
+            break;
+        }
+    }
+    if ($configPath !== null && function_exists('saveConfigWithBackup')) {
+        saveConfigWithBackup($config, $configPath, 'llm');
+    }
+
     return $model;
 }
 
@@ -132,9 +148,10 @@ function llmDailySummary(
     string $date,
     array $dayBucket,
     array $external,
-    array $config,
+    array &$config,
     DateTimeZone $tz,
-    array $dayTimeline = []
+    array $dayTimeline = [],
+    string $configPath = ''
 ): ?string {
     $conn = llmGetConnection($config);
     if ($conn === null) {
@@ -311,15 +328,34 @@ function llmDailySummary(
     appLog('INFO', 'llm', "[$date] sending request to $baseUrl — prompt length: " . mb_strlen($userPrompt) . " chars");
 
     try {
-        $model = llmResolveModel($conn);
+        $pathArg = $configPath !== '' ? $configPath : null;
+        $model   = llmResolveModel($conn, $config, $pathArg);
         appLog('INFO', 'llm', "[$date] model: $model");
-        $response = llmPostJson($conn, '/chat/completions', [
-            'model'    => $model,
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user',   'content' => $userPrompt],
-            ],
-        ]);
+        try {
+            $response = llmPostJson($conn, '/chat/completions', [
+                'model'    => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user',   'content' => $userPrompt],
+                ],
+            ]);
+        } catch (RuntimeException $e) {
+            if (str_contains($e->getMessage(), 'HTTP 404')) {
+                // Model gone — clear it, rediscover, and retry once.
+                unset($conn['model']);
+                $model    = llmResolveModel($conn, $config, $pathArg);
+                appLog('INFO', 'llm', "[$date] model refreshed to: $model");
+                $response = llmPostJson($conn, '/chat/completions', [
+                    'model'    => $model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => $systemPrompt],
+                        ['role' => 'user',   'content' => $userPrompt],
+                    ],
+                ]);
+            } else {
+                throw $e;
+            }
+        }
     } catch (RuntimeException $e) {
         appLog('ERROR', 'llm', "[$date] request failed: " . $e->getMessage());
         return null;
@@ -403,7 +439,8 @@ function llmSuggestTimeLogging(
     string $date,
     array $dayBucket,
     array $external,
-    array $config
+    array &$config,
+    string $configPath = ''
 ): array {
     $conn = llmGetConnection($config);
     if ($conn === null) {
@@ -607,14 +644,31 @@ function llmSuggestTimeLogging(
     appLog('INFO', 'llm', "[$date] suggest_time_logging: " . count($gaps) . " gaps, sending request");
 
     try {
-        $model    = llmResolveModel($conn);
-        $response = llmPostJson($conn, '/chat/completions', [
-            'model'    => $model,
-            'messages' => [
-                ['role' => 'system', 'content' => $systemPrompt],
-                ['role' => 'user',   'content' => $userPrompt],
-            ],
-        ]);
+        $pathArg = $configPath !== '' ? $configPath : null;
+        $model   = llmResolveModel($conn, $config, $pathArg);
+        try {
+            $response = llmPostJson($conn, '/chat/completions', [
+                'model'    => $model,
+                'messages' => [
+                    ['role' => 'system', 'content' => $systemPrompt],
+                    ['role' => 'user',   'content' => $userPrompt],
+                ],
+            ]);
+        } catch (RuntimeException $e) {
+            if (str_contains($e->getMessage(), 'HTTP 404')) {
+                unset($conn['model']);
+                $model    = llmResolveModel($conn, $config, $pathArg);
+                $response = llmPostJson($conn, '/chat/completions', [
+                    'model'    => $model,
+                    'messages' => [
+                        ['role' => 'system', 'content' => $systemPrompt],
+                        ['role' => 'user',   'content' => $userPrompt],
+                    ],
+                ]);
+            } else {
+                throw $e;
+            }
+        }
     } catch (RuntimeException $e) {
         appLog('ERROR', 'llm', "[$date] suggest_time_logging failed: " . $e->getMessage());
         return [];
@@ -702,7 +756,7 @@ function llmSuggestTimeLogging(
  * @param  array<string, mixed>              $config
  * @return list<array{kind: string, value: string, project: string, reason: string}>
  */
-function llmSuggestAssignments(array $unmatched, array $config): array
+function llmSuggestAssignments(array $unmatched, array &$config, string $configPath = ''): array
 {
     $conn = llmGetConnection($config);
     if ($conn === null) {
@@ -756,7 +810,8 @@ function llmSuggestAssignments(array $unmatched, array $config): array
         return [];
     }
 
-    $model = llmResolveModel($conn);
+    $pathArg = $configPath !== '' ? $configPath : null;
+    $model   = llmResolveModel($conn, $config, $pathArg);
 
     $systemPrompt = 'You are a time-tracking assistant. Map unclassified computer-activity signals to the '
         . 'correct project based on naming patterns. Be conservative: only suggest when confident. '

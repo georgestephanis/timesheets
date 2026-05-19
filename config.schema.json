@@ -482,7 +482,7 @@
                     "type": "string"
                 },
                 "model": {
-                    "description": "Default model name to use when no model is specified at call time.",
+                    "description": "Model name to use. Auto-discovered from GET /models on first use and written back here; clear this field to force rediscovery.",
                     "type": "string"
                 },
                 "timeout": {
