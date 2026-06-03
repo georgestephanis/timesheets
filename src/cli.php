@@ -210,7 +210,12 @@ function generateReport(
  */
 function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable $from, DateTimeImmutable $to, bool $rebuild = false): array
 {
-    $bundles = [];
+    $merged = [
+        'events' => ['window' => [], 'afk' => [], 'input' => []],
+        'chrome' => [],
+        'commits' => [],
+        'external' => [],
+    ];
     $fromCache = true;
 
     foreach (rangeDays($from, $to, $tz) as $day) {
@@ -224,27 +229,38 @@ function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable 
         if (!$rebuild && $isFullDay && $isHistoricalDay) {
             $cached = loadDailyCachedSources($dayStart);
             if ($cached !== null) {
-                $bundles[] = $cached;
+                array_push($merged['events']['window'], ...(array)($cached['events']['window'] ?? []));
+                array_push($merged['events']['afk'], ...(array)($cached['events']['afk'] ?? []));
+                array_push($merged['events']['input'], ...(array)($cached['events']['input'] ?? []));
+                array_push($merged['chrome'], ...(array)($cached['chrome'] ?? []));
+                array_push($merged['commits'], ...(array)($cached['commits'] ?? []));
+                array_push($merged['external'], ...(array)($cached['external'] ?? []));
                 continue;
             }
         }
 
-        $bundles[] = loadFreshSourceSlice($config, $sliceFrom, $sliceTo);
+        $bundle = loadFreshSourceSlice($config, $sliceFrom, $sliceTo);
         $fromCache = false;
 
+        array_push($merged['events']['window'], ...(array)($bundle['events']['window'] ?? []));
+        array_push($merged['events']['afk'], ...(array)($bundle['events']['afk'] ?? []));
+        array_push($merged['events']['input'], ...(array)($bundle['events']['input'] ?? []));
+        array_push($merged['chrome'], ...(array)($bundle['chrome'] ?? []));
+        array_push($merged['commits'], ...(array)($bundle['commits'] ?? []));
+        array_push($merged['external'], ...(array)($bundle['external'] ?? []));
+
         if ($isFullDay && $isHistoricalDay) {
-            $fullDayBundle = end($bundles);
             saveDailyCachedSources(
                 $dayStart,
-                $fullDayBundle['events'],
-                $fullDayBundle['chrome'],
-                $fullDayBundle['commits'],
-                $fullDayBundle['external']
+                $bundle['events'],
+                $bundle['chrome'],
+                $bundle['commits'],
+                $bundle['external']
             );
         }
     }
 
-    $filtered = filterSourcesToRange(mergeSourceBundles($bundles), $from, $to);
+    $filtered = filterSourcesToRange($merged, $from, $to);
 
     return [
         'events' => $filtered['events'],
@@ -253,6 +269,112 @@ function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable 
         'external' => $filtered['external'],
         'from_cache' => $fromCache,
     ];
+}
+
+/**
+ * Incrementally loads per-day source bundles and runs `classifyAndAggregate()`
+ * on each day to produce a combined bucket/unmatched/timeline for the full range.
+ *
+ * This avoids keeping all raw events/chrome/commits/external rows for the
+ * entire range in memory at once, making multi-day aggregations far more
+ * memory-frugal for long ranges requested via the web UI.
+ *
+ * Returns: [bucket, unmatched, timeline, from_cache]
+ */
+function classifyAndAggregateForRange(
+    array $config,
+    DateTimeZone $tz,
+    DateTimeImmutable $from,
+    DateTimeImmutable $to,
+    array $opts,
+    bool $rebuild = false
+): array {
+    $fullBucket = [];
+    $fullUnmatched = [
+        'vscode' => [],
+        'browser' => [],
+        'slack' => [],
+        'apps' => [],
+        'harvest' => [],
+        'clickup' => [],
+        'clockify' => [],
+        'github' => [],
+    ];
+    $fullTimeline = [];
+
+    $fromCache = true;
+
+    foreach (rangeDays($from, $to, $tz) as $day) {
+        $dayStart = $day->setTime(0, 0, 0);
+        $dayEnd = $day->setTime(23, 59, 59);
+        $sliceFrom = $from > $dayStart ? $from : $dayStart;
+        $sliceTo = $to < $dayEnd ? $to : $dayEnd;
+        $isFullDay = $sliceFrom == $dayStart && $sliceTo == $dayEnd;
+        $isHistoricalDay = rangeIsHistorical($dayEnd, $tz);
+
+        if (!$rebuild && $isFullDay && $isHistoricalDay) {
+            $cached = loadDailyCachedSources($dayStart);
+            if ($cached !== null) {
+                $bundle = $cached;
+            } else {
+                $bundle = loadFreshSourceSlice($config, $sliceFrom, $sliceTo);
+                $fromCache = false;
+            }
+        } else {
+            $bundle = loadFreshSourceSlice($config, $sliceFrom, $sliceTo);
+            $fromCache = false;
+        }
+
+        if ($isFullDay && $isHistoricalDay && !isset($cached)) {
+            saveDailyCachedSources(
+                $dayStart,
+                $bundle['events'],
+                $bundle['chrome'],
+                $bundle['commits'],
+                $bundle['external']
+            );
+        }
+
+        [$dayBucket, $dayUnmatched, $dayTimeline] = classifyAndAggregate($bundle['events'], $bundle['commits'], $bundle['external'], $config, $tz, $opts);
+
+        // Merge dayBucket into fullBucket
+        foreach ($dayBucket as $date => $projects) {
+            foreach ($projects as $proj => $data) {
+                if (!isset($fullBucket[$date][$proj])) {
+                    $fullBucket[$date][$proj] = $data;
+                    continue;
+                }
+                $fullBucket[$date][$proj]['seconds'] = ($fullBucket[$date][$proj]['seconds'] ?? 0) + ($data['seconds'] ?? 0);
+                $fullBucket[$date][$proj]['active_seconds'] = ($fullBucket[$date][$proj]['active_seconds'] ?? 0) + ($data['active_seconds'] ?? 0);
+                foreach ($data['detail'] ?? [] as $kind => $labels) {
+                    foreach ($labels as $label => $sec) {
+                        $fullBucket[$date][$proj]['detail'][$kind][$label] = ($fullBucket[$date][$proj]['detail'][$kind][$label] ?? 0) + $sec;
+                    }
+                }
+                $fullBucket[$date][$proj]['commits'] = array_merge($fullBucket[$date][$proj]['commits'] ?? [], $data['commits'] ?? []);
+            }
+        }
+
+        // Merge unmatched
+        foreach ($dayUnmatched as $k => $map) {
+            foreach ($map as $label => $cnt) {
+                $fullUnmatched[$k][$label] = ($fullUnmatched[$k][$label] ?? 0) + $cnt;
+            }
+        }
+
+        // Merge timeline
+        foreach ($dayTimeline as $date => $segments) {
+            $fullTimeline[$date] = array_merge($fullTimeline[$date] ?? [], $segments);
+        }
+
+        // Free per-day bundle memory before next iteration
+        unset($bundle, $cached, $dayBucket, $dayUnmatched, $dayTimeline);
+        if (function_exists('gc_collect_cycles')) {
+            gc_collect_cycles();
+        }
+    }
+
+    return [$fullBucket, $fullUnmatched, $fullTimeline, $fromCache];
 }
 
 /**

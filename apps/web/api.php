@@ -463,25 +463,20 @@ if (!$rebuild && !$hasProjectFilter && rangeIsHistorical($to, $tz)) {
     }
 }
 
-// Generate fresh data.
-[
-    'events' => $events,
-    'chrome' => $chrome,
-    'commits' => $commits,
-    'external' => $external,
-    'from_cache' => $fromCache,
-] = loadSourcesForRange($config, $tz, $from, $to, $rebuild);
-
+// Generate fresh data. Use a streaming per-day classifier to avoid loading the
+// entire range of raw source rows into memory (important for long ranges
+// requested via the web UI where PHP's memory_limit is small).
 $fullOpts = $opts;
 $fullOpts['project'] = null;
-[$fullBucket, $fullUnmatched, $fullTimeline] = classifyAndAggregate($events, $commits, $external, $config, $tz, $fullOpts);
+[$fullBucket, $fullUnmatched, $fullTimeline, $fromCache] = classifyAndAggregateForRange($config, $tz, $from, $to, $fullOpts, $rebuild);
 
 if ($hasProjectFilter) {
-    [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $opts);
+    [$bucket, $unmatched, $_timeline, $_fromCache] = classifyAndAggregateForRange($config, $tz, $from, $to, $opts, $rebuild);
+    $timeline = [];
 } else {
     [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
+    $timeline = $fullTimeline;
 }
-$timeline = $hasProjectFilter ? [] : $fullTimeline;
 
 // Load any cached LLM day summaries for all days in the range.
 $summaries = [];
