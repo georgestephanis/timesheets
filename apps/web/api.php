@@ -13,6 +13,9 @@ if (function_exists('set_time_limit')) {
     set_time_limit(0);
 }
 
+// Increase memory limit for web requests to support larger range aggregations.
+ini_set('memory_limit', '512M');
+
 set_exception_handler(function (Throwable $e): void {
     http_response_code(500);
     header('Content-Type: application/json; charset=UTF-8');

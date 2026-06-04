@@ -35,6 +35,9 @@ declare(strict_types=1);
 
 define('PROJECT_ROOT', dirname(__DIR__, 2));
 
+// Increase memory limit for CLI runs to support larger range aggregations.
+ini_set('memory_limit', '512M');
+
 $configFile = PROJECT_ROOT . '/config.json';
 if (!file_exists($configFile)) {
     fwrite(STDERR, "error: config.json not found. Copy config.example.json to config.json and edit it.\n");
