@@ -69,6 +69,8 @@ composer serve
 
 The server picks the first free port starting at 8000, prints the URL, and opens it in your default browser. The UI loads today's activity, lets you page through previous days, rebuild stale data, and cross-reference what you've logged in Harvest for each day.
 
+> **Always-on instance:** Sardonyx.local runs the web UI as a persistent service on a fixed port — **http://localhost:7133** — via a launchd LaunchAgent (`~/Library/LaunchAgents/com.georgestephanis.timesheets.plist`, logs at `~/Library/Logs/timesheets-web.log`). It starts at login, so you usually don't need `composer serve` at all. Manage it with `launchctl unload`/`load` on that plist. `composer serve` still works for an ad-hoc instance (it grabs a free port from 8000 and won't collide with 7133).
+
 ### Recommended cron job
 
 Run this once at 4 am each morning to pre-build and cache the prior day's report before you open it:
@@ -343,7 +345,11 @@ chmod +x activity-report.php
 composer serve
 ```
 
-`composer serve` finds the first available port starting at 8000, echoes the URL, and opens it in your default browser automatically. The web UI is a single-page app that fetches JSON from `apps/web/api.php` and renders it client-side. Features:
+`composer serve` finds the first available port starting at 8000, echoes the URL, and opens it in your default browser automatically. The web UI is a single-page app that fetches JSON from `apps/web/api.php` and renders it client-side.
+
+On Sardonyx.local the UI also runs as an always-on launchd service at a fixed **http://localhost:7133** (see the "Always-on instance" note under Quick start), so it's available without running `composer serve`.
+
+Features:
 
 - **Navigation** — page through days or date ranges; jump to any date with the date picker; `←`/`→` keyboard shortcuts for Prev/Next
 - **Project filter** — filter to a single project or group; filtering is client-side (no re-fetch)
