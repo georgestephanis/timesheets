@@ -50,7 +50,7 @@ The shared contract between all surfaces:
 | Artifact              | Role                                                                                      |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | `config.json`         | Single source of truth for projects, signals, and integration credentials                 |
-| `reports/YYYY-MM/DD/` | Per-day source caches (activitywatch, chrome, commits, integrations)                      |
+| `reports/YYYY-MM/DD/` | Per-day source caches (activitywatch, chrome, commits, ai sessions, integrations)         |
 | Report JSON shape     | All outputs conform to the same structure (`from`, `to`, `days`, `timelines`, `warnings`) |
 | `reports/config/`     | Timestamped config backups — written by every surface that mutates `config.json`          |
 
@@ -101,9 +101,13 @@ Every few seconds, ActivityWatch records which app and window title is in focus.
     - `09:14` `a1b2c3d4` Fix null pointer in auth middleware
     - `11:02` `e5f6a7b8` Add unit tests for token refresh
     - `14:38` `c9d0e1f2` Bump API version to 2.1
+- ai sessions (1):
+    - `10:02 am`–`11:14 am` [claude] Add retry logic to the token refresh flow…
 ```
 
-When an LLM is configured, single-day CLI runs also generate a concise bullet-point accomplishment summary from your commits, GitHub PRs/issues, and ClickUp tasks. The summary is embedded in the saved JSON report and displayed in the web UI as a collapsible panel above the project list for each day.
+Like commits, Claude Code CLI and Antigravity IDE sessions are pulled in and attributed to a project by matching their working directory/workspace path against `projects[*].repos` — see `paths.claude_code_logs` / `paths.antigravity_logs` below. They're purely a display signal (and context for the LLM summary, below); they never contribute to tracked seconds. Antigravity sessions carry only file-time-derived (not event-level) start/end timestamps and are flagged as approximate.
+
+When an LLM is configured, single-day CLI runs also generate a concise bullet-point accomplishment summary from your commits, GitHub PRs/issues, ClickUp tasks, and Claude Code/Antigravity session prompts. The summary is embedded in the saved JSON report and displayed in the web UI as a collapsible panel above the project list for each day.
 
 ---
 
@@ -147,6 +151,8 @@ Copy `config.example.json` to `config.json` and fill in your details. The file i
 | `paths.activitywatch`               | string      | Path to ActivityWatch data directory                                                                               |
 | `paths.chrome`                      | string      | Path to Chrome user-data directory                                                                                 |
 | `paths.chrome_profiles`             | array\|null | Profile folders to scan; `null` = auto-discover all                                                                |
+| `paths.claude_code_logs`            | string      | Path to Claude Code CLI session logs (default `~/.claude/projects`)                                                |
+| `paths.antigravity_logs`            | string      | Path to Antigravity IDE conversation logs (default `~/.gemini/antigravity-ide/conversations`)                      |
 | `git_authors`                       | string[]    | Your commit author email address(es)                                                                               |
 | `discover_repos`                    | string      | Set to `"github_desktop"` to auto-discover repos from the GitHub Desktop app (see below)                           |
 | `chrome_correlation_window_seconds` | int         | How far back (in seconds) to look in Chrome history when back-filling a missing URL (default 120)                  |
@@ -364,7 +370,7 @@ Features:
 
 Report data is cached at two levels:
 
-1. **Per-day source caches** (`reports/YYYY-MM/DD/activitywatch-*.json`, `chrome-*.json`, `commits-*.json`, `integrations-*.json`) — raw data per calendar day. Historical days are cached once and reused. Clicking "Rebuild from source" re-fetches and overwrites these.
+1. **Per-day source caches** (`reports/YYYY-MM/DD/activitywatch-*.json`, `chrome-*.json`, `commits-*.json`, `ai-sessions-*.json`, `integrations-*.json`) — raw data per calendar day. Historical days are cached once and reused. Clicking "Rebuild from source" re-fetches and overwrites these.
 2. **Report JSON** (`reports/YYYY-MM/DD/report-*.json`) — the rendered JSON for a date range, including any LLM-generated summary. Served directly for repeat loads of historical ranges. Rebuild regenerates this from the source caches (without the summary; re-run the CLI or click "Generate day summary" to restore it).
 
 ---
@@ -482,6 +488,8 @@ src/
   loader-chrome.php
   loader-git.php          — loadGitCommits() with optional GitHub Desktop discovery
   loader-github-desktop.php — discoverGitHubDesktopRepos() via LevelDB scanning
+  loader-claude-code.php  — loadClaudeCodeSessions() from ~/.claude/projects/*/*.jsonl
+  loader-antigravity.php  — loadAntigravitySessions() from Antigravity IDE conversation .db files
   loader-integrations.php — orchestrates Harvest/ClickUp/Clockify/GitHub; collects warnings
   integrations/
     shared.php            — httpGetJson()
