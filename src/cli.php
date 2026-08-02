@@ -132,6 +132,7 @@ function generateReport(
         'events' => $events,
         'commits' => $commits,
         'external' => $external,
+        'aiSessions' => $aiSessions,
         'from_cache' => $fromCache,
     ] = loadSourcesForRange($config, $tz, $from, $to);
 
@@ -140,11 +141,11 @@ function generateReport(
 
     $fullOpts = $opts;
     $fullOpts['project'] = null;
-    [$fullBucket, $fullUnmatched, $fullTimeline] = classifyAndAggregate($events, $commits, $external, $config, $tz, $fullOpts);
+    [$fullBucket, $fullUnmatched, $fullTimeline] = classifyAndAggregate($events, $commits, $external, $aiSessions, $config, $tz, $fullOpts);
 
     $hasProjectFilter = !empty($opts['project']);
     if ($hasProjectFilter) {
-        [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $opts);
+        [$bucket, $unmatched] = classifyAndAggregate($events, $commits, $external, $aiSessions, $config, $tz, $opts);
     } else {
         [$bucket, $unmatched] = [$fullBucket, $fullUnmatched];
     }
@@ -206,7 +207,7 @@ function generateReport(
  * slices are loaded fresh and are not cached.
  *
  * @param  array<string, mixed> $config Loaded and validated config array.
- * @return array{events: array, chrome: array, commits: array, external: array, from_cache: bool}
+ * @return array{events: array, chrome: array, commits: array, external: array, aiSessions: array, from_cache: bool}
  */
 function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable $from, DateTimeImmutable $to, bool $rebuild = false): array
 {
@@ -215,6 +216,7 @@ function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable 
         'chrome' => [],
         'commits' => [],
         'external' => [],
+        'aiSessions' => [],
     ];
     $fromCache = true;
 
@@ -235,6 +237,7 @@ function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable 
                 array_push($merged['chrome'], ...(array)($cached['chrome'] ?? []));
                 array_push($merged['commits'], ...(array)($cached['commits'] ?? []));
                 array_push($merged['external'], ...(array)($cached['external'] ?? []));
+                array_push($merged['aiSessions'], ...(array)($cached['aiSessions'] ?? []));
                 continue;
             }
         }
@@ -248,6 +251,7 @@ function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable 
         array_push($merged['chrome'], ...(array)($bundle['chrome'] ?? []));
         array_push($merged['commits'], ...(array)($bundle['commits'] ?? []));
         array_push($merged['external'], ...(array)($bundle['external'] ?? []));
+        array_push($merged['aiSessions'], ...(array)($bundle['aiSessions'] ?? []));
 
         if ($isFullDay && $isHistoricalDay) {
             saveDailyCachedSources(
@@ -255,7 +259,8 @@ function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable 
                 $bundle['events'],
                 $bundle['chrome'],
                 $bundle['commits'],
-                $bundle['external']
+                $bundle['external'],
+                $bundle['aiSessions']
             );
         }
     }
@@ -267,6 +272,7 @@ function loadSourcesForRange(array $config, DateTimeZone $tz, DateTimeImmutable 
         'chrome' => $filtered['chrome'],
         'commits' => $filtered['commits'],
         'external' => $filtered['external'],
+        'aiSessions' => $filtered['aiSessions'],
         'from_cache' => $fromCache,
     ];
 }
@@ -298,6 +304,7 @@ function classifyAndAggregateForRange(
         'harvest' => [],
         'clickup' => [],
         'clockify' => [],
+        'ndizi' => [],
         'github' => [],
     ];
     $fullTimeline = [];
@@ -331,11 +338,20 @@ function classifyAndAggregateForRange(
                 $bundle['events'],
                 $bundle['chrome'],
                 $bundle['commits'],
-                $bundle['external']
+                $bundle['external'],
+                $bundle['aiSessions']
             );
         }
 
-        [$dayBucket, $dayUnmatched, $dayTimeline] = classifyAndAggregate($bundle['events'], $bundle['commits'], $bundle['external'], $config, $tz, $opts);
+        [$dayBucket, $dayUnmatched, $dayTimeline] = classifyAndAggregate(
+            $bundle['events'],
+            $bundle['commits'],
+            $bundle['external'],
+            $bundle['aiSessions'],
+            $config,
+            $tz,
+            $opts
+        );
 
         // Merge dayBucket into fullBucket
         foreach ($dayBucket as $date => $projects) {
@@ -352,6 +368,7 @@ function classifyAndAggregateForRange(
                     }
                 }
                 $fullBucket[$date][$proj]['commits'] = array_merge($fullBucket[$date][$proj]['commits'] ?? [], $data['commits'] ?? []);
+                $fullBucket[$date][$proj]['ai_sessions'] = array_merge($fullBucket[$date][$proj]['ai_sessions'] ?? [], $data['ai_sessions'] ?? []);
             }
         }
 
@@ -381,7 +398,7 @@ function classifyAndAggregateForRange(
  * Loads a fresh source bundle for one contiguous time slice and applies Chrome backfill.
  *
  * @param  array<string, mixed> $config Loaded and validated config array.
- * @return array{events: array, chrome: array, commits: array, external: array}
+ * @return array{events: array, chrome: array, commits: array, external: array, aiSessions: array}
  */
 function loadFreshSourceSlice(array $config, DateTimeImmutable $from, DateTimeImmutable $to): array
 {
@@ -389,6 +406,10 @@ function loadFreshSourceSlice(array $config, DateTimeImmutable $from, DateTimeIm
     $chrome = loadChromeHistory($config, $from, $to);
     $commits = loadGitCommits($config, $from, $to);
     $external = loadIntegrationActivity($config, $from, $to);
+    $aiSessions = array_merge(
+        loadClaudeCodeSessions($config, $from, $to),
+        loadAntigravitySessions($config, $from, $to)
+    );
     backfillChromeUrls($events, $chrome, (int) $config['chrome_correlation_window_seconds']);
 
     return [
@@ -396,6 +417,7 @@ function loadFreshSourceSlice(array $config, DateTimeImmutable $from, DateTimeIm
         'chrome' => $chrome,
         'commits' => $commits,
         'external' => $external,
+        'aiSessions' => $aiSessions,
     ];
 }
 
@@ -539,14 +561,15 @@ function runLlmSuggest(array $config, array $opts, DateTimeZone $tz, DateTimeImm
 
     // Sources are already cached from generateReport; this re-uses the per-day cache.
     [
-        'events'   => $events,
-        'commits'  => $commits,
-        'external' => $external,
+        'events'     => $events,
+        'commits'    => $commits,
+        'external'   => $external,
+        'aiSessions' => $aiSessions,
     ] = loadSourcesForRange($config, $tz, $from, $to);
 
     $allOpts            = $opts;
     $allOpts['project'] = null;
-    [, $unmatched] = classifyAndAggregate($events, $commits, $external, $config, $tz, $allOpts);
+    [, $unmatched] = classifyAndAggregate($events, $commits, $external, $aiSessions, $config, $tz, $allOpts);
 
     $total = 0;
     foreach (['vscode', 'browser', 'slack', 'apps'] as $kind) {

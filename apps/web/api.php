@@ -313,6 +313,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_once PROJECT_ROOT . '/src/loader-chrome.php';
             require_once PROJECT_ROOT . '/src/loader-git.php';
             require_once PROJECT_ROOT . '/src/loader-integrations.php';
+            require_once PROJECT_ROOT . '/src/loader-claude-code.php';
+            require_once PROJECT_ROOT . '/src/loader-antigravity.php';
             require_once PROJECT_ROOT . '/src/integrations/llm.php';
             require_once PROJECT_ROOT . '/src/classifiers.php';
             require_once PROJECT_ROOT . '/src/renderers.php';
@@ -332,6 +334,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'events'     => $events,
                 'commits'    => $commits,
                 'external'   => $external,
+                'aiSessions' => $aiSessions,
                 'from_cache' => $fromCache,
             ] = loadSourcesForRange($config, $tz, $from, $to);
 
@@ -345,6 +348,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $events,
                 $commits,
                 $external,
+                $aiSessions,
                 $config,
                 $tz,
                 $sumOpts
@@ -382,6 +386,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             require_once PROJECT_ROOT . '/src/loader-chrome.php';
             require_once PROJECT_ROOT . '/src/loader-git.php';
             require_once PROJECT_ROOT . '/src/loader-integrations.php';
+            require_once PROJECT_ROOT . '/src/loader-claude-code.php';
+            require_once PROJECT_ROOT . '/src/loader-antigravity.php';
             require_once PROJECT_ROOT . '/src/integrations/shared.php';
             require_once PROJECT_ROOT . '/src/integrations/harvest.php';
             require_once PROJECT_ROOT . '/src/integrations/clickup.php';
@@ -401,9 +407,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $to   = new DateTimeImmutable($date . ' 23:59:59', $tz);
 
             [
-                'events'   => $events,
-                'commits'  => $commits,
-                'external' => $external,
+                'events'     => $events,
+                'commits'    => $commits,
+                'external'   => $external,
+                'aiSessions' => $aiSessions,
             ] = loadSourcesForRange($config, $tz, $from, $to);
 
             $sumOpts = [
@@ -412,7 +419,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'show_unmatched' => false, 'list_projects' => false,
                 'help' => false, 'suggest' => false,
             ];
-            [$fullBucket] = classifyAndAggregate($events, $commits, $external, $config, $tz, $sumOpts);
+            [$fullBucket] = classifyAndAggregate($events, $commits, $external, $aiSessions, $config, $tz, $sumOpts);
 
             $suggestions = llmSuggestTimeLogging($date, $fullBucket[$date] ?? [], $external, $config, $configFile);
             echo json_encode(['ok' => true, 'suggestions' => $suggestions]);
@@ -431,6 +438,8 @@ require_once PROJECT_ROOT . '/src/loader-activitywatch.php';
 require_once PROJECT_ROOT . '/src/loader-chrome.php';
 require_once PROJECT_ROOT . '/src/loader-git.php';
 require_once PROJECT_ROOT . '/src/loader-integrations.php';
+require_once PROJECT_ROOT . '/src/loader-claude-code.php';
+require_once PROJECT_ROOT . '/src/loader-antigravity.php';
 require_once PROJECT_ROOT . '/src/classifiers.php';
 require_once PROJECT_ROOT . '/src/renderers.php';
 require_once PROJECT_ROOT . '/src/cli.php';

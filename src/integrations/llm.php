@@ -343,17 +343,19 @@ function llmDailySummary(
     $totalGithub  = 0;
     $totalClickup = 0;
     $totalHarvest = 0;
+    $totalAiSessions = 0;
 
     foreach ($allProjects as $proj) {
         if (isset($ignoredNames[$proj])) {
             continue;
         }
 
-        $sec     = (int)($dayBucket[$proj]['seconds'] ?? 0);
-        $commits = array_slice($dayBucket[$proj]['commits'] ?? [], 0, 15);
-        $ext     = $extByProj[$proj] ?? [];
+        $sec        = (int)($dayBucket[$proj]['seconds'] ?? 0);
+        $commits    = array_slice($dayBucket[$proj]['commits'] ?? [], 0, 15);
+        $ext        = $extByProj[$proj] ?? [];
+        $aiSessions = array_slice($dayBucket[$proj]['ai_sessions'] ?? [], 0, 10);
 
-        if ($sec < 60 && !$commits && !$ext) {
+        if ($sec < 60 && !$commits && !$ext && !$aiSessions) {
             continue;
         }
 
@@ -381,13 +383,27 @@ function llmDailySummary(
         foreach (array_slice($ext['harvest'] ?? [], 0, 10) as $l) {
             $lines[] = '  harvest: ' . $l;
         }
+        // AI coding session content (Claude Code prompts, Antigravity workspace names) —
+        // gives the LLM raw material to describe what was actually worked on, beyond
+        // just commit subjects. Antigravity's detail is only the workspace name since
+        // its logged content is an opaque protobuf blob.
+        foreach ($aiSessions as $s) {
+            $detail = (string)($s['detail'] ?? $s['label'] ?? '');
+            if ($detail === '') {
+                continue;
+            }
+            $src = (string)($s['source'] ?? 'ai');
+            $approx = !empty($s['approximate_timing']) ? ', approx. timing' : '';
+            $lines[] = "  $src session$approx: $detail";
+        }
 
         $sections[] = implode("\n", $lines);
 
-        $totalCommits += count($commits);
-        $totalGithub  += count($ext['github'] ?? []);
-        $totalClickup += count($ext['clickup'] ?? []);
-        $totalHarvest += count($ext['harvest'] ?? []);
+        $totalCommits    += count($commits);
+        $totalGithub     += count($ext['github'] ?? []);
+        $totalClickup    += count($ext['clickup'] ?? []);
+        $totalHarvest    += count($ext['harvest'] ?? []);
+        $totalAiSessions += count($aiSessions);
     }
 
     // Unattributed external activity (no matched project).
@@ -410,7 +426,8 @@ function llmDailySummary(
     }
 
     appLog('INFO', 'llm', "[$date] data: $totalCommits commits, $totalGithub github, "
-        . "$totalClickup clickup, $totalHarvest harvest across " . count($sections) . " project sections");
+        . "$totalClickup clickup, $totalHarvest harvest, $totalAiSessions ai sessions across "
+        . count($sections) . " project sections");
 
     if (!$sections) {
         appLog('INFO', 'llm', "[$date] no actionable data — summary skipped");

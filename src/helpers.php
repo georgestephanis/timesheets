@@ -20,6 +20,37 @@ function expandPath(string $p): string
 }
 
 /**
+ * Resolves a filesystem path to the configured project whose repo contains it.
+ *
+ * Matches projects[*].repos entries against $path by exact match or path-prefix
+ * (the longest matching repo path wins), so a session cwd/workspace path nested inside
+ * a repo (not just the repo root) still attributes correctly.
+ *
+ * @param  array<string, mixed> $config
+ */
+function projectForLocalPath(array $config, string $path): ?string
+{
+    $path = rtrim(expandPath($path), '/');
+    $best = null;
+    $bestLen = -1;
+    foreach ($config['projects'] ?? [] as $proj => $p) {
+        foreach ($p['repos'] ?? [] as $r) {
+            $repo = rtrim(expandPath($r), '/');
+            if ($repo === '') {
+                continue;
+            }
+            if ($path === $repo || str_starts_with($path, $repo . '/')) {
+                if (strlen($repo) > $bestLen) {
+                    $bestLen = strlen($repo);
+                    $best = $proj;
+                }
+            }
+        }
+    }
+    return $best;
+}
+
+/**
  * Returns true if $needle matches any pattern in $patterns using case-insensitive glob rules.
  *
  * @param string   $needle   Value to test (e.g. a hostname).

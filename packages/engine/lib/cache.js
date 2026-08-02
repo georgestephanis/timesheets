@@ -33,7 +33,7 @@ export function reportsDir(projectRoot, from, timezone) {
  * @returns {Promise<SourceBundle|null>}
  */
 export async function loadCachedSources(dir, key) {
-    const names = ["activitywatch", "chrome", "commits", "integrations"];
+    const names = ["activitywatch", "chrome", "commits", "integrations", "ai-sessions"];
     const paths = Object.fromEntries(names.map((n) => [n, path.join(dir, `${n}-${key}.json`)]));
 
     for (const p of Object.values(paths)) {
@@ -63,6 +63,7 @@ export async function loadCachedSources(dir, key) {
         chrome: deserializeChrome(raw.chrome),
         commits: deserializeCommits(raw.commits),
         external: deserializeExternal(raw.integrations),
+        aiSessions: deserializeExternal(raw["ai-sessions"]),
     };
 }
 
@@ -104,6 +105,7 @@ export async function saveCachedSources(projectRoot, dir, key, from, to, timezon
         write("chrome", serializeChrome(bundle.chrome)),
         write("commits", serializeCommits(bundle.commits)),
         write("integrations", serializeExternal(bundle.external)),
+        write("ai-sessions", serializeExternal(bundle.aiSessions ?? [])),
     ]);
 
     const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: timezone });
@@ -116,7 +118,9 @@ export async function saveCachedSources(projectRoot, dir, key, from, to, timezon
         from: fmt.format(from),
         to: fmt.format(to),
         key,
-        files: ["activitywatch", "chrome", "commits", "integrations"].map((n) => `${relBase}/${n}-${key}.json`),
+        files: ["activitywatch", "chrome", "commits", "integrations", "ai-sessions"].map(
+            (n) => `${relBase}/${n}-${key}.json`,
+        ),
         counts: {
             window_events: bundle.events.window.length,
             afk_events: bundle.events.afk.length,
@@ -124,6 +128,7 @@ export async function saveCachedSources(projectRoot, dir, key, from, to, timezon
             chrome_rows: bundle.chrome.length,
             commits: bundle.commits.length,
             external_rows: bundle.external.length,
+            ai_sessions: (bundle.aiSessions ?? []).length,
         },
     });
 }
@@ -156,7 +161,7 @@ export async function sourceCacheMtime(projectRoot, day, timezone) {
     const dir = reportsDir(projectRoot, day, timezone);
     const key = dailyCacheKey(day, timezone);
     let mtime = 0;
-    for (const src of ["activitywatch", "chrome", "commits", "integrations"]) {
+    for (const src of ["activitywatch", "chrome", "commits", "integrations", "ai-sessions"]) {
         try {
             const stat = await fs.stat(path.join(dir, `${src}-${key}.json`));
             mtime = Math.max(mtime, stat.mtimeMs);
@@ -253,6 +258,7 @@ export function mergeSourceBundles(bundles) {
         chrome: bundles.flatMap((b) => b.chrome),
         commits: bundles.flatMap((b) => b.commits),
         external: bundles.flatMap((b) => b.external),
+        aiSessions: bundles.flatMap((b) => b.aiSessions ?? []),
     };
 }
 
@@ -277,6 +283,7 @@ export function filterSourcesToRange(bundle, from, to) {
         chrome: bundle.chrome.filter((r) => r.time >= from && r.time <= to),
         commits: bundle.commits.filter((r) => r.dt >= from && r.dt <= to),
         external: bundle.external.filter((r) => r.end >= from && r.start <= to),
+        aiSessions: (bundle.aiSessions ?? []).filter((r) => r.end >= from && r.start <= to),
     };
 }
 
@@ -485,5 +492,6 @@ function deserializeExternal(rows) {
  * @typedef {{ time: Date; host: string; url: string; title: string }} ChromeRow
  * @typedef {{ dt: Date; project: string; repo: string; sha: string; subj: string }} CommitRow
  * @typedef {{ start: Date; end: Date; [key: string]: unknown }} ExternalRow
- * @typedef {{ events: AwEvents; chrome: ChromeRow[]; commits: CommitRow[]; external: ExternalRow[] }} SourceBundle
+ * @typedef {{ start: Date; end: Date; project: string; source: string; label: string; detail: string; approximate_timing?: boolean }} AiSessionRow
+ * @typedef {{ events: AwEvents; chrome: ChromeRow[]; commits: CommitRow[]; external: ExternalRow[]; aiSessions: AiSessionRow[] }} SourceBundle
  */

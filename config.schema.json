@@ -45,6 +45,14 @@
                         }
                     ],
                     "default": null
+                },
+                "claude_code_logs": {
+                    "description": "Path to Claude Code CLI session logs (one subdirectory per sanitized working directory, containing *.jsonl transcripts). Defaults to ~/.claude/projects.",
+                    "type": "string"
+                },
+                "antigravity_logs": {
+                    "description": "Path to Antigravity IDE conversation logs (*.db SQLite files). Defaults to ~/.gemini/antigravity-ide/conversations.",
+                    "type": "string"
                 }
             }
         },

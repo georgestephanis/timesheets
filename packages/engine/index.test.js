@@ -204,7 +204,7 @@ describe("classifyAndAggregate", () => {
             afk: [],
             input: [],
         };
-        const { bucket } = classifyAndAggregate(events, [], [], config, "UTC");
+        const { bucket } = classifyAndAggregate(events, [], [], [], config, "UTC");
         assert.ok(bucket["2024-01-15"]);
         assert.ok(bucket["2024-01-15"]["myproject"]);
         assert.ok(bucket["2024-01-15"]["myproject"].seconds > 0);
@@ -230,7 +230,7 @@ describe("classifyAndAggregate", () => {
             ],
             input: [],
         };
-        const { bucket } = classifyAndAggregate(events, [], [], config, "UTC");
+        const { bucket } = classifyAndAggregate(events, [], [], [], config, "UTC");
         assert.ok(!bucket["2024-01-15"]?.["myproject"]);
     });
 
@@ -248,7 +248,7 @@ describe("classifyAndAggregate", () => {
             afk: [],
             input: [],
         };
-        const { unmatched } = classifyAndAggregate(events, [], [], config, "UTC");
+        const { unmatched } = classifyAndAggregate(events, [], [], [], config, "UTC");
         assert.ok(unmatched.vscode["unknownproject"] > 0);
     });
 
@@ -263,7 +263,7 @@ describe("classifyAndAggregate", () => {
                 subj: "fix bug",
             },
         ];
-        const { bucket } = classifyAndAggregate(events, commits, [], config, "UTC");
+        const { bucket } = classifyAndAggregate(events, commits, [], [], config, "UTC");
         assert.ok(bucket["2024-01-15"]["myproject"].commits.length === 1);
     });
 });

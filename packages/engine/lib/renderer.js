@@ -10,6 +10,7 @@
 
 /**
  * @typedef {import('./classifiers.js').CommitRow} CommitRow
+ * @typedef {import('./cache.js').AiSessionRow} AiSessionRow
  */
 
 // ─── Main builder ─────────────────────────────────────────────────────────────
@@ -59,6 +60,14 @@ export function buildReport(bucket, unmatched, from, to, timezone, timeline = {}
                     sha: c.sha,
                     subj: c.subj,
                     repo: c.repo,
+                })),
+                ai_sessions: (rec.ai_sessions ?? []).map((/** @type {AiSessionRow} */ s) => ({
+                    start: s.start.toISOString(),
+                    end: s.end.toISOString(),
+                    source: s.source,
+                    label: s.label,
+                    detail: s.detail ?? "",
+                    approximate_timing: !!s.approximate_timing,
                 })),
             };
         }

@@ -22,6 +22,19 @@
  */
 
 /**
+ * A Claude Code or Antigravity IDE session attributed to a project. Display-only,
+ * like CommitRecord — never contributes to seconds/active_seconds.
+ *
+ * @typedef {Object} AiSessionRecord
+ * @property {string} start - ISO 8601 session start timestamp
+ * @property {string} end   - ISO 8601 session end timestamp
+ * @property {string} source - 'claude' or 'antigravity'
+ * @property {string} label  - Short display label (first prompt or workspace name)
+ * @property {string} detail - Raw material for LLM summaries (prompts or workspace name)
+ * @property {boolean} [approximate_timing] - True when start/end are derived from file times, not real event timestamps
+ */
+
+/**
  * External integration data for a single project on a single day.
  * The value is an empty array [] when no integration data is present,
  * or an object with per-integration keys when data exists.
@@ -30,6 +43,7 @@
  *   harvest?:  {entries: number, seconds: number, discussion: number},
  *   clickup?:  {entries: number, discussion: number},
  *   clockify?: {entries: number, seconds: number},
+ *   ndizi?:    {entries: number, seconds: number},
  *   github?:   {entries: number, activity: number, discussion: number}
  * }} ExternalData
  */
@@ -51,6 +65,7 @@
  * @property {ExternalData} external      - Integration data ([] when empty)
  * @property {DetailData}  detail         - Per-signal-type signal breakdown
  * @property {CommitRecord[]} commits     - Git commits attributed to this project
+ * @property {AiSessionRecord[]} ai_sessions - Claude Code / Antigravity sessions attributed to this project
  */
 
 /**
@@ -63,7 +78,7 @@
  * @property {Object<string, Object<string, ProjectReport>>} days
  *   Daily project reports — outer key is "YYYY-MM-DD", inner key is project name.
  * @property {Object<string, Object<string, number>>} unmatched
- *   Unmatched signals by type ('vscode'|'browser'|'slack'|'apps'|'harvest'|'clickup'|'clockify'|'github'),
+ *   Unmatched signals by type ('vscode'|'browser'|'slack'|'apps'|'harvest'|'clickup'|'clockify'|'ndizi'|'github'),
  *   each mapping signal identifiers to seconds.
  * @property {Object<string, TimelineSegment[]>} [timelines]
  *   Present only when non-empty. Outer key is "YYYY-MM-DD"; value is ordered segments.
@@ -94,6 +109,7 @@
  * @property {string}   [harvest_client]   - Harvest client name (case-insensitive)
  * @property {string[]} [clickup_tasks]    - ClickUp task name globs
  * @property {string[]} [clockify_projects] - Clockify project name globs
+ * @property {string[]} [ndizi_projects]    - Ndizi project name globs
  * @property {Object<string, Object<string, string>>} [repo_remotes]
  *   Remote name/URL snapshot keyed by repo path, then remote name.
  */
@@ -103,7 +119,7 @@
  * @property {string} [color]        - CSS color value for accent bars
  * @property {string[]} [aliases]    - Alternate names that resolve to this grouping
  * @property {string} [logo]         - Logo URL or data URI
- * @property {'clickup'|'harvest'|'clockify'|'none'} [time_tracking]
+ * @property {'clickup'|'harvest'|'clockify'|'ndizi'|'none'} [time_tracking]
  * @property {string} [harvest_connection] - Name of the Harvest connection (required when time_tracking is 'harvest')
  */
 
@@ -149,12 +165,22 @@
  */
 
 /**
+ * @typedef {Object} NdiziConnection
+ * @property {string} name
+ * @property {string} site_url
+ * @property {string} username
+ * @property {string} app_password
+ * @property {string} [user_id]
+ */
+
+/**
  * @typedef {Object} IntegrationsConfig
  * @property {HarvestConnection[]}  [harvest]
  * @property {ClickUpConnection[]}  [clickup]
  * @property {GitHubConnection[]}   [github]
  * @property {LlmConnection[]}      [llm]
  * @property {ClockifyConnection[]} [clockify]
+ * @property {NdiziConnection[]}    [ndizi]
  */
 
 /**
@@ -166,6 +192,8 @@
  * @property {string} paths.activitywatch - Path to ActivityWatch data directory
  * @property {string} paths.chrome        - Path to Chrome user data directory
  * @property {string|string[]|null} paths.chrome_profiles - Profile name(s), or null to auto-detect
+ * @property {string} [paths.claude_code_logs] - Path to Claude Code CLI session log directory
+ * @property {string} [paths.antigravity_logs] - Path to Antigravity IDE conversation log directory
  * @property {string[]} git_authors       - Git author email addresses
  * @property {string}   [discover_repos]  - Repo discovery strategy ('github_desktop' or path)
  * @property {number}   [chrome_correlation_window_seconds]
@@ -194,7 +222,7 @@
 
 /**
  * @typedef {Object} ReassignSignalPayload
- * @property {string}  type          - Signal type ('vscode'|'browser'|'slack'|'apps'|'harvest'|'clickup'|'clockify'|'github')
+ * @property {string}  type          - Signal type ('vscode'|'browser'|'slack'|'apps'|'harvest'|'clickup'|'clockify'|'ndizi'|'github')
  * @property {string}  key           - Signal identifier (domain, workspace, app name, etc.)
  * @property {string}  project       - Target project name
  * @property {boolean} [createProject] - When true, create the project if it does not already exist

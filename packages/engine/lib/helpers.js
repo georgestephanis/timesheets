@@ -17,6 +17,34 @@ export function expandPath(p) {
 }
 
 /**
+ * Resolves a filesystem path to the configured project whose repo path is an
+ * exact match or a path-prefix of it (longest match wins). Mirrors PHP
+ * projectForLocalPath(). Used to attribute AI coding session cwds/workspaces
+ * to a project, since those paths may be a subdirectory of the repo root.
+ * @param {import('@timesheets/contracts').Config} config
+ * @param {string} filePath
+ * @returns {string | null}
+ */
+export function projectForLocalPath(config, filePath) {
+    const target = expandPath(filePath).replace(/\/+$/, "");
+    let best = null;
+    let bestLen = -1;
+    for (const [proj, p] of Object.entries(config.projects ?? {})) {
+        for (const r of p.repos ?? []) {
+            const repo = expandPath(r).replace(/\/+$/, "");
+            if (!repo) continue;
+            if (target === repo || target.startsWith(repo + "/")) {
+                if (repo.length > bestLen) {
+                    bestLen = repo.length;
+                    best = proj;
+                }
+            }
+        }
+    }
+    return best;
+}
+
+/**
  * Case-insensitive glob match. Supports * (any chars) and ? (one char).
  * Mirrors PHP fnmatch with FNM_CASEFOLD.
  * @param {string} needle

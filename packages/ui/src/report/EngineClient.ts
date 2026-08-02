@@ -20,6 +20,7 @@ export type ProjectReport = {
     external: Record<string, unknown> | unknown[];
     detail: Record<string, Record<string, number>>;
     commits: CommitRecord[];
+    ai_sessions: AiSessionRecord[];
 };
 
 export type CommitRecord = {
@@ -27,6 +28,15 @@ export type CommitRecord = {
     sha: string;
     subj: string;
     repo: string;
+};
+
+export type AiSessionRecord = {
+    start: string;
+    end: string;
+    source: string;
+    label: string;
+    detail: string;
+    approximate_timing?: boolean;
 };
 
 export type TimelineSegment = {

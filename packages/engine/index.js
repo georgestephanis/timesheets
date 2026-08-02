@@ -142,6 +142,7 @@ class TimesheetsEngine {
             /** @type {any} */ (bundle.events),
             bundle.commits,
             bundle.external,
+            bundle.aiSessions ?? [],
             cfg,
             tz,
         );

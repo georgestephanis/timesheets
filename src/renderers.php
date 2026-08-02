@@ -14,7 +14,7 @@ declare(strict_types=1);
  *
  * @param string       $heading Markdown heading prefix ('###' or '####').
  * @param string       $name    Project name.
- * @param array        $rec     Project record: seconds, detail, commits, grouping.
+ * @param array        $rec     Project record: seconds, detail, commits, ai_sessions, grouping.
  * @param int          $minSec  Minimum seconds threshold from config.
  * @param DateTimeZone $tz      Display timezone for commit timestamps.
  */
@@ -24,7 +24,8 @@ function renderProjectEntry(string $heading, string $name, array $rec, int $minS
     $activeSec = $rec['active_seconds'] ?? 0;
     $activityRatio = (float)($rec['activity_ratio'] ?? 0.0);
     $commits = $rec['commits'] ?? [];
-    if ($sec < $minSec && !$commits) {
+    $aiSessions = $rec['ai_sessions'] ?? [];
+    if ($sec < $minSec && !$commits && !$aiSessions) {
         return '';
     }
     $secStr = $sec ? ' — ' . fmtDur($sec) : '';
@@ -69,6 +70,15 @@ function renderProjectEntry(string $heading, string $name, array $rec, int $minS
         foreach ($commits as $c) {
             $t = $c['dt']->setTimezone($tz)->format('g:i a');
             $out .= "    - `$t` `" . substr($c['sha'], 0, 8) . "` " . $c['subj'] . "\n";
+        }
+    }
+    if ($aiSessions) {
+        $out .= "- _ai sessions (" . count($aiSessions) . "):_\n";
+        foreach ($aiSessions as $s) {
+            $start = $s['start']->setTimezone($tz)->format('g:i a');
+            $end = $s['end']->setTimezone($tz)->format('g:i a');
+            $approx = !empty($s['approximate_timing']) ? ' (approx)' : '';
+            $out .= "    - `$start`–`$end`$approx [" . $s['source'] . '] ' . $s['label'] . "\n";
         }
     }
     $out .= "\n";
@@ -206,7 +216,11 @@ function renderMarkdown(
  *         "external": {
  *           "<source>": { "entries": "<int>", "activity": "<int>", "discussion": "<int>" }
  *         },
- *         "commits": [{ "time": "<RFC 3339>", "sha": "<string>", "subj": "<string>", "repo": "<string>" }]
+ *         "commits": [{ "time": "<RFC 3339>", "sha": "<string>", "subj": "<string>", "repo": "<string>" }],
+ *         "ai_sessions": [{
+ *           "start": "<RFC 3339>", "end": "<RFC 3339>", "source": "<claude|antigravity>",
+ *           "label": "<string>", "detail": "<string>", "approximate_timing": "<bool>"
+ *         }]
  *       }
  *     }
  *   },
@@ -255,6 +269,14 @@ function renderJson(
                     'subj' => $c['subj'],
                     'repo' => $c['repo'],
                 ], $rec['commits'] ?? []),
+                'ai_sessions' => array_map(fn($s) => [
+                    'start'  => $s['start']->setTimezone($tz)->format('c'),
+                    'end'    => $s['end']->setTimezone($tz)->format('c'),
+                    'source' => $s['source'],
+                    'label'  => $s['label'],
+                    'detail' => $s['detail'] ?? '',
+                    'approximate_timing' => !empty($s['approximate_timing']),
+                ], $rec['ai_sessions'] ?? []),
             ];
         }
     }
@@ -280,7 +302,7 @@ function renderJson(
 /**
  * Renders the activity bucket as a tab-separated values (TSV) string.
  *
- * Columns: date, project, seconds, commits. One row per (date, project) pair,
+ * Columns: date, project, seconds, commits, ai_sessions. One row per (date, project) pair,
  * sorted ascending by date. No per-signal detail breakdown is included.
  * The $from and $to parameters are accepted for interface symmetry but are not
  * written to the output.
@@ -293,7 +315,7 @@ function renderJson(
 function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to, DateTimeZone $tz): string
 {
     $rows = [
-        "date\tgrouping\tproject\tseconds\tactive_seconds\tactivity_ratio\tcommits\t"
+        "date\tgrouping\tproject\tseconds\tactive_seconds\tactivity_ratio\tcommits\tai_sessions\t"
         . "harvest_entries\tharvest_discussion\tclickup_entries\tclickup_discussion\tgithub_entries\tgithub_activity\tgithub_discussion",
     ];
     $tsv = static fn(string $s): string => str_replace(["\t", "\r\n", "\r", "\n"], [' ', ' ', ' ', ' '], $s);
@@ -310,6 +332,7 @@ function renderTsv(array $bucket, DateTimeImmutable $from, DateTimeImmutable $to
                 . "\t" . (int)($rec['active_seconds'] ?? 0)
                 . "\t" . sprintf('%.3f', (float)($rec['activity_ratio'] ?? 0))
                 . "\t" . count($rec['commits'] ?? [])
+                . "\t" . count($rec['ai_sessions'] ?? [])
                 . "\t" . (int)($harvest['entries'] ?? 0)
                 . "\t" . (int)($harvest['discussion'] ?? 0)
                 . "\t" . (int)($clickup['entries'] ?? 0)

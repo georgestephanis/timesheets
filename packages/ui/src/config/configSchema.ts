@@ -76,6 +76,8 @@ const pathsSchema = z.object({
     activitywatch: z.string(),
     chrome: z.string(),
     chrome_profiles: z.union([z.string(), z.array(z.string()), z.null()]).optional(),
+    claude_code_logs: z.string().optional(),
+    antigravity_logs: z.string().optional(),
 });
 
 export const configSchema = z.object({

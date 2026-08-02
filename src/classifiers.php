@@ -266,19 +266,20 @@ function projectForExternal(array $row, array $config): ?string
  *   commits: list<commit row>
  * }
  *
- * @param  array        $events   Window and AFK events from loadActivityWatch() after backfillChromeUrls().
- * @param  array        $commits  Commit rows from loadGitCommits().
- * @param  array        $external External integration rows from loadIntegrationActivity().
- * @param  array        $config   Loaded config array.
- * @param  DateTimeZone $tz       Timezone used to bucket events into calendar dates.
- * @param  array        $opts     Parsed CLI options from parseArgs().
+ * @param  array        $events     Window and AFK events from loadActivityWatch() after backfillChromeUrls().
+ * @param  array        $commits    Commit rows from loadGitCommits().
+ * @param  array        $external   External integration rows from loadIntegrationActivity().
+ * @param  array        $aiSessions Claude Code / Antigravity session rows from loadClaudeCodeSessions()/loadAntigravitySessions().
+ * @param  array        $config     Loaded config array.
+ * @param  DateTimeZone $tz         Timezone used to bucket events into calendar dates.
+ * @param  array        $opts       Parsed CLI options from parseArgs().
  * @return array{
  *     0: array<string, array<string, array<string, mixed>>>,
  *     1: array<string, array<string, int>>,
  *     2: array<string, list<array{s: int, e: int, p: string, g: string|null}>>
  * }  [$bucket, $unmatched, $timeline]
  */
-function classifyAndAggregate(array $events, array $commits, array $external, array $config, DateTimeZone $tz, array $opts): array
+function classifyAndAggregate(array $events, array $commits, array $external, array $aiSessions, array $config, DateTimeZone $tz, array $opts): array
 {
     $bucket = []; // [date_iso][project] = ['seconds' => int, 'commits' => [...], 'detail' => [...]]
     $unmatched = ['vscode' => [], 'browser' => [], 'slack' => [], 'apps' => [], 'harvest' => [], 'clickup' => [], 'clockify' => [], 'github' => []];
@@ -544,6 +545,18 @@ function classifyAndAggregate(array $events, array $commits, array $external, ar
             continue;
         }
         $bucket[$date][$proj]['commits'][] = $c;
+    }
+
+    // AI coding sessions (Claude Code, Antigravity) — display-only, like commits; each
+    // row keeps its own start/end so overlapping sessions from concurrent windows are
+    // never merged into one, and none of this contributes to seconds/active_seconds.
+    foreach ($aiSessions as $s) {
+        $date = $s['start']->setTimezone($tz)->format('Y-m-d');
+        $proj = $s['project'];
+        if (!$matchesFilter($proj)) {
+            continue;
+        }
+        $bucket[$date][$proj]['ai_sessions'][] = $s;
     }
 
     // External integrations

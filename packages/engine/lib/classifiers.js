@@ -130,6 +130,7 @@ export function projectForExternal(row, config) {
         }
         if (source === "clickup" && p.clickup_tasks?.length && fnmatchAny(hint, p.clickup_tasks)) return name;
         if (source === "clockify" && p.clockify_projects?.length && fnmatchAny(hint, p.clockify_projects)) return name;
+        if (source === "ndizi" && p.ndizi_projects?.length && fnmatchAny(hint, p.ndizi_projects)) return name;
     }
     return null;
 }
@@ -212,16 +213,17 @@ const TERMINAL_APPS = new Set([
  * @param {LoadedEvents} events
  * @param {CommitRow[]} commits
  * @param {ExternalRow[]} external
+ * @param {import('./cache.js').AiSessionRow[]} aiSessions Claude Code / Antigravity session rows, display-only like commits.
  * @param {import('@timesheets/contracts').Config} config
  * @param {string} timezone  IANA timezone identifier.
  * @param {{ project?: string|null }} [opts]
  * @returns {{
- *   bucket: Record<string, Record<string, { seconds: number; active_seconds: number; activity_ratio: number; grouping: string|null; detail: Record<string, Record<string, number>>; commits: CommitRow[]; external: Record<string, { entries: number; activity: number; discussion: number }> }>>;
+ *   bucket: Record<string, Record<string, { seconds: number; active_seconds: number; activity_ratio: number; grouping: string|null; detail: Record<string, Record<string, number>>; commits: CommitRow[]; ai_sessions: import('./cache.js').AiSessionRow[]; external: Record<string, { entries: number; activity: number; discussion: number }> }>>;
  *   unmatched: Record<string, Record<string, number>>;
  *   timeline: Record<string, Array<{ s: number; e: number; p: string; g: string|null }>>;
  * }}
  */
-export function classifyAndAggregate(events, commits, external, config, timezone, opts = {}) {
+export function classifyAndAggregate(events, commits, external, aiSessions, config, timezone, opts = {}) {
     /** @type {Record<string, Record<string, any>>} */
     const bucket = {};
     /** @type {Record<string, Record<string, number>>} */
@@ -233,6 +235,7 @@ export function classifyAndAggregate(events, commits, external, config, timezone
         harvest: {},
         clickup: {},
         clockify: {},
+        ndizi: {},
         github: {},
     };
 
@@ -271,7 +274,14 @@ export function classifyAndAggregate(events, commits, external, config, timezone
     function bumpDetail(date, proj, kind, label, sec) {
         if (!bucket[date]) bucket[date] = {};
         if (!bucket[date][proj])
-            bucket[date][proj] = { seconds: 0, active_seconds: 0, detail: {}, commits: [], external: {} };
+            bucket[date][proj] = {
+                seconds: 0,
+                active_seconds: 0,
+                detail: {},
+                commits: [],
+                ai_sessions: [],
+                external: {},
+            };
         bucket[date][proj].seconds = (bucket[date][proj].seconds ?? 0) + sec;
         if (!bucket[date][proj].detail[kind]) bucket[date][proj].detail[kind] = {};
         bucket[date][proj].detail[kind][label] = (bucket[date][proj].detail[kind][label] ?? 0) + sec;
@@ -300,7 +310,14 @@ export function classifyAndAggregate(events, commits, external, config, timezone
             if (ignoredProjects.has(proj) || !matchesFilter(proj)) continue;
             bumpDetail(date, proj, kind, label, sec);
             if (!bucket[date][proj])
-                bucket[date][proj] = { seconds: 0, active_seconds: 0, detail: {}, commits: [], external: {} };
+                bucket[date][proj] = {
+                    seconds: 0,
+                    active_seconds: 0,
+                    detail: {},
+                    commits: [],
+                    ai_sessions: [],
+                    external: {},
+                };
             bucket[date][proj].active_seconds = (bucket[date][proj].active_seconds ?? 0) + activeSec;
             const seg = { ...tlSeg, p: proj };
             if (!timelineRaw[date]) timelineRaw[date] = [];
@@ -449,7 +466,14 @@ export function classifyAndAggregate(events, commits, external, config, timezone
         bumpDetail(date, proj, detailKind, detailLabel, sec);
         if (!bucket[date]) bucket[date] = {};
         if (!bucket[date][proj])
-            bucket[date][proj] = { seconds: 0, active_seconds: 0, detail: {}, commits: [], external: {} };
+            bucket[date][proj] = {
+                seconds: 0,
+                active_seconds: 0,
+                detail: {},
+                commits: [],
+                ai_sessions: [],
+                external: {},
+            };
         bucket[date][proj].active_seconds = (bucket[date][proj].active_seconds ?? 0) + activeSec;
         if (!timelineRaw[date]) timelineRaw[date] = [];
         timelineRaw[date].push(tlSeg);
@@ -464,8 +488,35 @@ export function classifyAndAggregate(events, commits, external, config, timezone
         if (!matchesFilter(proj)) continue;
         if (!bucket[date]) bucket[date] = {};
         if (!bucket[date][proj])
-            bucket[date][proj] = { seconds: 0, active_seconds: 0, detail: {}, commits: [], external: {} };
+            bucket[date][proj] = {
+                seconds: 0,
+                active_seconds: 0,
+                detail: {},
+                commits: [],
+                ai_sessions: [],
+                external: {},
+            };
         bucket[date][proj].commits.push(c);
+    }
+
+    // AI coding sessions (Claude Code, Antigravity) — display-only, like commits; each
+    // row keeps its own start/end so overlapping sessions from concurrent windows are
+    // never merged into one, and none of this contributes to seconds/active_seconds.
+    for (const s of aiSessions) {
+        const date = fmt.format(s.start);
+        const proj = s.project;
+        if (!matchesFilter(proj)) continue;
+        if (!bucket[date]) bucket[date] = {};
+        if (!bucket[date][proj])
+            bucket[date][proj] = {
+                seconds: 0,
+                active_seconds: 0,
+                detail: {},
+                commits: [],
+                ai_sessions: [],
+                external: {},
+            };
+        bucket[date][proj].ai_sessions.push(s);
     }
 
     // External integrations
@@ -490,7 +541,14 @@ export function classifyAndAggregate(events, commits, external, config, timezone
 
         if (!bucket[date]) bucket[date] = {};
         if (!bucket[date][proj])
-            bucket[date][proj] = { seconds: 0, active_seconds: 0, detail: {}, commits: [], external: {} };
+            bucket[date][proj] = {
+                seconds: 0,
+                active_seconds: 0,
+                detail: {},
+                commits: [],
+                ai_sessions: [],
+                external: {},
+            };
 
         if (sec > 0) {
             bucket[date][proj].seconds = (bucket[date][proj].seconds ?? 0) + sec;

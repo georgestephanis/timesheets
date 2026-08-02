@@ -9,6 +9,8 @@
 import { loadActivityWatch } from "./loader-activitywatch.js";
 import { loadChromeHistory, backfillChromeUrls } from "./loader-chrome.js";
 import { loadGitCommits } from "./loader-git.js";
+import { loadClaudeCodeSessions } from "./loader-claude-code.js";
+import { loadAntigravitySessions } from "./loader-antigravity.js";
 import { warning } from "./helpers.js";
 
 /**
@@ -54,6 +56,25 @@ export function makeLoadFreshFn(config) {
         // Integration APIs — stubbed (Harvest, ClickUp, Clockify, GitHub REST).
         const external = /** @type {any[]} */ ([]);
 
-        return { events, chrome, commits, external };
+        // AI coding sessions (Claude Code, Antigravity) — display-only, like commits.
+        // Each row keeps its own start/end, so overlapping sessions from concurrent
+        // windows (e.g. two Claude Code sessions running at once) are simply
+        // concatenated rather than merged into one.
+        /** @type {Array<{ start: Date; end: Date; project: string; source: string; label: string; detail: string; approximate_timing?: boolean }>} */
+        let aiSessions = [];
+        try {
+            const [claude, antigravity] = await Promise.all([
+                loadClaudeCodeSessions(config, from, to),
+                Promise.resolve(loadAntigravitySessions(config, from, to)),
+            ]);
+            aiSessions = [...claude, ...antigravity];
+        } catch (err) {
+            warning(
+                "ai-sessions",
+                `loadClaudeCodeSessions/loadAntigravitySessions failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        }
+
+        return { events, chrome, commits, external, aiSessions };
     };
 }

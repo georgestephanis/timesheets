@@ -57,7 +57,7 @@ function dailyCacheKey(DateTimeImmutable $day): string
  *
  * @param  string $dir Absolute path to the per-range reports directory.
  * @param  string $key Date-range key from reportsCacheKey().
- * @return array{events: array, chrome: array, commits: array, external: array}|null
+ * @return array{events: array, chrome: array, commits: array, external: array, aiSessions: array}|null
  */
 function loadCachedSources(string $dir, string $key): ?array
 {
@@ -66,6 +66,7 @@ function loadCachedSources(string $dir, string $key): ?array
         'chrome'  => "$dir/chrome-$key.json",
         'commits' => "$dir/commits-$key.json",
         'external' => "$dir/integrations-$key.json",
+        'aiSessions' => "$dir/ai-sessions-$key.json",
     ];
     foreach ($paths as $path) {
         if (!file_exists($path)) {
@@ -85,13 +86,14 @@ function loadCachedSources(string $dir, string $key): ?array
         'chrome'  => deserializeChrome($raw['chrome']),
         'commits' => deserializeCommits($raw['commits']),
         'external' => deserializeExternal($raw['external']),
+        'aiSessions' => deserializeExternal($raw['aiSessions']),
     ];
 }
 
 /**
  * Loads a full-day cached source bundle for the given calendar day, if present.
  *
- * @return array{events: array, chrome: array, commits: array, external: array}|null
+ * @return array{events: array, chrome: array, commits: array, external: array, aiSessions: array}|null
  */
 function loadDailyCachedSources(DateTimeImmutable $day): ?array
 {
@@ -114,6 +116,7 @@ function loadDailyCachedSources(DateTimeImmutable $day): ?array
  * @param array             $chrome  Raw Chrome history rows.
  * @param array             $commits Git commit rows.
  * @param array             $external External integration rows.
+ * @param array             $aiSessions Claude Code / Antigravity session rows.
  */
 function saveCachedSources(
     string $dir,
@@ -123,7 +126,8 @@ function saveCachedSources(
     array $events,
     array $chrome,
     array $commits,
-    array $external
+    array $external,
+    array $aiSessions
 ): void {
     if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
         return;
@@ -135,11 +139,13 @@ function saveCachedSources(
         'chrome'        => "chrome-$key.json",
         'commits'       => "commits-$key.json",
         'integrations'  => "integrations-$key.json",
+        'ai_sessions'   => "ai-sessions-$key.json",
     ];
     file_put_contents("$dir/{$files['activitywatch']}", json_encode(serializeEvents($events), $flags) . "\n");
     file_put_contents("$dir/{$files['chrome']}", json_encode(serializeChrome($chrome), $flags) . "\n");
     file_put_contents("$dir/{$files['commits']}", json_encode(serializeCommits($commits), $flags) . "\n");
     file_put_contents("$dir/{$files['integrations']}", json_encode(serializeExternal($external), $flags) . "\n");
+    file_put_contents("$dir/{$files['ai_sessions']}", json_encode(serializeExternal($aiSessions), $flags) . "\n");
 
     appendToIndex(PROJECT_ROOT . '/reports/cache-data.jsonl', [
         'cached_at' => (new DateTimeImmutable('now'))->format('c'),
@@ -154,6 +160,7 @@ function saveCachedSources(
             'chrome_rows'   => count($chrome),
             'commits'       => count($commits),
             'external_rows' => count($external),
+            'ai_sessions'   => count($aiSessions),
         ],
     ]);
 }
@@ -165,13 +172,15 @@ function saveCachedSources(
  * @param array                                            $chrome
  * @param array                                            $commits
  * @param array                                            $external
+ * @param array                                            $aiSessions
  */
 function saveDailyCachedSources(
     DateTimeImmutable $day,
     array $events,
     array $chrome,
     array $commits,
-    array $external
+    array $external,
+    array $aiSessions
 ): void {
     $dayStart = $day->setTime(0, 0, 0);
     $dayEnd = $day->setTime(23, 59, 59);
@@ -183,12 +192,13 @@ function saveDailyCachedSources(
         $events,
         $chrome,
         $commits,
-        $external
+        $external,
+        $aiSessions
     );
 }
 
 /**
- * Returns the maximum mtime of the four per-day source cache files, or 0 if none exist.
+ * Returns the maximum mtime of the five per-day source cache files, or 0 if none exist.
  *
  * Used as a fingerprint to detect whether source data has changed since an LLM summary
  * was generated.
@@ -198,7 +208,7 @@ function sourceCacheMtime(DateTimeImmutable $day): int
     $dir = reportsDir($day->setTime(0, 0, 0));
     $key = dailyCacheKey($day->setTime(0, 0, 0));
     $mtime = 0;
-    foreach (['activitywatch', 'chrome', 'commits', 'integrations'] as $src) {
+    foreach (['activitywatch', 'chrome', 'commits', 'integrations', 'ai-sessions'] as $src) {
         $f = "$dir/$src-$key.json";
         if (file_exists($f)) {
             $mtime = max($mtime, (int)filemtime($f));
@@ -276,8 +286,12 @@ function rangeDays(DateTimeImmutable $from, DateTimeImmutable $to, DateTimeZone 
 /**
  * Merges multiple source bundles into one combined bundle.
  *
- * @param  list<array{events: array, chrome: array, commits: array, external: array}> $bundles
- * @return array{events: array, chrome: array, commits: array, external: array}
+ * Each ai_sessions row keeps its own start/end, so overlapping sessions from
+ * concurrent windows (e.g. two Claude Code sessions running at once) are simply
+ * concatenated rather than merged into one, mirroring how commits are handled.
+ *
+ * @param  list<array{events: array, chrome: array, commits: array, external: array, aiSessions: array}> $bundles
+ * @return array{events: array, chrome: array, commits: array, external: array, aiSessions: array}
  */
 function mergeSourceBundles(array $bundles): array
 {
@@ -286,6 +300,7 @@ function mergeSourceBundles(array $bundles): array
         'chrome' => [],
         'commits' => [],
         'external' => [],
+        'aiSessions' => [],
     ];
 
     foreach ($bundles as $bundle) {
@@ -295,6 +310,7 @@ function mergeSourceBundles(array $bundles): array
         array_push($merged['chrome'], ...(array)($bundle['chrome'] ?? []));
         array_push($merged['commits'], ...(array)($bundle['commits'] ?? []));
         array_push($merged['external'], ...(array)($bundle['external'] ?? []));
+        array_push($merged['aiSessions'], ...(array)($bundle['aiSessions'] ?? []));
     }
 
     return $merged;
@@ -303,8 +319,8 @@ function mergeSourceBundles(array $bundles): array
 /**
  * Trims a combined source bundle back to the exact requested range.
  *
- * @param  array{events: array, chrome: array, commits: array, external: array} $bundle
- * @return array{events: array, chrome: array, commits: array, external: array}
+ * @param  array{events: array, chrome: array, commits: array, external: array, aiSessions: array} $bundle
+ * @return array{events: array, chrome: array, commits: array, external: array, aiSessions: array}
  */
 function filterSourcesToRange(array $bundle, DateTimeImmutable $from, DateTimeImmutable $to): array
 {
@@ -336,6 +352,14 @@ function filterSourcesToRange(array $bundle, DateTimeImmutable $from, DateTimeIm
             static fn(array $row): bool => ($row['dt'] ?? null) instanceof DateTimeImmutable && $inRange($row['dt'])
         )),
         'external' => array_values(array_filter($bundle['external'], static function (array $row) use ($from, $to): bool {
+            $start = $row['start'] ?? null;
+            $end = $row['end'] ?? null;
+            return $start instanceof DateTimeImmutable
+                && $end instanceof DateTimeImmutable
+                && $end >= $from
+                && $start <= $to;
+        })),
+        'aiSessions' => array_values(array_filter($bundle['aiSessions'] ?? [], static function (array $row) use ($from, $to): bool {
             $start = $row['start'] ?? null;
             $end = $row['end'] ?? null;
             return $start instanceof DateTimeImmutable

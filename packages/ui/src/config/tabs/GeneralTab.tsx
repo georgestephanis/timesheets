@@ -22,6 +22,8 @@ export function GeneralTab({ draft, setField }: Props) {
     const chromeProfiles = useFieldPath(draft, "paths.chrome_profiles", setField, {
         arrayAsTextarea: true,
     });
+    const claudeCodeLogs = useFieldPath(draft, "paths.claude_code_logs", setField);
+    const antigravityLogs = useFieldPath(draft, "paths.antigravity_logs", setField);
 
     const gitAuthors = useFieldPath(draft, "git_authors", setField, { arrayAsTextarea: true });
     const discoverRepos = useFieldPath(draft, "discover_repos", setField);
@@ -80,6 +82,20 @@ export function GeneralTab({ draft, setField }: Props) {
                     hint="One profile directory name per line"
                 />
             )}
+            <FieldRow
+                label="Claude Code logs"
+                value={claudeCodeLogs.value}
+                onChange={claudeCodeLogs.onChange}
+                placeholder="~/.claude/projects"
+                hint="Optional — enables AI session attribution from Claude Code CLI logs"
+            />
+            <FieldRow
+                label="Antigravity IDE logs"
+                value={antigravityLogs.value}
+                onChange={antigravityLogs.onChange}
+                placeholder="~/.gemini/antigravity-ide/conversations"
+                hint="Optional — enables AI session attribution from Antigravity IDE logs"
+            />
 
             <SectionHeader title="Identity" />
             <FieldRow

@@ -34,6 +34,8 @@ function badgeLabel(key: string, val: ExternalIntg): string {
             return `ClickUp: ${val.entries ?? 0} task${(val.entries ?? 0) !== 1 ? "s" : ""}`;
         case "clockify":
             return `Clockify: ${val.entries ?? 0} entr${(val.entries ?? 0) !== 1 ? "ies" : "y"}`;
+        case "ndizi":
+            return `Ndizi: ${val.entries ?? 0} entr${(val.entries ?? 0) !== 1 ? "ies" : "y"}`;
         default:
             return `${key}: ${val.entries ?? 0}`;
     }
@@ -83,6 +85,23 @@ export function ProjectCard({ name, data }: Props) {
                                     <Text style={styles.commitSha}>{c.sha.slice(0, 7)}</Text>
                                     <Text style={styles.commitSubj} numberOfLines={2}>
                                         {c.subj}
+                                    </Text>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
+                    {data.ai_sessions.length > 0 && (
+                        <View style={styles.commits}>
+                            <Text style={styles.detailLabel}>AI sessions</Text>
+                            {data.ai_sessions.map((s, i) => (
+                                <View key={`${s.source}-${s.start}-${i}`} style={styles.commit}>
+                                    <Text style={styles.commitSha}>
+                                        {s.source}
+                                        {s.approximate_timing ? " (approx)" : ""}
+                                    </Text>
+                                    <Text style={styles.commitSubj} numberOfLines={2}>
+                                        {s.label}
                                     </Text>
                                 </View>
                             ))}
