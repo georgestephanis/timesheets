@@ -1,4 +1,5 @@
 config.json*
+BOL-MANUAL-GENERATION.md
 vendor/
 node_modules/
 reports/
