@@ -2,6 +2,7 @@ config.json*
 vendor/
 node_modules/
 reports/
+tmp/
 .clinerules
 .phpunit.result.cache
 

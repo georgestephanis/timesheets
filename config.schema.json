@@ -238,6 +238,11 @@
                     "type": "array",
                     "items": { "$ref": "#/$defs/ndizi_connection" },
                     "default": []
+                },
+                "freshbooks": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/freshbooks_connection" },
+                    "default": []
                 }
             },
             "default": {}
@@ -536,6 +541,42 @@
                 "username": { "type": "string", "description": "WordPress username." },
                 "app_password": { "type": "string", "description": "WordPress Application Password for this user." },
                 "user_id": { "type": "string", "description": "Auto-resolved from /wp/v2/users/me on first run." }
+            }
+        },
+        "freshbooks_connection": {
+            "type": "object",
+            "required": ["name", "client_id", "client_secret", "redirect_uri"],
+            "additionalProperties": false,
+            "properties": {
+                "name": { "type": "string", "description": "Display name for this connection." },
+                "client_id": {
+                    "type": "string",
+                    "description": "OAuth2 Client ID from the FreshBooks developer app (https://my.freshbooks.com/#/developer)."
+                },
+                "client_secret": {
+                    "type": "string",
+                    "description": "OAuth2 Client Secret from the FreshBooks developer app."
+                },
+                "redirect_uri": {
+                    "type": "string",
+                    "description": "HTTPS redirect URI registered on the FreshBooks app; must match exactly during the auth exchange."
+                },
+                "access_token": {
+                    "type": "string",
+                    "description": "Auto-filled by tools/freshbooks-auth.php; short-lived bearer token, refreshed as needed."
+                },
+                "refresh_token": {
+                    "type": "string",
+                    "description": "Auto-filled and rotated on every refresh (one-time-use); persisted after each exchange."
+                },
+                "token_expires_at": {
+                    "type": "integer",
+                    "description": "Auto-filled Unix timestamp when the access_token expires."
+                },
+                "account_id": {
+                    "type": "string",
+                    "description": "Auto-resolved from /auth/api/v1/users/me; used in accounting API paths."
+                }
             }
         }
     }
