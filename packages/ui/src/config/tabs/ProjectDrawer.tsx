@@ -36,6 +36,9 @@ export function ProjectDrawer({ name, draft, setField, onClose, onDelete, onRena
     const clockifyProjects = useFieldPath(draft, [...b, "clockify_projects"], setField, {
         arrayAsTextarea: true,
     });
+    const ndiziProjects = useFieldPath(draft, [...b, "ndizi_projects"], setField, {
+        arrayAsTextarea: true,
+    });
 
     const handleDelete = () => {
         Alert.alert("Delete Project", `Remove "${name}" from the config? This cannot be undone until you discard.`, [
@@ -137,6 +140,13 @@ export function ProjectDrawer({ name, draft, setField, onClose, onDelete, onRena
                     label="Clockify projects"
                     value={clockifyProjects.value}
                     onChange={clockifyProjects.onChange}
+                    type="textarea"
+                    hint="Project name globs (one per line)"
+                />
+                <FieldRow
+                    label="Ndizi projects"
+                    value={ndiziProjects.value}
+                    onChange={ndiziProjects.onChange}
                     type="textarea"
                     hint="Project name globs (one per line)"
                 />

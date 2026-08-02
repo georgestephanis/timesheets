@@ -57,7 +57,7 @@ function GroupingCard({ name, draft, setField, onRemove }: GroupingCardProps) {
                 value={timeTracking.value || "none"}
                 onChange={timeTracking.onChange}
                 type="segment"
-                options={["none", "harvest", "clickup", "clockify"]}
+                options={["none", "harvest", "clickup", "clockify", "ndizi"]}
             />
             {timeTracking.value === "harvest" && (
                 <FieldRow

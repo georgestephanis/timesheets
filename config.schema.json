@@ -233,6 +233,11 @@
                     "type": "array",
                     "items": { "$ref": "#/$defs/clockify_connection" },
                     "default": []
+                },
+                "ndizi": {
+                    "type": "array",
+                    "items": { "$ref": "#/$defs/ndizi_connection" },
+                    "default": []
                 }
             },
             "default": {}
@@ -329,6 +334,12 @@
                 },
                 "clockify_projects": {
                     "description": "Clockify project name globs that map to this local project.",
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "minItems": 1
+                },
+                "ndizi_projects": {
+                    "description": "Ndizi project name globs that map to this local project.",
                     "type": "array",
                     "items": { "type": "string" },
                     "minItems": 1
@@ -510,6 +521,21 @@
                 "api_key": { "type": "string", "description": "Clockify API key from Profile → API." },
                 "workspace_id": { "type": "string", "description": "Auto-resolved from /v1/user on first run." },
                 "user_id": { "type": "string", "description": "Auto-resolved from /v1/user on first run." }
+            }
+        },
+        "ndizi_connection": {
+            "type": "object",
+            "required": ["name", "site_url", "username", "app_password"],
+            "additionalProperties": false,
+            "properties": {
+                "name": { "type": "string", "description": "Display name for this connection." },
+                "site_url": {
+                    "type": "string",
+                    "description": "Base URL of the WordPress site running Ndizi Project Management, e.g. https://example.com/."
+                },
+                "username": { "type": "string", "description": "WordPress username." },
+                "app_password": { "type": "string", "description": "WordPress Application Password for this user." },
+                "user_id": { "type": "string", "description": "Auto-resolved from /wp/v2/users/me on first run." }
             }
         }
     }

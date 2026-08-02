@@ -247,6 +247,9 @@ function projectForExternal(array $row, array $config): ?string
         if ($source === 'clockify' && !empty($p['clockify_projects']) && fnmatchAny($hint, $p['clockify_projects'])) {
             return $name;
         }
+        if ($source === 'ndizi' && !empty($p['ndizi_projects']) && fnmatchAny($hint, $p['ndizi_projects'])) {
+            return $name;
+        }
     }
 
     return null;
@@ -282,7 +285,10 @@ function projectForExternal(array $row, array $config): ?string
 function classifyAndAggregate(array $events, array $commits, array $external, array $aiSessions, array $config, DateTimeZone $tz, array $opts): array
 {
     $bucket = []; // [date_iso][project] = ['seconds' => int, 'commits' => [...], 'detail' => [...]]
-    $unmatched = ['vscode' => [], 'browser' => [], 'slack' => [], 'apps' => [], 'harvest' => [], 'clickup' => [], 'clockify' => [], 'github' => []];
+    $unmatched = [
+        'vscode' => [], 'browser' => [], 'slack' => [], 'apps' => [],
+        'harvest' => [], 'clickup' => [], 'clockify' => [], 'ndizi' => [], 'github' => [],
+    ];
 
     $personalHosts = $config['personal_hosts'] ?? [];
     $personalApps  = $config['personal_apps']  ?? [];

@@ -15,6 +15,7 @@ export type {
     GitHubConnection,
     LlmConnection,
     ClockifyConnection,
+    NdiziConnection,
 } from "./config/configSchema";
 export { NativeEngine } from "./config/NativeEngine";
 

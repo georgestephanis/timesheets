@@ -17,6 +17,7 @@ export const projectSchema = z.object({
     harvest_client: z.string().optional(),
     clickup_tasks: z.array(z.string()).optional(),
     clockify_projects: z.array(z.string()).optional(),
+    ndizi_projects: z.array(z.string()).optional(),
     repo_remotes: z.record(z.record(z.string())).optional(),
 });
 
@@ -24,7 +25,7 @@ export const groupingSchema = z.object({
     color: z.string().optional(),
     aliases: z.array(z.string()).optional(),
     logo: z.string().optional(),
-    time_tracking: z.enum(["clickup", "harvest", "clockify", "none"]).optional(),
+    time_tracking: z.enum(["clickup", "harvest", "clockify", "ndizi", "none"]).optional(),
     harvest_connection: z.string().optional(),
 });
 
@@ -64,12 +65,21 @@ const clockifyConnectionSchema = z.object({
     user_id: z.string().optional(),
 });
 
+const ndiziConnectionSchema = z.object({
+    name: z.string(),
+    site_url: z.string(),
+    username: z.string(),
+    app_password: z.string(),
+    user_id: z.string().optional(),
+});
+
 const integrationsSchema = z.object({
     harvest: z.array(harvestConnectionSchema).optional(),
     clickup: z.array(clickupConnectionSchema).optional(),
     github: z.array(githubConnectionSchema).optional(),
     llm: z.array(llmConnectionSchema).optional(),
     clockify: z.array(clockifyConnectionSchema).optional(),
+    ndizi: z.array(ndiziConnectionSchema).optional(),
 });
 
 const pathsSchema = z.object({
@@ -111,3 +121,4 @@ export type ClickUpConnection = z.infer<typeof clickupConnectionSchema>;
 export type GitHubConnection = z.infer<typeof githubConnectionSchema>;
 export type LlmConnection = z.infer<typeof llmConnectionSchema>;
 export type ClockifyConnection = z.infer<typeof clockifyConnectionSchema>;
+export type NdiziConnection = z.infer<typeof ndiziConnectionSchema>;

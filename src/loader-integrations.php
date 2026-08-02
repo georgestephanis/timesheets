@@ -14,6 +14,8 @@ require_once __DIR__ . '/integrations/clickup-catalog.php';
 require_once __DIR__ . '/integrations/github.php';
 require_once __DIR__ . '/integrations/clockify.php';
 require_once __DIR__ . '/integrations/clockify-catalog.php';
+require_once __DIR__ . '/integrations/ndizi.php';
+require_once __DIR__ . '/integrations/ndizi-catalog.php';
 
 /**
  * Loads external integration activity rows from configured providers.
@@ -120,16 +122,49 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
         }
     }
 
+    // Ndizi integration
+    foreach (($integrations['ndizi'] ?? []) as $idx => $conn) {
+        if (!is_array($conn)) {
+            continue;
+        }
+        $label = (string)($conn['name'] ?? "ndizi[$idx]");
+        // Auto-resolve user_id from /wp/v2/users/me when absent/non-standard, then persist it.
+        if (!idLooksStandard($conn['user_id'] ?? null)) {
+            $resolved = resolveNdiziUserId($conn, $httpTimeout);
+            if ($resolved !== null) {
+                $conn['user_id'] = $resolved;
+                $config['integrations']['ndizi'][$idx]['user_id'] = $resolved;
+                $configDirty = true;
+            }
+        }
+        try {
+            foreach (loadNdiziTimeEntries($conn, $from, $to, $httpTimeout) as $row) {
+                $rows[] = $row;
+            }
+        } catch (RuntimeException $e) {
+            warning('integrations', "[$label] " . $e->getMessage());
+        }
+    }
+
     if ($configDirty) {
         $configFile = PROJECT_ROOT . '/config.json';
         $existing = is_file($configFile) ? (json_decode((string)file_get_contents($configFile), true) ?? []) : [];
 
         // Match by connection name rather than array index to survive reordering.
+        // Note: iterate `$existing['integrations'][x]` directly (not `?? []`) so the
+        // `&$existingConn` reference binds into $existing itself; referencing through
+        // a `??` fallback would bind into a throwaway copy and silently drop the write.
+        if (!isset($existing['integrations']) || !is_array($existing['integrations'])) {
+            $existing['integrations'] = [];
+        }
         foreach (($config['integrations']['harvest'] ?? []) as $conn) {
             if (!isset($conn['user_id'], $conn['name'])) {
                 continue;
             }
-            foreach (($existing['integrations']['harvest'] ?? []) as &$existingConn) {
+            if (!isset($existing['integrations']['harvest']) || !is_array($existing['integrations']['harvest'])) {
+                $existing['integrations']['harvest'] = [];
+            }
+            foreach ($existing['integrations']['harvest'] as &$existingConn) {
                 if (is_array($existingConn) && ($existingConn['name'] ?? null) === $conn['name']) {
                     $existingConn['user_id'] = $conn['user_id'];
                     break;
@@ -141,7 +176,10 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
             if (!isset($conn['assignee'], $conn['name'])) {
                 continue;
             }
-            foreach (($existing['integrations']['clickup'] ?? []) as &$existingConn) {
+            if (!isset($existing['integrations']['clickup']) || !is_array($existing['integrations']['clickup'])) {
+                $existing['integrations']['clickup'] = [];
+            }
+            foreach ($existing['integrations']['clickup'] as &$existingConn) {
                 if (is_array($existingConn) && ($existingConn['name'] ?? null) === $conn['name']) {
                     $existingConn['assignee'] = (string)$conn['assignee'];
                     break;
@@ -153,10 +191,28 @@ function loadIntegrationActivity(array $config, DateTimeImmutable $from, DateTim
             if (!isset($conn['user_id'], $conn['workspace_id'], $conn['name'])) {
                 continue;
             }
-            foreach (($existing['integrations']['clockify'] ?? []) as &$existingConn) {
+            if (!isset($existing['integrations']['clockify']) || !is_array($existing['integrations']['clockify'])) {
+                $existing['integrations']['clockify'] = [];
+            }
+            foreach ($existing['integrations']['clockify'] as &$existingConn) {
                 if (is_array($existingConn) && ($existingConn['name'] ?? null) === $conn['name']) {
                     $existingConn['user_id']      = (string)$conn['user_id'];
                     $existingConn['workspace_id'] = (string)$conn['workspace_id'];
+                    break;
+                }
+            }
+            unset($existingConn);
+        }
+        foreach (($config['integrations']['ndizi'] ?? []) as $conn) {
+            if (!isset($conn['user_id'], $conn['name'])) {
+                continue;
+            }
+            if (!isset($existing['integrations']['ndizi']) || !is_array($existing['integrations']['ndizi'])) {
+                $existing['integrations']['ndizi'] = [];
+            }
+            foreach ($existing['integrations']['ndizi'] as &$existingConn) {
+                if (is_array($existingConn) && ($existingConn['name'] ?? null) === $conn['name']) {
+                    $existingConn['user_id'] = (string)$conn['user_id'];
                     break;
                 }
             }

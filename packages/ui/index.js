@@ -24,6 +24,7 @@ const mockReportData = {
                     harvest: { entries: 1, activity: 1, discussion: 0 },
                     clickup: { entries: 0, activity: 0, discussion: 0 },
                     clockify: { entries: 1, activity: 1, discussion: 1 },
+                    ndizi: { entries: 1, activity: 1, discussion: 1 },
                 },
                 commits: [
                     {

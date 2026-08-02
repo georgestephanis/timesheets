@@ -11,6 +11,7 @@ import type {
     GitHubConnection,
     LlmConnection,
     ClockifyConnection,
+    NdiziConnection,
 } from "../configSchema";
 
 type Props = {
@@ -177,6 +178,37 @@ function ClockifyCard({
     );
 }
 
+function NdiziCard({
+    idx,
+    conn,
+    draft,
+    setField,
+    onRemove,
+}: {
+    idx: number;
+    conn: NdiziConnection;
+    draft: Config;
+    setField: (path: string | string[], value: unknown) => void;
+    onRemove: () => void;
+}) {
+    const b = `integrations.ndizi.${idx}`;
+    const name = useFieldPath(draft, `${b}.name`, setField);
+    const siteUrl = useFieldPath(draft, `${b}.site_url`, setField);
+    const username = useFieldPath(draft, `${b}.username`, setField);
+    const appPassword = useFieldPath(draft, `${b}.app_password`, setField);
+    const userId = useFieldPath(draft, `${b}.user_id`, setField);
+
+    return (
+        <ConnectionCard title={conn.name || `Ndizi #${idx + 1}`} onRemove={onRemove}>
+            <FieldRow label="Name" value={name.value} onChange={name.onChange} />
+            <FieldRow label="Site URL" value={siteUrl.value} onChange={siteUrl.onChange} />
+            <FieldRow label="Username" value={username.value} onChange={username.onChange} />
+            <FieldRow label="App Password" value={appPassword.value} onChange={appPassword.onChange} type="password" />
+            <FieldRow label="User ID" value={userId.value} onChange={userId.onChange} />
+        </ConnectionCard>
+    );
+}
+
 function AddButton({ label, onPress }: { label: string; onPress: () => void }) {
     return (
         <Pressable onPress={onPress} style={styles.addBtn}>
@@ -289,6 +321,15 @@ export function IntegrationsTab({ draft, setField }: Props) {
     const removeClockify = (idx: number) => {
         const next = (integrations.clockify ?? []).filter((_, i) => i !== idx);
         setField("integrations.clockify", next);
+    };
+
+    const addNdizi = () => {
+        const existing = integrations.ndizi ?? [];
+        setField("integrations.ndizi", [...existing, { name: "", site_url: "", username: "", app_password: "" }]);
+    };
+    const removeNdizi = (idx: number) => {
+        const next = (integrations.ndizi ?? []).filter((_, i) => i !== idx);
+        setField("integrations.ndizi", next);
     };
 
     return (
@@ -406,6 +447,21 @@ export function IntegrationsTab({ draft, setField }: Props) {
                     />
                 ))}
                 <AddButton label="Add Clockify" onPress={addClockify} />
+            </View>
+
+            <View style={styles.section}>
+                <Text style={styles.sectionLabel}>NDIZI</Text>
+                {(integrations.ndizi ?? []).map((conn, i) => (
+                    <NdiziCard
+                        key={i}
+                        idx={i}
+                        conn={conn}
+                        draft={draft}
+                        setField={setField}
+                        onRemove={() => removeNdizi(i)}
+                    />
+                ))}
+                <AddButton label="Add Ndizi" onPress={addNdizi} />
             </View>
         </ScrollView>
     );
