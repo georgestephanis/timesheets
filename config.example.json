@@ -5,6 +5,7 @@
 
     "paths": {
         "activitywatch": "~/Library/Application Support/activitywatch",
+        "activitywatch_sync_dir": "/Volumes/Shared/aw",
         "chrome": "~/Library/Application Support/Google/Chrome",
         "chrome_profiles": null
     },

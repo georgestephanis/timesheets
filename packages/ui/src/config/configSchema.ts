@@ -84,6 +84,7 @@ const integrationsSchema = z.object({
 
 const pathsSchema = z.object({
     activitywatch: z.string(),
+    activitywatch_sync_dir: z.string().optional(),
     chrome: z.string(),
     chrome_profiles: z.union([z.string(), z.array(z.string()), z.null()]).optional(),
     claude_code_logs: z.string().optional(),

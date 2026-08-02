@@ -7,11 +7,75 @@ declare(strict_types=1);
  */
 
 /**
- * Loads window-focus, AFK, and input events from the local ActivityWatch SQLite database.
+ * Finds every `<host>/<uuid>/test.db` produced by ActivityWatch's `aw-sync` tool
+ * under a `--sync-dir` root.
  *
- * Tries the aw-server-rust and legacy aw-server database paths in order and returns
- * data from the first one found. Emits a STDERR warning and returns empty arrays if
- * neither path exists.
+ * @return list<string>
+ */
+function awFindSyncDirDbs(string $syncDir): array
+{
+    $found = [];
+    if (!is_dir($syncDir)) {
+        return $found;
+    }
+
+    foreach (scandir($syncDir) ?: [] as $hostName) {
+        if ($hostName === '.' || $hostName === '..') {
+            continue;
+        }
+        $hostDir = "$syncDir/$hostName";
+        if (!is_dir($hostDir)) {
+            continue;
+        }
+
+        foreach (scandir($hostDir) ?: [] as $uuidName) {
+            if ($uuidName === '.' || $uuidName === '..') {
+                continue;
+            }
+            $dbPath = "$hostDir/$uuidName/test.db";
+            if (is_dir("$hostDir/$uuidName") && file_exists($dbPath)) {
+                $found[] = $dbPath;
+            }
+        }
+    }
+
+    return $found;
+}
+
+/**
+ * Merges window/afk/input results from multiple sources, dropping exact-duplicate
+ * events (same start, end, and payload) that occur when a host's live db and its
+ * own aw-sync mirror both cover the same period. Distinct hosts' events are unioned.
+ *
+ * @param  list<array{window: list<array<string, mixed>>, afk: list<array<string, mixed>>, input: list<array<string, mixed>>}> $results
+ * @return array{window: list<array<string, mixed>>, afk: list<array<string, mixed>>, input: list<array<string, mixed>>}
+ */
+function awMergeAndDedupe(array $results): array
+{
+    $merged = ['window' => [], 'afk' => [], 'input' => []];
+
+    foreach (['window', 'afk', 'input'] as $key) {
+        $seen = [];
+        foreach ($results as $r) {
+            foreach ($r[$key] as $ev) {
+                $dedupeKey = serialize($ev);
+                if (isset($seen[$dedupeKey])) {
+                    continue;
+                }
+                $seen[$dedupeKey] = true;
+                $merged[$key][] = $ev;
+            }
+        }
+        usort($merged[$key], fn($a, $b) => $a['start'] <=> $b['start']);
+    }
+
+    return $merged;
+}
+
+/**
+ * Loads window-focus, AFK, and input events from every discoverable ActivityWatch
+ * SQLite database: the local live db plus, if configured, every host's mirror under
+ * `paths.activitywatch_sync_dir` (as produced by ActivityWatch's `aw-sync` tool).
  *
  * @param  array             $config Loaded config array.
  * @param  DateTimeImmutable $from   Start of the query window.
@@ -21,38 +85,45 @@ declare(strict_types=1);
 function loadActivityWatch(array $config, DateTimeImmutable $from, DateTimeImmutable $to): array
 {
     $base = expandPath($config['paths']['activitywatch']);
-    $fallback = ['window' => [], 'afk' => [], 'input' => []];
+    $syncDirRaw = $config['paths']['activitywatch_sync_dir'] ?? null;
+    $syncDir = $syncDirRaw ? expandPath($syncDirRaw) : null;
 
-    foreach (['aw-server-rust/sqlite.db', 'aw-server/peewee-sqlite.v2.db'] as $rel) {
-        $path = "$base/$rel";
-        if (file_exists($path)) {
-            $copy = copyForRead($path);
-            if (!$copy) {
-                warning('aw', "could not copy $path");
-                continue;
-            }
+    $candidates = array_map(fn($rel) => "$base/$rel", ['aw-server-rust/sqlite.db', 'aw-server/peewee-sqlite.v2.db']);
+    if ($syncDir) {
+        $candidates = [...$candidates, ...awFindSyncDirDbs($syncDir)];
+    }
 
-            try {
-                $loaded = loadAwSqlite($copy, $from, $to);
-            } catch (Throwable $e) {
-                warning('aw', "could not parse $path ({$e->getMessage()})");
-                continue;
-            }
+    $results = [];
+    foreach ($candidates as $path) {
+        if (!file_exists($path)) {
+            continue;
+        }
 
-            if ($loaded['window'] !== [] || $loaded['afk'] !== [] || $loaded['input'] !== []) {
-                return $loaded;
-            }
+        $copy = copyForRead($path);
+        if (!$copy) {
+            warning('aw', "could not copy $path");
+            continue;
+        }
 
-            $fallback = $loaded;
+        try {
+            $loaded = loadAwSqlite($copy, $from, $to);
+        } catch (Throwable $e) {
+            warning('aw', "could not parse $path ({$e->getMessage()})");
+            continue;
+        }
+
+        if ($loaded['window'] !== [] || $loaded['afk'] !== [] || $loaded['input'] !== []) {
+            $results[] = $loaded;
         }
     }
 
-    if ($fallback['window'] !== [] || $fallback['afk'] !== [] || $fallback['input'] !== []) {
-        return $fallback;
+    if ($results === []) {
+        $suffix = $syncDir ? " or $syncDir" : '';
+        warning('aw', "no ActivityWatch sqlite found under $base$suffix");
+        return ['window' => [], 'afk' => [], 'input' => []];
     }
 
-    warning('aw', "no ActivityWatch sqlite found under $base");
-    return ['window' => [], 'afk' => [], 'input' => []];
+    return awMergeAndDedupe($results);
 }
 
 /**

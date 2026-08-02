@@ -190,6 +190,7 @@
  * @property {string} timezone - IANA timezone identifier
  * @property {Object} paths    - Filesystem paths for data sources
  * @property {string} paths.activitywatch - Path to ActivityWatch data directory
+ * @property {string} [paths.activitywatch_sync_dir] - Path to an aw-sync --sync-dir root; when set, every discoverable <hostname>/<uuid>/test.db under it is merged into the local ActivityWatch data
  * @property {string} paths.chrome        - Path to Chrome user data directory
  * @property {string|string[]|null} paths.chrome_profiles - Profile name(s), or null to auto-detect
  * @property {string} [paths.claude_code_logs] - Path to Claude Code CLI session log directory

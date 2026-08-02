@@ -12,6 +12,7 @@ type Props = {
 
 export function GeneralTab({ draft, setField }: Props) {
     const aw = useFieldPath(draft, "paths.activitywatch", setField);
+    const awSyncDir = useFieldPath(draft, "paths.activitywatch_sync_dir", setField);
     const chrome = useFieldPath(draft, "paths.chrome", setField);
     const autoDetect = {
         value: draft.paths.chrome_profiles === null,
@@ -58,6 +59,13 @@ export function GeneralTab({ draft, setField }: Props) {
                 value={aw.value}
                 onChange={aw.onChange}
                 placeholder="~/.local/share/activitywatch"
+            />
+            <FieldRow
+                label="ActivityWatch aw-sync directory"
+                value={awSyncDir.value}
+                onChange={awSyncDir.onChange}
+                placeholder="/Volumes/Personal/aw (optional)"
+                hint="If set, merges in every <hostname>/<uuid>/test.db under an aw-sync --sync-dir root"
             />
             <FieldRow
                 label="Chrome user data"

@@ -26,6 +26,10 @@
                     "description": "Path to the ActivityWatch data directory.",
                     "type": "string"
                 },
+                "activitywatch_sync_dir": {
+                    "description": "Optional path to an ActivityWatch aw-sync --sync-dir root (e.g. a shared network volume mirroring multiple machines' history as <hostname>/<uuid>/test.db). When set, every discoverable host db under this directory is merged in with the local ActivityWatch data.",
+                    "type": "string"
+                },
                 "chrome": {
                     "description": "Path to the Chrome user-data directory.",
                     "type": "string"

@@ -4,7 +4,7 @@
  * TypeScript port of src/loader-activitywatch.php.
  */
 
-import { existsSync } from "fs";
+import { existsSync, readdirSync } from "fs";
 import { tmpdir } from "os";
 import { copyFileSync } from "fs";
 import path from "path";
@@ -216,7 +216,67 @@ function loadAwSqlite(dbPath, from, to) {
 }
 
 /**
- * Loads window-focus, AFK, and input events from the local ActivityWatch SQLite database.
+ * Finds every `<host>/<uuid>/test.db` produced by ActivityWatch's `aw-sync` tool
+ * under a `--sync-dir` root.
+ * @param {string} syncDir
+ * @returns {string[]}
+ */
+function findSyncDirDbs(syncDir) {
+    /** @type {string[]} */
+    const found = [];
+    let hosts;
+    try {
+        hosts = readdirSync(syncDir, { withFileTypes: true });
+    } catch {
+        return found;
+    }
+    for (const hostEnt of hosts) {
+        if (!hostEnt.isDirectory()) continue;
+        const hostDir = path.join(syncDir, hostEnt.name);
+        let uuids;
+        try {
+            uuids = readdirSync(hostDir, { withFileTypes: true });
+        } catch {
+            continue;
+        }
+        for (const uuidEnt of uuids) {
+            if (!uuidEnt.isDirectory()) continue;
+            const dbPath = path.join(hostDir, uuidEnt.name, "test.db");
+            if (existsSync(dbPath)) found.push(dbPath);
+        }
+    }
+    return found;
+}
+
+/**
+ * Merges window/afk/input results from multiple sources, dropping exact-duplicate
+ * events (same start, end, and payload) that occur when a host's live db and its
+ * own aw-sync mirror both cover the same period. Distinct hosts' events are unioned.
+ * @param {{ window: any[]; afk: any[]; input: any[] }[]} results
+ * @returns {{ window: any[]; afk: any[]; input: any[] }}
+ */
+function mergeAndDedupe(results) {
+    /** @type {{ window: any[]; afk: any[]; input: any[] }} */
+    const merged = { window: [], afk: [], input: [] };
+    for (const key of /** @type {const} */ (["window", "afk", "input"])) {
+        const seen = new Set();
+        for (const r of results) {
+            for (const ev of r[key]) {
+                const dedupeKey = JSON.stringify(ev);
+                if (seen.has(dedupeKey)) continue;
+                seen.add(dedupeKey);
+                merged[key].push(ev);
+            }
+        }
+        merged[key].sort((a, b) => a.start.getTime() - b.start.getTime());
+    }
+    return merged;
+}
+
+/**
+ * Loads window-focus, AFK, and input events from every discoverable ActivityWatch
+ * SQLite database: the local live db plus, if configured, every host's mirror under
+ * `paths.activitywatch_sync_dir` (as produced by ActivityWatch's `aw-sync` tool).
  * Mirrors PHP loadActivityWatch().
  *
  * @param {import('@timesheets/contracts').Config} config
@@ -226,13 +286,15 @@ function loadAwSqlite(dbPath, from, to) {
  */
 export function loadActivityWatch(config, from, to) {
     const base = expandPath(config.paths.activitywatch);
-    /** @type {{ window: any[]; afk: any[]; input: any[] }} */
+    const syncDir = config.paths.activitywatch_sync_dir ? expandPath(config.paths.activitywatch_sync_dir) : null;
     const empty = { window: [], afk: [], input: [] };
-    /** @type {{ window: any[]; afk: any[]; input: any[] }} */
-    let fallback = empty;
 
-    for (const rel of ["aw-server-rust/sqlite.db", "aw-server/peewee-sqlite.v2.db"]) {
-        const full = path.join(base, rel);
+    const candidates = ["aw-server-rust/sqlite.db", "aw-server/peewee-sqlite.v2.db"].map((rel) => path.join(base, rel));
+    if (syncDir) candidates.push(...findSyncDirDbs(syncDir));
+
+    /** @type {{ window: any[]; afk: any[]; input: any[] }[]} */
+    const results = [];
+    for (const full of candidates) {
         if (!existsSync(full)) continue;
         const copy = copyForRead(full);
         if (!copy) {
@@ -241,14 +303,16 @@ export function loadActivityWatch(config, from, to) {
         }
         try {
             const loaded = loadAwSqlite(copy, from, to);
-            if (loaded.window.length || loaded.afk.length || loaded.input.length) return loaded;
-            fallback = loaded;
+            if (loaded.window.length || loaded.afk.length || loaded.input.length) results.push(loaded);
         } catch (err) {
             warning("aw", `could not parse ${full} (${err instanceof Error ? err.message : String(err)})`);
         }
     }
 
-    if (fallback.window.length || fallback.afk.length || fallback.input.length) return fallback;
-    warning("aw", `no ActivityWatch sqlite found under ${base}`);
-    return empty;
+    if (!results.length) {
+        warning("aw", `no ActivityWatch sqlite found under ${base}${syncDir ? ` or ${syncDir}` : ""}`);
+        return empty;
+    }
+
+    return mergeAndDedupe(results);
 }
