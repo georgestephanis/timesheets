@@ -3,8 +3,7 @@
     "private": true,
     "type": "module",
     "workspaces": [
-        "packages/*",
-        "apps/*"
+        "packages/*"
     ],
     "engines": {
         "node": ">=20.19.4"
@@ -14,10 +13,6 @@
         "format:check": "prettier --check .",
         "lint:js": "eslint apps/web/static/app.js",
         "lint:js:fix": "eslint --fix apps/web/static/app.js",
-        "desktop:start": "npm run start -w @timesheets/desktop",
-        "desktop:macos": "npm run macos -w @timesheets/desktop",
-        "desktop:dev": "bash tools/desktop-dev.sh",
-        "desktop:dev:clean": "bash tools/desktop-dev.sh --clean",
         "test": "npm run test -w @timesheets/engine -w @timesheets/test-fixtures",
         "typecheck": "npm run typecheck -w @timesheets/engine",
         "check": "composer check"
