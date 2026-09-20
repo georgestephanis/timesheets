@@ -97,6 +97,7 @@ export async function clickupNames(conn, timeoutMs = 20_000) {
     const headers = { Authorization: token, Accept: "application/json" };
     const names = new Set();
 
+    /** @param {string} url */
     const getJson = async (url) => {
         const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -120,7 +121,7 @@ export async function clickupNames(conn, timeoutMs = 20_000) {
             if (!spaceId) continue;
 
             // Folders (and their lists)
-            let foldersData = { folders: [] };
+            let foldersData = /** @type {any} */ ({ folders: [] });
             try {
                 foldersData = await getJson(
                     `https://api.clickup.com/api/v2/space/${encodeURIComponent(spaceId)}/folder?archived=false`,
@@ -135,7 +136,7 @@ export async function clickupNames(conn, timeoutMs = 20_000) {
                 if (folderName) names.add(folderName);
                 if (!folderId) continue;
 
-                let listsData = { lists: [] };
+                let listsData = /** @type {any} */ ({ lists: [] });
                 try {
                     listsData = await getJson(
                         `https://api.clickup.com/api/v2/folder/${encodeURIComponent(folderId)}/list?archived=false`,
@@ -151,7 +152,7 @@ export async function clickupNames(conn, timeoutMs = 20_000) {
             }
 
             // Folderless lists
-            let spaceListsData = { lists: [] };
+            let spaceListsData = /** @type {any} */ ({ lists: [] });
             try {
                 spaceListsData = await getJson(
                     `https://api.clickup.com/api/v2/space/${encodeURIComponent(spaceId)}/list?archived=false`,

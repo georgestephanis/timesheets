@@ -33,13 +33,19 @@ jobs:
             - name: Set up Node
               uses: actions/setup-node@v6
               with:
-                  node-version: "20"
+                  node-version: "24"
 
             - name: Install Node dependencies
-              run: npm install
+              run: npm ci
 
             - name: Format check (prettier)
               run: npm run format:check
 
             - name: Lint JS (eslint)
               run: npm run lint:js
+
+            - name: Typecheck (tsc)
+              run: npm run typecheck
+
+            - name: Test JS (node --test)
+              run: npm test

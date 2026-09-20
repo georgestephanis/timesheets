@@ -6,6 +6,9 @@
         "packages/*",
         "apps/*"
     ],
+    "engines": {
+        "node": ">=20.19.4"
+    },
     "scripts": {
         "format": "prettier --write .",
         "format:check": "prettier --check .",
