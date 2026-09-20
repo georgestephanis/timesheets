@@ -17,31 +17,6 @@ updates:
       schedule:
           interval: weekly
       groups:
-          # react-native-macos lags upstream React Native by several minors, and
-          # every @react-native/* package must match the react-native version it
-          # builds for. Bumped individually these are unmergeable; grouped, they
-          # arrive as the single coordinated upgrade they actually are.
-          react-native:
-              patterns:
-                  - "react"
-                  - "react-dom"
-                  - "react-test-renderer"
-                  - "react-native"
-                  - "react-native-*"
-                  - "@react-native/*"
-                  - "@react-native-macos/*"
-                  - "@react-native-community/*"
-                  - "@types/react"
-                  - "@types/react-*"
-          babel:
-              patterns:
-                  - "@babel/*"
-                  - "babel-*"
-          jest:
-              patterns:
-                  - "jest"
-                  - "jest-*"
-                  - "@jest/*"
           linting:
               patterns:
                   - "eslint"
@@ -52,9 +27,6 @@ updates:
           types:
               patterns:
                   - "@types/*"
-              exclude-patterns:
-                  - "@types/react"
-                  - "@types/react-*"
 
     - package-ecosystem: github-actions
       directory: "/"

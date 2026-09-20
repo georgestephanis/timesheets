@@ -10,11 +10,10 @@ A local-first activity reporting tool with multiple UI surfaces sharing a common
 
 **UI surfaces:**
 
-- **React Native macOS desktop** (`apps/desktop/`) — native app with full report viewing, config editing, signal assignment, and LLM features; see [docs/NATIVE.md](docs/NATIVE.md)
 - **PHP CLI** (`activity-report.php`) — backfills daily reports, generates Markdown/JSON/TSV output, LLM-assisted signal tuning
 - **PHP web UI** (`apps/web/`) — local browser interface; report browsing, Harvest sidebar, rebuild, config panel
 
-The desktop app is built on a TypeScript engine (`packages/engine/`) that shares the same `config.json` shape and `reports/` cache layout as the PHP implementation. All three surfaces can run against the same local data simultaneously — no data migration required.
+A TypeScript engine (`packages/engine/`) mirrors the PHP core against the same `config.json` shape and `reports/` cache layout. Both surfaces run against the same local data simultaneously — no data migration required.
 
 ## A Recommendation on Building your `config.json`
 
@@ -25,24 +24,26 @@ The config is a somewhat long and detailed JSON object. Both a `config.example.j
 All UI surfaces converge on the same local data stores:
 
 ```
-┌─────────────────────┐   ┌─────────────────────┐   ┌─────────────────────────┐
-│   PHP CLI           │   │   PHP Web UI         │   │   React Native Desktop  │
-│   activity-report   │   │   apps/web/ + api.php│   │   apps/desktop/         │
-│   .php              │   │                      │   │                         │
-└──────────┬──────────┘   └──────────┬───────────┘   └────────────┬────────────┘
-           │                         │                             │
-           │              ┌──────────┴───────────┐                │
-           └──────────────►   PHP core (src/)    │   ┌────────────▼────────────┐
-                          │   config, cache,      │   │  TypeScript engine      │
-                          │   loaders, classifiers│   │  packages/engine/       │
-                          └──────────┬────────────┘   └────────────┬────────────┘
-                                     │                              │
-                          ┌──────────▼──────────────────────────────▼────────────┐
-                          │                  Shared data stores                   │
-                          │                                                        │
-                          │  config.json  ·  reports/YYYY-MM/DD/  ·  ActivityWatch │
-                          │  Chrome history  ·  Git repos  ·  External APIs        │
-                          └────────────────────────────────────────────────────────┘
+┌─────────────────────┐   ┌──────────────────────┐
+│   PHP CLI           │   │   PHP Web UI         │
+│   activity-report   │   │   apps/web/ + api.php│
+│   .php              │   │                      │
+└──────────┬──────────┘   └──────────┬───────────┘
+           │                         │
+           └────────────┬────────────┘
+                        │
+             ┌──────────▼───────────┐   ┌─────────────────────────┐
+             │   PHP core (src/)    │   │  TypeScript engine      │
+             │   config, cache,     │   │  packages/engine/       │
+             │   loaders,classifiers│   │  (no UI surface today)  │
+             └──────────┬───────────┘   └────────────┬────────────┘
+                        │                             │
+             ┌──────────▼─────────────────────────────▼─────────────┐
+             │                 Shared data stores                    │
+             │                                                        │
+             │  config.json  ·  reports/YYYY-MM/DD/  ·  ActivityWatch │
+             │  Chrome history  ·  Git repos  ·  External APIs        │
+             └────────────────────────────────────────────────────────┘
 ```
 
 The shared contract between all surfaces:
@@ -54,7 +55,7 @@ The shared contract between all surfaces:
 | Report JSON shape     | All outputs conform to the same structure (`from`, `to`, `days`, `timelines`, `warnings`) |
 | `reports/config/`     | Timestamped config backups — written by every surface that mutates `config.json`          |
 
-The TypeScript engine (`packages/engine/`) is being developed in parallel as the data layer for the native desktop app. It keeps `config.json` and `reports/` layout compatible with the PHP app so both can run against the same local data without conflict.
+The TypeScript engine (`packages/engine/`) is a parallel implementation of the same data layer, kept compatible with the PHP app's `config.json` and `reports/` layout. It has no UI surface of its own: the React Native macOS desktop app it was built for was retired on 2026-09-20 and is preserved on the `archive/react-native-desktop` branch and the matching tag.
 
 ## Quick start
 
@@ -431,8 +432,6 @@ composer serve                              # PHP web UI — picks a free port s
 composer report                             # PHP CLI (no args = backfill last 7 days)
 composer report -- --days 3                 # pass flags after --
 composer report -- --from 2026-05-08        # explicit date
-npm run desktop:start                       # React Native metro bundler
-npm run desktop:macos                       # build and run macOS desktop app
 ```
 
 ### Linting and static analysis
@@ -476,7 +475,6 @@ apps/
     static/
       app.css             — all styles
       app.js              — client-side renderer, admin panel, timeline, day summary
-  desktop/                — @timesheets/desktop: React Native macOS app (Phase 5 complete)
 src/
   config.php              — saveConfigWithBackup(), applySignalToProject(), parseSlackSignal()
   helpers.php             — expandPath(), fmtDur(), appLog(), warning()
@@ -510,10 +508,9 @@ tools/
   ensure-github-integration.php
   prune-config-backups.php
   reset-cache.php
-packages/                 — TypeScript monorepo workspace; shared by all non-PHP surfaces (see docs/NATIVE.md)
+packages/                 — TypeScript monorepo workspace
   contracts/              — @timesheets/contracts: JS type definitions matching PHP JSON output shape
   engine/                 — @timesheets/engine: TypeScript engine (replaces PHP core; same config.json + reports/ layout)
-  ui/                     — @timesheets/ui: React Native components (peerDep on react-native-macos)
   test-fixtures/          — @timesheets/test-fixtures: golden fixture data for PHP–TypeScript parity tests
 reports/                  — gitignored; all generated data lives here
   app.jsonl               — structured application log (all subsystems)
@@ -527,10 +524,7 @@ config.schema.json        — JSON Schema for editor validation
 AGENTS.md                 — architecture guide for contributors and AI agents
 SECURITY.md               — local threat model and token-handling notes
 docs/
-  NATIVE.md               — native desktop migration plan (React Native + TypeScript engine)
-  MIGRATION.md            — first-time setup, config path, packaging steps
   TROUBLESHOOTING.md      — common failures and fixes
-  APP-vs-PHP.md           — feature parity table across all three UI surfaces
   TODO.md                 — backlog and deferred items
   CLOCKIFY.md             — Clockify integration notes
 ```
